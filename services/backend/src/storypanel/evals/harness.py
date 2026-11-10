@@ -298,9 +298,14 @@ async def main(argv: list[str] | None = None) -> int:
         await credits.grant(db, user.id, 100_000, kind="grant", reason="eval run",
                             dedupe_key=f"eval:{user.id}")  # fmt: skip
         user_id = user.id
-    if args.live:  # the global spend limit doubles as the run's budget
-        object.__setattr__(s, "spend_limit_global_daily_usd", args.max_usd)
-        object.__setattr__(s, "spend_limit_user_daily_usd", args.max_usd)
+    # The run's budget. Live: the explicit --max-usd is the hard ceiling for the whole run.
+    # Simulated: prices are fictional, so the per-user/global ceilings are lifted for this
+    # process only; the per-comic ceiling stays in force and is part of what is tested.
+    from decimal import Decimal
+
+    budget = Decimal(str(args.max_usd)) if args.live else Decimal("1000000")
+    object.__setattr__(s, "spend_limit_global_daily_usd", budget)
+    object.__setattr__(s, "spend_limit_user_daily_usd", budget)
     sem = asyncio.Semaphore(args.concurrency)
 
     async def guarded(case: dict[str, Any]) -> dict[str, Any]:

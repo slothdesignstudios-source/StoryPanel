@@ -109,6 +109,17 @@ async def test_safety_failures_stay_hidden_after_retries(
         vid = (await db.execute(select(PanelVersion.id).limit(1))).scalar_one()
     restore = await client.post(f"/v1/panels/{panels[0]['id']}/versions/{vid}/restore", headers=headers)
     assert restore.status_code == 404
+    # audit every surface that hands out URLs: project JSON (pages, previews, cast, exports),
+    # the dashboard listing and every panel's version history
+    async with transaction() as db:
+        bad_keys = (
+            (await db.execute(select(Asset.storage_key).where(Asset.quarantined.is_(True)))).scalars().all()
+        )
+    surfaces = [p, (await client.get("/v1/projects", headers=headers)).json()]
+    surfaces += [(await client.get(f"/v1/panels/{x['id']}/versions", headers=headers)).json() for x in panels]
+    blob = __import__("json").dumps(surfaces)
+    assert bad_keys and not any(key in blob for key in bad_keys)
+    assert all(pg["preview_url"] for pg in p["pages"])  # previews exist, drawn with empty frames
     edit = await client.post(
         f"/v1/panels/{panels[0]['id']}/edit", json={"instruction": "add rain"}, headers=headers
     )
@@ -456,3 +467,87 @@ async def test_trace_context_crosses_api_outbox_workflow_and_activity(client: An
     assert any(n.startswith("POST /v1/projects") for n in names), names
     assert "StartWorkflow:ComicWorkflow" in names and "RunWorkflow:ComicWorkflow" in names
     assert "RunActivity:intake" in names and "RunActivity:character_sheet" in names
+
+
+# ------------------------------------------------------------------ targeted repair, provenance
+async def test_local_qa_failure_is_repaired_in_place_not_redrawn(
+    client: Any, headers: dict[str, str], worker: Any
+) -> None:
+    """One character failing QA triggers an inpaint of that region; the rest of the panel is
+    pixel-identical to the first attempt."""
+    import io
+
+    from PIL import Image, ImageChops
+
+    from storypanel.services import repo
+
+    fake.control.qa_fail_attempts = 1
+    p = await run_to_completion(client, headers, STRIP)
+    assert all(x["status"] == "ok" for x in panels_of(p))
+    async with transaction() as db:
+        versions = (
+            (await db.execute(select(PanelVersion).order_by(PanelVersion.panel_id, PanelVersion.attempt)))
+            .scalars()
+            .all()
+        )
+        first, second = versions[0], versions[1]
+        assert (first.attempt, first.qa_status, second.attempt, second.qa_status) == (0, "fail", 1, "pass")
+        assert second.model == "fake-inpaint" and second.references[0]["role"] == "repair_base"
+        box = first.qa_scores["repair"]["box"]
+        a = Image.open(io.BytesIO(await repo.asset_bytes(db, first.image_asset_id))).convert("RGB")
+        b = Image.open(io.BytesIO(await repo.asset_bytes(db, second.image_asset_id))).convert("RGB")
+        costs = dict((await db.execute(select(ProviderUsage.model, ProviderUsage.cost_usd).where(
+            ProviderUsage.operation.in_(("image_inpaint", "image_edit"))))).all())  # fmt: skip
+    assert a.size == b.size
+    diff = ImageChops.difference(a, b).getbbox()
+    assert diff is not None  # something was repainted...
+    w, h = a.size
+    x0, y0, x1, y1 = (
+        int(box["x"] * w),
+        int(box["y"] * h),
+        int((box["x"] + box["w"]) * w),
+        int((box["y"] + box["h"]) * h),
+    )
+    assert (
+        diff[0] >= x0 and diff[1] >= y0 and diff[2] <= x1 + 1 and diff[3] <= y1 + 1
+    )  # ...only inside the mask
+    assert "fake-inpaint" in costs
+    assert sum("fake-inpaint" == m for m in fake.control.models_used) == 4  # one repair per panel
+
+
+async def test_exports_carry_ai_provenance_labels(client: Any, headers: dict[str, str], worker: Any) -> None:
+    import io
+    import zipfile
+
+    import httpx
+    from PIL import Image
+    from pypdf import PdfReader
+
+    from storypanel.pipeline.render import DIGITAL_SOURCE_TYPE
+
+    p = await run_to_completion(client, headers, STRIP)
+
+    async def export(fmt: str) -> bytes:
+        r = await client.post(f"/v1/projects/{p['id']}/exports", json={"format": fmt}, headers=headers)
+        eid = r.json()["id"]
+        done = await wait_for(client, p["id"], headers, lambda q: any(
+            e["id"] == eid and e["status"] == "ready" for e in q["exports"]))  # fmt: skip
+        url = next(e for e in done["exports"] if e["id"] == eid)["download_url"]
+        async with httpx.AsyncClient() as http:
+            return (await http.get(url)).content
+
+    with Image.open(io.BytesIO(await export("png"))) as img:
+        xmp = img.info["XML:com.adobe.xmp"]
+        assert (
+            DIGITAL_SOURCE_TYPE in xmp and "StoryPanel" in xmp and img.info["Comment"] == "AI-generated image"
+        )
+    cbz = zipfile.ZipFile(io.BytesIO(await export("cbz")))
+    assert DIGITAL_SOURCE_TYPE.encode() in cbz.read("ComicInfo.xml")
+    with Image.open(io.BytesIO(cbz.read("page_001.png"))) as img:
+        assert DIGITAL_SOURCE_TYPE in img.info["XML:com.adobe.xmp"]
+    meta = PdfReader(io.BytesIO(await export("pdf"))).metadata
+    assert (
+        meta is not None
+        and DIGITAL_SOURCE_TYPE in (meta.keywords or "")
+        and meta.subject == "AI-generated comic"
+    )

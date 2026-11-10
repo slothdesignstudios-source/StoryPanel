@@ -272,7 +272,9 @@ def layout_panel(
 TYPESET_VERSION = 1
 
 
-def typeset(kind: str, text: str, geometry: dict[str, Any], font: str = "comic_neue") -> tuple[dict[str, Any], list[str]]:
+def typeset(
+    kind: str, text: str, geometry: dict[str, Any], font: str = "comic_neue"
+) -> tuple[dict[str, Any], list[str]]:
     """The shared layout contract between the editor and every export.
 
     Fits `text` inside the balloon's text box and returns the geometry with the result
@@ -284,10 +286,14 @@ def typeset(kind: str, text: str, geometry: dict[str, Any], font: str = "comic_n
     g = dict(geometry)
     g.setdefault("font_size", FONT_MAX)
     if kind == "sfx":
-        g.update(text_size=float(g["font_size"]), lines=[" ".join(text.split()).upper()], typeset=TYPESET_VERSION)
+        g.update(
+            text_size=float(g["font_size"]), lines=[" ".join(text.split()).upper()], typeset=TYPESET_VERSION
+        )
         return g, []
     iw, ih = inner_box(kind, float(g["w"]), float(g["h"]))
-    size, lines, fits = fit_text(" ".join(text.split()), font, iw, ih, float(g["font_size"]), min_size=FONT_MIN - 4)
+    size, lines, fits = fit_text(
+        " ".join(text.split()), font, iw, ih, float(g["font_size"]), min_size=FONT_MIN - 4
+    )
     g.update(text_size=size, lines=lines, typeset=TYPESET_VERSION)
     return g, [] if fits else ["overflow"]
 

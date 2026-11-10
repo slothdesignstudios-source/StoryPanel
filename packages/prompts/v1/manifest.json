@@ -1,7 +1,20 @@
-{"version": "v1", "templates": {
-  "intake": "intake.system.md", "bible": "bible.system.md", "script": "script.system.md",
-  "script_repair": "script_repair.user.md", "moderation": "moderation.system.md",
-  "vision_qa": "vision_qa.system.md", "image_safety": "image_safety.system.md",
-  "panel": "panel.image.j2", "portrait": "portrait.image.j2", "turnaround": "turnaround.image.j2",
-  "expressions": "expressions.image.j2", "location": "location.image.j2", "revise": "revise.image.j2",
-  "panel_edit": "panel_edit.image.j2"}}
+{
+ "version": "v1",
+ "templates": {
+  "intake": "intake.system.md",
+  "bible": "bible.system.md",
+  "script": "script.system.md",
+  "script_repair": "script_repair.user.md",
+  "moderation": "moderation.system.md",
+  "vision_qa": "vision_qa.system.md",
+  "image_safety": "image_safety.system.md",
+  "panel": "panel.image.j2",
+  "portrait": "portrait.image.j2",
+  "turnaround": "turnaround.image.j2",
+  "expressions": "expressions.image.j2",
+  "location": "location.image.j2",
+  "revise": "revise.image.j2",
+  "panel_edit": "panel_edit.image.j2",
+  "repair": "repair.image.j2"
+ }
+}

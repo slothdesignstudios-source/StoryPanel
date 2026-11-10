@@ -30,7 +30,7 @@ from storypanel.domain.states import PanelStatus
 from storypanel.domain.states import ProjectStatus as S
 from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
-from storypanel.pipeline import art, lettering, moderation, qa, render
+from storypanel.pipeline import art, lettering, moderation, qa, render, repair
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext, ImageInput, ImageRequest
 from storypanel.services import credits, events, repo
@@ -134,6 +134,15 @@ async def stage_generate_panel(
             asset_id = (await db.execute(select(PanelVersion.image_asset_id).where(
                 PanelVersion.id == panel.current_version_id))).scalar_one()  # fmt: skip
             current_image = await repo.asset_bytes(db, asset_id)
+        # Targeted repair: if the previous attempt failed QA only locally (one character),
+        # repaint that region instead of paying for, and re-rolling, the whole panel.
+        repair_of: tuple[bytes, dict[str, Any]] | None = None
+        if attempt > 0 and kind != "edit" and (s.inpaint_model or s.provider_mode == "fake"):
+            prev_version = (await db.execute(select(PanelVersion).where(
+                PanelVersion.idempotency_key == f"panel:{panel_id}:{request_key}:a{attempt - 1}"))).scalar_one_or_none()  # fmt: skip
+            target = (prev_version.qa_scores or {}).get("repair") if prev_version else None
+            if prev_version is not None and prev_version.qa_status == "fail" and target:
+                repair_of = (await repo.asset_bytes(db, prev_version.image_asset_id), target)
         spec_version, owner, project_id = panel.spec_version, project.owner_id, project.id
         if attempt == 0:
             panel.status = PanelStatus.GENERATING.value
@@ -146,7 +155,19 @@ async def stage_generate_panel(
                       attempt=attempt, prompt_version=PROMPT_VERSION)  # fmt: skip
     seed = int(hashlib.sha256(key.encode()).hexdigest()[:8], 16) % (2**31)
 
-    if kind == "edit":
+    mask: bytes | None = None
+    used: list[dict[str, Any]]
+    if repair_of is not None:
+        base_image, target = repair_of
+        who = cast[target["character"]]
+        mask = repair.build_mask(base_image, target["box"])
+        prompt = art.compile_repair_prompt(who, preset, tuple(fix_notes or ()))
+        prompt_sha = hashlib.sha256(prompt.encode()).hexdigest()
+        used = [{"role": "repair_base", "key": str(panel_id), "box": target["box"],
+                 "character": target["character"]}]  # fmt: skip
+        req = ImageRequest(prompt, aspect, mode="inpaint", seed=seed, image=base_image, mask=mask,
+                           audience=c["audience"].value)  # fmt: skip
+    elif kind == "edit":
         assert instruction is not None and current_image is not None
         verdict = await moderation.moderate_text(instruction, audience=c["audience"],
                                                  surface="panel_edit", ctx=ctx)  # fmt: skip
@@ -154,7 +175,7 @@ async def stage_generate_panel(
             raise AppError(ErrorCode.MODERATION_BLOCKED, verdict.user_message)
         refs = [ImageInput(current_image)]
         names: list[tuple[str, int]] = []
-        used: list[dict[str, Any]] = [{"role": "base", "key": str(panel_id)}]
+        used = [{"role": "base", "key": str(panel_id)}]
         async with transaction() as db:
             for ch in spec.characters[: s.image_max_references - 1]:
                 asset = char_refs.get(ch.id, {}).get("portrait")
@@ -181,10 +202,14 @@ async def stage_generate_panel(
         used = [{"role": r.role, "key": r.key, "view": r.view, "asset_id": r.asset_id}
                 for r in compiled.references]  # fmt: skip
         prompt, prompt_sha = compiled.prompt, compiled.prompt_sha256
-        req = ImageRequest(prompt, aspect, tuple(refs), seed=seed, inputs=compiled.inputs)
+        req = ImageRequest(prompt, aspect, tuple(refs), seed=seed, inputs=compiled.inputs,
+                           audience=c["audience"].value)  # fmt: skip
 
     result, usage = await metering.generate_image(req, ctx, key=key)
-    image = storage.validate_image(result.data)
+    data = result.data
+    if repair_of is not None and mask is not None:
+        data = repair.composite(repair_of[0], storage.validate_image(result.data).data, mask)
+    image = storage.validate_image(data)
 
     async with transaction() as db:
         asset = await repo.save_image(db, owner_id=owner, project_id=project_id, kind="panel",  # type: ignore[assignment]
@@ -540,6 +565,8 @@ async def stage_export_assemble(export_id: uuid.UUID) -> dict[str, Any]:
                  for n in range(len(order))]  # fmt: skip
         owner, project_id = export.owner_id, export.project_id
     title = revision["title"]
+    # Provenance: every exported page carries a machine-readable AI-generation label.
+    pages = [render.label_png(p, title) for p in pages]
     if fmt == "pdf":
         data, ctype, ext = render.build_pdf(pages, title, tuple(order[0]["size"])), "application/pdf", "pdf"
     elif fmt == "cbz":

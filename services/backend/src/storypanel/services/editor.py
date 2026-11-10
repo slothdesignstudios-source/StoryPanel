@@ -267,7 +267,9 @@ def _remap(g: dict[str, Any], old: tuple[float, ...], new: tuple[float, ...]) ->
 async def _move_balloons(db: AsyncSession, panel: Panel, old: tuple[float, ...], new: tuple[float, ...],
                          page_size: tuple[int, int]) -> None:  # fmt: skip
     for b in (await db.execute(select(Balloon).where(Balloon.panel_id == panel.id))).scalars():
-        b.geometry, b.flags = lettering.typeset(b.type, b.text, _clamp_geometry(_remap(b.geometry, old, new), page_size))
+        b.geometry, b.flags = lettering.typeset(
+            b.type, b.text, _clamp_geometry(_remap(b.geometry, old, new), page_size)
+        )
         b.version += 1
 
 

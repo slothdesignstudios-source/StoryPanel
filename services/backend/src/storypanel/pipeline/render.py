@@ -177,6 +177,42 @@ def render_page(doc: PageDoc, width_px: int) -> bytes:
     return buf.getvalue()
 
 
+# ------------------------------------------------------------------ provenance
+# IPTC's Digital Source Type vocabulary is the interoperable way to say "made by a
+# generative model"; it is what C2PA assertions and major platforms read. This is a
+# metadata label, not a signed C2PA manifest (see docs/decisions.md, provenance).
+DIGITAL_SOURCE_TYPE = "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"
+
+
+def provenance_xmp(title: str) -> str:
+    return (
+        '<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>'
+        '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+        '<rdf:Description rdf:about="" xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xmp="http://ns.adobe.com/xap/1.0/">'
+        f"<Iptc4xmpExt:DigitalSourceType>{DIGITAL_SOURCE_TYPE}</Iptc4xmpExt:DigitalSourceType>"
+        "<xmp:CreatorTool>StoryPanel</xmp:CreatorTool>"
+        f'<dc:title><rdf:Alt><rdf:li xml:lang="x-default">{escape(title[:200])}</rdf:li></rdf:Alt></dc:title>'
+        '<dc:description><rdf:Alt><rdf:li xml:lang="x-default">AI-generated comic. Artwork produced by '
+        "generative image models; lettering composed by StoryPanel.</rdf:li></rdf:Alt></dc:description>"
+        '</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>'
+    )
+
+
+def label_png(data: bytes, title: str) -> bytes:
+    """Re-save a rendered page with AI-generation metadata (pixels unchanged)."""
+    from PIL.PngImagePlugin import PngInfo
+
+    info = PngInfo()
+    info.add_itxt("XML:com.adobe.xmp", provenance_xmp(title))
+    info.add_text("Software", "StoryPanel")
+    info.add_text("Comment", "AI-generated image")
+    with Image.open(io.BytesIO(data)) as img:
+        out = io.BytesIO()
+        img.save(out, format="PNG", pnginfo=info)
+    return out.getvalue()
+
+
 # ------------------------------------------------------------------ exporters
 def build_pdf(pages: list[bytes], title: str, page_units: tuple[int, int]) -> bytes:
     """One PDF page per comic page, 6 inches wide, with a 0.125 in bleed margin for print."""
@@ -188,6 +224,7 @@ def build_pdf(pages: list[bytes], title: str, page_units: tuple[int, int]) -> by
     c.setTitle(title[:200])
     c.setCreator("StoryPanel")
     c.setSubject("AI-generated comic")
+    c.setKeywords(f"AI-generated; DigitalSourceType={DIGITAL_SOURCE_TYPE}")
     for data in pages:
         c.drawImage(ImageReader(io.BytesIO(data)), bleed, bleed, width=pw, height=ph)
         c.showPage()
@@ -199,7 +236,7 @@ def build_cbz(pages: list[bytes], title: str) -> bytes:
     buf = io.BytesIO()
     info = ('<?xml version="1.0" encoding="utf-8"?>\n<ComicInfo>'
             f"<Title>{escape(title[:200])}</Title><PageCount>{len(pages)}</PageCount>"
-            "<Notes>AI-generated with StoryPanel</Notes></ComicInfo>")  # fmt: skip
+            f"<Notes>AI-generated with StoryPanel. DigitalSourceType: {DIGITAL_SOURCE_TYPE}</Notes></ComicInfo>")  # fmt: skip
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
         for n, data in enumerate(pages, start=1):
             z.writestr(f"page_{n:03d}.png", data)  # zero-padded so readers sort correctly

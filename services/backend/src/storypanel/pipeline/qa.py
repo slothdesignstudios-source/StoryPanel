@@ -26,6 +26,7 @@ from storypanel.domain.schemas import (
     VisionQAReport,
 )  # fmt: skip
 from storypanel.obs import metrics
+from storypanel.pipeline import repair
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext, ImageInput
 
@@ -175,5 +176,8 @@ async def evaluate_panel(
         "anatomy_defects": report.anatomy_defects, "action_matches": report.action_matches,
     }  # fmt: skip
     head_boxes = {o.id: o.head_box.model_dump() for o in report.characters if o.present and o.head_box}
+    body_boxes = {o.id: o.body_box.model_dump() for o in report.characters if o.present and o.body_box}
+    if not passed:
+        scores["repair"] = repair.repair_target(problems, body_boxes)
     return QAOutcome("pass" if passed else "fail", scores, notes[:6], head_boxes,
                      report.action_box.model_dump() if report.action_box else None)  # fmt: skip

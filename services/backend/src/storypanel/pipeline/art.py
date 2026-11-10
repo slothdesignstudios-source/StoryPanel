@@ -180,3 +180,10 @@ def compile_edit_prompt(instruction: str, style_preset: str,
     return render_prompt("panel_edit", style_token=styles().get(style_preset).token,
                          instruction=instruction.strip(),
                          characters=[{"name": n, "ref": r} for n, r in characters])  # fmt: skip
+
+
+def compile_repair_prompt(spec: CharacterSpec, style_preset: str, fix_notes: tuple[str, ...]) -> str:
+    """Prompt for repainting one character's region. Uses the canonical description so the
+    repaired figure is described in exactly the words every other prompt uses."""
+    return render_prompt("repair", style_token=styles().get(style_preset).token, name=spec.name,
+                         canonical_description=spec.canonical_description(), fix_notes=list(fix_notes))  # fmt: skip
