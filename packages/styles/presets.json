@@ -1,0 +1,20 @@
+{
+  "version": "2026.11.1",
+  "note": "Style tokens are reused verbatim in every prompt. Changing a token requires a new version; stored projects pin the version they were created with.",
+  "default": "clean_manga_warm",
+  "free_plan_presets": ["clean_manga_warm", "bold_western_ink"],
+  "presets": [
+    {"id": "clean_manga_warm", "name": "Clean manga", "blurb": "Crisp linework, screentone shading, warm limited palette.",
+     "token": "Clean-line manga illustration, screentone shading, bold black ink, warm limited palette",
+     "swatch": ["#F4E9D8", "#D94F30", "#2B2B2B", "#7FD4FF"], "lettering": {"font": "comic_neue", "sfx_font": "bangers"}},
+    {"id": "bold_western_ink", "name": "Bold western", "blurb": "Heavy inks, dynamic shadows, saturated flat colour.",
+     "token": "Classic western comic-book illustration, heavy black inks, dramatic spot shadows, saturated flat colours, halftone accents",
+     "swatch": ["#FFD23F", "#EE4266", "#3A86FF", "#111111"], "lettering": {"font": "comic_neue", "sfx_font": "bangers"}},
+    {"id": "soft_storybook", "name": "Soft storybook", "blurb": "Gentle watercolour washes and rounded shapes for all ages.",
+     "token": "Soft storybook illustration, gentle watercolour washes, rounded friendly shapes, pencil outlines, pastel palette",
+     "swatch": ["#FDF6EC", "#F7B7A3", "#A8D5BA", "#6C8EAD"], "lettering": {"font": "comic_neue", "sfx_font": "bangers"}},
+    {"id": "noir_duotone", "name": "Noir duotone", "blurb": "High-contrast black and one accent colour.",
+     "token": "Noir graphic-novel illustration, high-contrast black and white, single teal accent colour, hard-edged shadows, film-grain texture",
+     "swatch": ["#0D0D0D", "#F2F2F2", "#1FA9A0", "#5A5A5A"], "lettering": {"font": "comic_neue", "sfx_font": "bangers"}}
+  ]
+}
