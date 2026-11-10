@@ -375,7 +375,7 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
                 flags += b.flags
                 db.add(Balloon(project_id=project.id, panel_id=panel.id, order_index=b.index,
                                type=b.type, speaker_id=b.speaker, text=b.text,
-                               geometry=b.geometry(), flags=b.flags))  # fmt: skip
+                               geometry=b.geometry(styles().get(preset).font), flags=b.flags))  # fmt: skip
         await db.flush()
         for flag in flags:
             metrics.lettering_flags.labels(flag).inc()

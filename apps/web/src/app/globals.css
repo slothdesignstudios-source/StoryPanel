@@ -1,9 +1,12 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/bricolage-grotesque";
-@import "@fontsource/comic-neue/400.css";
-@import "@fontsource/comic-neue/700.css";
-@import "@fontsource/bangers/400.css";
+
+/* Lettering fonts: the exact files the server renderer uses (packages/fonts), so balloon
+   text measures and breaks the same way in the editor as in exports. */
+@font-face { font-family: "Comic Neue"; src: url("/fonts/comic-neue-latin-400-normal.woff") format("woff"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Comic Neue"; src: url("/fonts/comic-neue-latin-700-normal.woff") format("woff"); font-weight: 700; font-display: block; }
+@font-face { font-family: "Bangers"; src: url("/fonts/bangers-latin-400-normal.woff") format("woff"); font-weight: 400; font-display: block; }
 
 @theme {
   --color-paper: #fbf7f0;

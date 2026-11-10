@@ -15,6 +15,7 @@ function useImage(url: string | null | undefined) {
   useEffect(() => {
     if (!url) return setImg(null);
     const el = new window.Image();
+    el.crossOrigin = "anonymous"; // signed storage URLs are served with CORS for the web origin
     el.onload = () => setImg(el);
     el.onerror = () => setImg(null);
     el.src = url;
@@ -55,7 +56,7 @@ function tailPoints(g: Geometry): number[] | null {
   return [bx + nx * half, by + ny * half, g.tail.x, g.tail.y, bx - nx * half, by - ny * half];
 }
 
-function BalloonShape({ b, g, selected, editable, onSelect, onChange }: { b: Balloon; g: Geometry; selected: boolean; editable: boolean; onSelect?: () => void; onChange?: (g: Geometry, commit: boolean) => void }) {
+function BalloonShape({ b, g, selected, editable, resizing, onSelect, onChange }: { b: Balloon; g: Geometry; selected: boolean; editable: boolean; resizing: boolean; onSelect?: () => void; onChange?: (g: Geometry, commit: boolean) => void }) {
   const ref = useRef<Konva.Group>(null);
   const tr = useRef<Konva.Transformer>(null);
   useEffect(() => {
@@ -66,7 +67,19 @@ function BalloonShape({ b, g, selected, editable, onSelect, onChange }: { b: Bal
   }, [selected, editable]);
   const [iw, ih] = innerBox(b.type, g.w, g.h);
   const sfx = b.type === "sfx";
-  const fit = sfx ? null : fitText(b.text, COMIC, iw, ih, g.font_size);
+  // Stored server typesetting is authoritative. A local fit is only a preview while the
+  // user is resizing (geometry changed but not yet saved) or for legacy balloons.
+  const stored = g.lines && g.text_size && !resizing ? { size: g.text_size, lines: g.lines } : null;
+  const fit = sfx ? null : stored ?? fitText(b.text, COMIC, iw, ih, g.font_size);
+  const blockH = fit ? fit.lines.length * fit.size * LINE_HEIGHT : 0;
+  // Patch over the outline where the speech tail joins (balloon-local coordinates), drawn
+  // after the outline and before the text, in the same order as the server renderer.
+  const tailRaw = b.type === "speech" ? tailPoints(g) : null;
+  const cover = tailRaw ? (() => {
+    const cx = g.x + g.w / 2, cy = g.y + g.h / 2, t = tailRaw;
+    return [t[0]! * 0.94 + cx * 0.06, t[1]! * 0.94 + cy * 0.06, (t[0]! + t[4]! + t[2]! * 4) / 6, (t[1]! + t[5]! + t[3]! * 4) / 6,
+      t[4]! * 0.94 + cx * 0.06, t[5]! * 0.94 + cy * 0.06].map((v, n) => v - (n % 2 ? g.y : g.x));
+  })() : null;
   const tail = b.type === "speech" || b.type === "thought" ? tailPoints(g) : null;
   const move = (node: Konva.Node, commit: boolean) => {
     const nx = node.x() - g.w / 2, ny = node.y() - g.h / 2;
@@ -92,15 +105,25 @@ function BalloonShape({ b, g, selected, editable, onSelect, onChange }: { b: Bal
         }}
       >
         {b.type === "caption" && <Rect width={g.w} height={g.h} fill="#fff4c8" stroke={INK} strokeWidth={2.6} />}
-        {(b.type === "speech" || b.type === "thought") && <Ellipse x={g.w / 2} y={g.h / 2} radiusX={g.w / 2} radiusY={g.h / 2} fill="#fff" stroke={INK} strokeWidth={2.6} dash={b.type === "thought" ? [10, 6] : undefined} />}
+        {b.type === "speech" && <Ellipse x={g.w / 2} y={g.h / 2} radiusX={g.w / 2} radiusY={g.h / 2} fill="#fff" stroke={INK} strokeWidth={2.6} />}
+        {cover && <Line points={cover} closed fill="#fff" listening={false} />}
+        {b.type === "thought" && (
+          <>
+            {Array.from({ length: 14 }, (_, n) => {
+              const a = (2 * Math.PI * n) / 14;
+              const r = Math.min(g.w, g.h) * 0.13;
+              return <Ellipse key={n} x={g.w / 2 + Math.cos(a) * g.w * 0.44} y={g.h / 2 + Math.sin(a) * g.h * 0.44} radiusX={r} radiusY={r} fill="#fff" stroke={INK} strokeWidth={2.6} />;
+            })}
+            <Ellipse x={g.w / 2} y={g.h / 2} radiusX={g.w * 0.44} radiusY={g.h * 0.44} fill="#fff" />
+          </>
+        )}
         {sfx ? (
-          <Text width={g.w} height={g.h} align="center" verticalAlign="middle" text={b.text.toUpperCase()} fontFamily={SFX} fontSize={g.font_size} fill="#ffdd33" stroke={INK} strokeWidth={2.5} fillAfterStrokeEnabled />
+          <Text x={-g.w} width={g.w * 3} height={g.h} align="center" verticalAlign="middle" text={b.text.toUpperCase()} wrap="none" fontFamily={SFX} fontSize={g.font_size} fill="#ffdd33" stroke={INK} strokeWidth={6} lineJoin="round" fillAfterStrokeEnabled />
         ) : (
-          <Text x={(g.w - iw) / 2} y={g.h / 2 - (fit!.lines.length * fit!.size * LINE_HEIGHT) / 2} width={iw} align="center" text={fit!.lines.join("\n")} wrap="none" fontFamily={COMIC} fontSize={fit!.size} lineHeight={LINE_HEIGHT} fill={INK} />
+          <Text x={-g.w} y={g.h / 2 - blockH / 2} width={g.w * 3} align="center" text={fit!.lines.join("\n")} wrap="none" fontFamily={COMIC} fontSize={fit!.size} lineHeight={LINE_HEIGHT} fill={INK} />
         )}
         {selected && !editable && <Rect width={g.w} height={g.h} stroke="#17726d" strokeWidth={3} dash={[8, 5]} listening={false} />}
       </Group>
-      {tail && b.type === "speech" && <Line points={[tail[0]! * 0.94 + (g.x + g.w / 2) * 0.06, tail[1]! * 0.94 + (g.y + g.h / 2) * 0.06, (tail[0]! + tail[4]! + tail[2]! * 4) / 6, (tail[1]! + tail[5]! + tail[3]! * 4) / 6, tail[4]! * 0.94 + (g.x + g.w / 2) * 0.06, tail[5]! * 0.94 + (g.y + g.h / 2) * 0.06]} closed fill="#fff" listening={false} />}
       {selected && editable && <Transformer ref={tr} rotateEnabled={false} keepRatio={false} flipEnabled={false} anchorSize={12} borderStroke="#17726d" anchorStroke="#17726d" boundBoxFunc={(o, n) => (n.width < 40 || n.height < 30 ? o : n)} />}
     </>
   );
@@ -136,7 +159,7 @@ export default function PageCanvas({ page, width, editable = false, selectedPane
       </Layer>
       <Layer key={fontsReady ? "fonts" : "fallback"}>
         {balloons.map((b) => (
-          <BalloonShape key={b.id} b={b} g={drafts?.[b.id] ?? (b.geometry as Geometry)} selected={selectedBalloon === b.id} editable={editable}
+          <BalloonShape key={b.id} b={b} g={drafts?.[b.id] ?? (b.geometry as Geometry)} resizing={!!drafts?.[b.id] && (drafts[b.id]!.w !== (b.geometry as Geometry).w || drafts[b.id]!.h !== (b.geometry as Geometry).h)} selected={selectedBalloon === b.id} editable={editable}
             onSelect={onSelectBalloon ? () => { onSelectBalloon(b.id); onSelectPanel?.(b.panel_id); } : undefined}
             onChange={(g, commit) => onBalloonChange?.(b.id, g, commit)} />
         ))}

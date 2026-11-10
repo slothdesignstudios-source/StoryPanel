@@ -133,6 +133,10 @@ async def ensure_bucket() -> None:
         await asyncio.to_thread(_client().head_bucket, Bucket=s.s3_bucket)
     except ClientError:
         await _call(_client().create_bucket, Bucket=s.s3_bucket)
+    # Same rule infra/terraform applies to deployed buckets: the web app may GET signed
+    # objects cross-origin (needed for the canvas to read pixels it drew).
+    await _call(_client().put_bucket_cors, Bucket=s.s3_bucket, CORSConfiguration={"CORSRules": [
+        {"AllowedMethods": ["GET"], "AllowedOrigins": s.cors_origins, "AllowedHeaders": ["*"], "MaxAgeSeconds": 600}]})
 
 
 async def healthy() -> bool:

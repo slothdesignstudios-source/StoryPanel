@@ -15,7 +15,9 @@ export type Credits = S["CreditsOut"];
 export type Meta = S["MetaOut"];
 export type Version = S["VersionOut"];
 export type ExportOut = S["ExportOut"];
-export type Geometry = { x: number; y: number; w: number; h: number; font_size: number; rotation?: number; tail?: { x: number; y: number } | null };
+/** Balloon geometry in page units. `lines` and `text_size` are the server's typesetting
+ *  (lettering.typeset): render them as-is, never re-wrap. */
+export type Geometry = { x: number; y: number; w: number; h: number; font_size: number; rotation?: number; tail?: { x: number; y: number } | null; text_size?: number; lines?: string[] };
 
 export const ACTIVE = new Set(["queued", "intake", "awaiting_answers", "planning", "awaiting_cast_approval", "scripting", "awaiting_script_approval", "illustrating"]);
 export const WORKING = new Set(["queued", "intake", "planning", "scripting", "illustrating"]);

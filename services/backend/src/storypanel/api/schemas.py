@@ -93,6 +93,11 @@ class Geometry(In):
     font_size: float = Field(default=22, ge=8, le=120)
     rotation: float = Field(default=0, ge=-45, le=45)
     tail: dict[Literal["x", "y"], float] | None = None
+    # Typesetting is server-owned (lettering.typeset). Clients may echo these back; they
+    # are accepted and recomputed, never trusted.
+    text_size: float | None = None
+    lines: list[str] | None = Field(default=None, max_length=40)
+    typeset: int | None = None
 
 
 class PatchBalloon(In):

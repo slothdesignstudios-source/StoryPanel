@@ -23,6 +23,8 @@ WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=10001:10001 /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=10001:10001 /repo/apps/web/.next/static ./.next/static
+# Next's standalone output omits public/ (lettering fonts live there)
+COPY --from=build --chown=10001:10001 /repo/apps/web/public ./public
 USER 10001:10001
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=15s --retries=3 \

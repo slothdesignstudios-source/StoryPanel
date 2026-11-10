@@ -19,7 +19,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as pdf_canvas
 
 from storypanel.catalog import font_path
-from storypanel.pipeline.lettering import FONT_MIN, LINE_HEIGHT, fit_text, inner_box
+from storypanel.pipeline.lettering import LINE_HEIGHT, typeset
 
 INK = (17, 17, 17)
 PAPER = (255, 255, 255)
@@ -55,10 +55,13 @@ def _font(name: str, size: float, bold: bool = False) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(font_path(name, bold)), size)
 
 
-def _draw_text(d: ImageDraw.ImageDraw, text: str, font: str, cx: float, cy: float, box_w: float,
-               box_h: float, max_size: float, k: float) -> None:  # fmt: skip
-    # Fit in page units (resolution independent), then draw scaled.
-    size, lines, _ = fit_text(text, font, box_w, box_h, max_size, min_size=FONT_MIN - 6)
+def _draw_text(d: ImageDraw.ImageDraw, g: dict[str, Any], kind: str, text: str, font: str, cx: float,
+               cy: float, k: float) -> None:  # fmt: skip
+    # Draw the stored typesetting (the same lines the editor shows). Geometry saved before
+    # the layout contract existed is typeset here with the same function.
+    if "lines" not in g:
+        g = typeset(kind, text, g, font)[0]
+    size, lines = float(g["text_size"]), list(g["lines"])
     f = _font(font, size * k)
     line_h = size * LINE_HEIGHT * k
     y = cy * k - len(lines) * line_h / 2
@@ -137,8 +140,7 @@ def _draw_balloon(layer: Image.Image, b: dict[str, Any], doc: PageDoc, k: float)
                 ]
                 inner = [shrink[0], ((bx1 + bx2 + tx * 4) / 6, (by1 + by2 + ty * 4) / 6), shrink[1]]
                 d.polygon([(px * k, py * k) for px, py in inner], fill=PAPER)
-    iw, ih = inner_box(kind, w, h)
-    _draw_text(d, text, doc.font, x + w / 2, y + h / 2, iw, ih, float(g.get("font_size", 22)), k)
+    _draw_text(d, g, kind, text, doc.font, x + w / 2, y + h / 2, k)
 
 
 def render_page(doc: PageDoc, width_px: int) -> bytes:

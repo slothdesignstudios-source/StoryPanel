@@ -125,11 +125,12 @@ class Placed:
     def rect(self) -> Rect:
         return (self.x, self.y, self.w, self.h)
 
-    def geometry(self) -> dict[str, Any]:
-        return {"x": round(self.x, 1), "y": round(self.y, 1), "w": round(self.w, 1),
-                "h": round(self.h, 1), "font_size": self.font_size, "rotation": self.rotation,
-                "tail": {"x": round(self.tail[0], 1), "y": round(self.tail[1], 1)}
-                if self.tail else None}  # fmt: skip
+    def geometry(self, font: str = "comic_neue") -> dict[str, Any]:
+        g = {"x": round(self.x, 1), "y": round(self.y, 1), "w": round(self.w, 1),
+             "h": round(self.h, 1), "font_size": self.font_size, "rotation": self.rotation,
+             "tail": {"x": round(self.tail[0], 1), "y": round(self.tail[1], 1)}
+             if self.tail else None}  # fmt: skip
+        return typeset(self.type, self.text, g, font)[0]
 
 
 def overlap(a: Rect, b: Rect) -> float:
@@ -268,11 +269,28 @@ def layout_panel(
     return placed
 
 
-def check_geometry(kind: str, text: str, geometry: dict[str, Any], font: str = "comic_neue") -> list[str]:
-    """Flags for a user-edited balloon: does the text still fit at a legible size?"""
-    iw, ih = inner_box(kind, float(geometry["w"]), float(geometry["h"]))
+TYPESET_VERSION = 1
+
+
+def typeset(kind: str, text: str, geometry: dict[str, Any], font: str = "comic_neue") -> tuple[dict[str, Any], list[str]]:
+    """The shared layout contract between the editor and every export.
+
+    Fits `text` inside the balloon's text box and returns the geometry with the result
+    stored: `text_size` (the fitted size, never above `font_size`) and `lines` (the exact
+    line breaks). The browser and the server renderer both draw these stored lines with the
+    same font files and never re-wrap, so a balloon breaks identically on screen and on paper.
+    Returns the updated geometry and its flags ("overflow" if even the minimum size cannot fit).
+    """
+    g = dict(geometry)
+    g.setdefault("font_size", FONT_MAX)
     if kind == "sfx":
-        return []
-    _, _, fits = fit_text(text, font, iw, ih, float(geometry.get("font_size", FONT_MAX)),
-                          min_size=FONT_MIN - 4)  # fmt: skip
-    return [] if fits else ["overflow"]
+        g.update(text_size=float(g["font_size"]), lines=[" ".join(text.split()).upper()], typeset=TYPESET_VERSION)
+        return g, []
+    iw, ih = inner_box(kind, float(g["w"]), float(g["h"]))
+    size, lines, fits = fit_text(" ".join(text.split()), font, iw, ih, float(g["font_size"]), min_size=FONT_MIN - 4)
+    g.update(text_size=size, lines=lines, typeset=TYPESET_VERSION)
+    return g, [] if fits else ["overflow"]
+
+
+def check_geometry(kind: str, text: str, geometry: dict[str, Any], font: str = "comic_neue") -> list[str]:
+    return typeset(kind, text, geometry, font)[1]
