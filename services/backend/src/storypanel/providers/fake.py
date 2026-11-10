@@ -104,7 +104,10 @@ class FakeTextProvider:
         m = re.search(r"(\d+)\s*-?\s*pages?", low)
         strip = "strip" in low
         pages = 1 if strip else int(m.group(1)) if m else i["default_pages"]
-        style = next((s for s in i["style_ids"] if s.split("_")[1] in low), i["default_style"])
+        words = {"clean_manga_warm": ("manga",), "bold_western_ink": ("western comic", "bold western"),
+                 "soft_storybook": ("storybook",), "noir_duotone": ("noir",)}  # fmt: skip
+        style = next((s for s in i["style_ids"] if any(w in low for w in words.get(s, ()))),
+                     i["default_style"])  # fmt: skip
         audience = "teen" if "teen" in low else "all_ages"
         questions: list[dict[str, Any]] = []
         if not answers and not m and not strip and len(prompt.split()) < 9:

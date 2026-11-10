@@ -168,3 +168,33 @@ async def test_reload_restores_active_job(client: Any, headers: dict[str, str], 
     assert again["event_seq"] > 0 and len(again["characters"]) == 2
     assert all(c["sheet_status"] == "ready" and c["images"]["portrait"] for c in again["characters"])
     await asyncio.sleep(0)
+
+
+async def test_story_bible_edit_invalidates_cast_approval_target(
+    client: Any, headers: dict[str, str], worker: Any
+) -> None:
+    r = await client.post(
+        "/v1/projects", json={"prompt": "A robot learns to cook, as a 4 panel strip"}, headers=headers
+    )
+    pid = r.json()["id"]
+    p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_cast_approval")
+    v = p["cast_version"]
+    r = await client.patch(
+        f"/v1/projects/{pid}/bible",
+        headers=headers,
+        json={"cast_version": v, "title": "Soup for One", "tone": "dry"},
+    )
+    assert r.status_code == 200 and r.json()["title"] == "Soup for One" and r.json()["cast_version"] == v + 1
+    assert r.json()["bible"]["tone"] == "dry"
+    stale_edit = await client.patch(
+        f"/v1/projects/{pid}/bible", headers=headers, json={"cast_version": v, "title": "Old tab"}
+    )
+    assert stale_edit.status_code == 409
+    stale = await client.post(
+        f"/v1/projects/{pid}/characters/approve", json={"cast_version": v}, headers=headers
+    )
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "version_conflict"
+    blocked = await client.patch(
+        f"/v1/projects/{pid}/bible", headers=headers, json={"cast_version": v + 1, "title": "Batman Returns"}
+    )
+    assert blocked.status_code == 422 and blocked.json()["error"]["code"] == "moderation_blocked"

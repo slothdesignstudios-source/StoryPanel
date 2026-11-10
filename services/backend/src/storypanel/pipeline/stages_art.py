@@ -249,6 +249,7 @@ async def stage_finalize_panel(
     """Pick the result, apply it unless the user has moved on, charge, and announce it."""
     s = get_settings()
     async with transaction() as db:
+        await repo.lock_project_of(db, Panel, panel_id)
         panel = (await db.execute(select(Panel).where(Panel.id == panel_id).with_for_update())).scalar_one()
         versions = list((await db.execute(select(PanelVersion).where(
             PanelVersion.id.in_([uuid.UUID(v) for v in version_ids]))
@@ -297,6 +298,7 @@ async def stage_panel_failed(panel_id: uuid.UUID, *, kind: str, code: str, messa
                              workflow_id: str = "") -> None:  # fmt: skip
     """A panel's work ended in an error (not a QA verdict). Keep any existing image."""
     async with transaction() as db:
+        await repo.lock_project_of(db, Panel, panel_id)
         panel = (await db.execute(select(Panel).where(Panel.id == panel_id).with_for_update())).scalar_one()
         if panel.current_version_id is None:
             panel.status = PanelStatus.FAILED.value
@@ -344,6 +346,7 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
     """Place balloons for panels that have none yet, then render the page preview.
     Balloons a user has already edited are never recomputed."""
     async with transaction() as db:
+        await repo.lock_project_of(db, Page, page_id)
         page = (await db.execute(select(Page).where(Page.id == page_id).with_for_update())).scalar_one()
         project = await repo.get_project(db, page.project_id, lock=True)
         panels = list((await db.execute(select(Panel).where(Panel.page_id == page_id)
@@ -382,6 +385,7 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
     png = render.render_page(doc, PREVIEW_WIDTH)
     image = storage.validate_image(png)
     async with transaction() as db:
+        await repo.lock_project_of(db, Page, page_id)
         page = (await db.execute(select(Page).where(Page.id == page_id).with_for_update())).scalar_one()
         asset = await repo.save_image(db, owner_id=owner, project_id=project_id, kind="page_preview",
                                       image=image)  # fmt: skip

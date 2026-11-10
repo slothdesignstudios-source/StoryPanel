@@ -1,0 +1,96 @@
+# Alert rules. Every alert links to a runbook in docs/runbooks/.
+groups:
+  - name: storypanel-availability
+    rules:
+      - alert: ApiHighErrorRate
+        expr: sum(rate(sp_http_requests_total{status=~"5.."}[5m])) / sum(rate(sp_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: page }
+        annotations: { summary: "API 5xx rate above 5%", runbook: docs/runbooks/elevated-failures.md }
+      - alert: ApiSlow
+        expr: histogram_quantile(0.95, sum by (le) (rate(sp_http_request_seconds_bucket{route!~".*/events"}[5m]))) > 2
+        for: 10m
+        labels: { severity: ticket }
+        annotations: { summary: "API p95 latency above 2s", runbook: docs/runbooks/elevated-failures.md }
+      - alert: DependencyDown
+        expr: sp_dependency_up == 0
+        for: 2m
+        labels: { severity: page }
+        annotations: { summary: "{{ $labels.dependency }} is failing readiness checks", runbook: docs/runbooks/restore.md }
+      - alert: WorkerDown
+        expr: absent(up{job="worker"} == 1)
+        for: 3m
+        labels: { severity: page }
+        annotations: { summary: "No worker is being scraped: nothing can be generated", runbook: docs/runbooks/stuck-generation.md }
+  - name: storypanel-workflows
+    rules:
+      - alert: StuckProjects
+        expr: sp_projects_stuck > 0
+        for: 10m
+        labels: { severity: page }
+        annotations: { summary: "{{ $value }} running comics have made no progress for 15+ minutes", runbook: docs/runbooks/stuck-generation.md }
+      - alert: OutboxBacklog
+        expr: sp_outbox_oldest_pending_seconds > 120
+        for: 3m
+        labels: { severity: page }
+        annotations: { summary: "Workflow starts/signals are not reaching Temporal", runbook: docs/runbooks/stuck-generation.md }
+      - alert: ActivityQueueAge
+        expr: histogram_quantile(0.95, sum by (le) (rate(sp_activity_schedule_to_start_seconds_bucket[5m]))) > 30
+        for: 10m
+        labels: { severity: ticket }
+        annotations: { summary: "Activities wait 30s+ for a worker: scale workers", runbook: docs/runbooks/stuck-generation.md }
+      - alert: ElevatedActivityFailures
+        expr: sum(rate(sp_activity_runs_total{outcome!~"ok|cancelled"}[10m])) / sum(rate(sp_activity_runs_total[10m])) > 0.2
+        for: 10m
+        labels: { severity: page }
+        annotations: { summary: "More than 20% of pipeline steps are failing", runbook: docs/runbooks/elevated-failures.md }
+      - alert: ExportFailures
+        expr: sum(rate(sp_exports_total{outcome="failed"}[15m])) / sum(rate(sp_exports_total[15m])) > 0.1
+        for: 15m
+        labels: { severity: ticket }
+        annotations: { summary: "Exports failing above 10%", runbook: docs/runbooks/failed-export.md }
+  - name: storypanel-providers
+    rules:
+      - alert: ProviderOutage
+        expr: sum by (provider) (rate(sp_provider_calls_total{outcome="error"}[5m])) / sum by (provider) (rate(sp_provider_calls_total[5m])) > 0.5
+        for: 5m
+        labels: { severity: page }
+        annotations: { summary: "{{ $labels.provider }} is failing more than half of calls", runbook: docs/runbooks/provider-outage.md }
+      - alert: ProviderThrottling
+        expr: sum by (provider) (rate(sp_provider_calls_total{outcome="throttled"}[10m])) > 0.2
+        for: 10m
+        labels: { severity: ticket }
+        annotations: { summary: "{{ $labels.provider }} is rate limiting us", runbook: docs/runbooks/provider-outage.md }
+      - alert: SpendAboveBudget
+        expr: sum(increase(sp_provider_cost_usd_total[1d])) > 400
+        labels: { severity: page }
+        annotations: { summary: "Provider spend passed 80% of the daily global limit", runbook: docs/runbooks/budget-overrun.md }
+      - alert: SpendLimitHit
+        expr: increase(sp_spend_limit_hits_total{scope="global"}[10m]) > 0
+        labels: { severity: page }
+        annotations: { summary: "Global spend limit reached: generation is refused", runbook: docs/runbooks/budget-overrun.md }
+  - name: storypanel-quality-and-money
+    rules:
+      - alert: CreditLedgerDrift
+        expr: sp_credit_reconciliation_drift > 0
+        for: 5m
+        labels: { severity: page }
+        annotations: { summary: "{{ $value }} accounts where balance and ledger disagree", runbook: docs/runbooks/billing-mismatch.md }
+      - alert: WebhookSignatureFailures
+        expr: increase(sp_webhook_events_total{outcome="bad_signature"}[15m]) > 5
+        labels: { severity: ticket }
+        annotations: { summary: "Repeated invalid payment webhook signatures", runbook: docs/runbooks/billing-mismatch.md }
+      - alert: QaPassRateLow
+        expr: sum(rate(sp_panel_qa_total{check="vision",outcome="pass"}[1h])) / sum(rate(sp_panel_qa_total{check="vision"}[1h])) < 0.7
+        for: 1h
+        labels: { severity: ticket }
+        annotations: { summary: "First-pass panel QA below 70%: model or prompt regression?", runbook: docs/runbooks/elevated-failures.md }
+      - alert: SafetyBlockSpike
+        expr: sum(rate(sp_moderation_total{outcome="blocked"}[30m])) / sum(rate(sp_moderation_total[30m])) > 0.2
+        for: 30m
+        labels: { severity: ticket }
+        annotations: { summary: "Unusual share of content blocked by moderation", runbook: docs/runbooks/elevated-failures.md }
+      - alert: TelemetryExportFailing
+        expr: increase(sp_telemetry_failures_total[15m]) > 20
+        labels: { severity: ticket }
+        annotations: { summary: "Telemetry sink {{ $labels.sink }} is failing (generation is unaffected)", runbook: docs/runbooks/elevated-failures.md }

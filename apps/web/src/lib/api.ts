@@ -34,6 +34,11 @@ const middleware: Middleware = {
     if (request.method !== "GET" && !request.headers.has("Idempotency-Key")) {
       request.headers.set("Idempotency-Key", crypto.randomUUID());
     }
+    // Start a W3C trace in the browser so one id follows the click through API, workflow and worker.
+    if (!request.headers.has("traceparent")) {
+      const hex = (n: number) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
+      request.headers.set("traceparent", `00-${hex(16)}-${hex(8)}-01`);
+    }
     return request;
   },
   async onResponse({ response }) {

@@ -399,3 +399,68 @@ async def test_sse_replay_reconnect_and_reset(app: Any, headers: dict[str, str])
     finally:
         server.should_exit = True
         await task
+
+
+# ------------------------------------------------------------------ spend limits & deletion jobs
+async def test_spend_limits_refuse_new_paid_work(client: Any, headers: dict[str, str]) -> None:
+    from datetime import UTC, datetime
+
+    from storypanel.providers import metering
+    from storypanel.providers.base import CallContext
+
+    uid = str(await _user(client, headers))
+    ctx = CallContext("panel_generate", user_id=uid, project_id=str(uuid.uuid4()))
+    await metering.check_spend_limits(ctx)  # under every limit
+    day = datetime.now(UTC).strftime("%Y%m%d")
+    r = events.redis_client()
+    for key, scope in (
+        (f"sp:spend:project:{ctx.project_id}", "comic"),
+        (f"sp:spend:user:{uid}:{day}", "comic"),
+        (f"sp:spend:global:{day}", "paused"),
+    ):
+        await r.set(key, "100000")
+        with pytest.raises(AppError) as e:
+            await metering.check_spend_limits(ctx)
+        assert e.value.code is ErrorCode.SPEND_LIMIT and not e.value.retryable and scope in e.value.message
+        await r.delete(key)
+    await metering.check_spend_limits(ctx)
+
+
+async def test_deleted_projects_are_purged_with_their_files(client: Any, headers: dict[str, str]) -> None:
+    from storypanel import storage
+    from storypanel.db.models import Asset
+    from storypanel.services import maintenance
+
+    owner = await _user(client, headers)
+    ids = await _seed_comic(owner)
+    keep = await _seed_comic(owner)
+    await storage.put_bytes("users/x/purge-me.png", b"png", "image/png")
+    async with transaction() as db:
+        db.add(
+            Asset(
+                id=uuid.uuid4(),
+                owner_id=owner,
+                project_id=ids["project"],
+                kind="panel",
+                storage_key="users/x/purge-me.png",
+                content_type="image/png",
+                bytes=3,
+                sha256="0" * 64,
+            )
+        )
+    assert (await client.delete(f"/v1/projects/{ids['project']}", headers=headers)).status_code == 204
+    assert (
+        await client.get(f"/v1/projects/{ids['project']}", headers=headers)
+    ).status_code == 404  # hidden at once
+    assert await maintenance.purge_deleted_projects() == 0  # still inside the grace period
+    async with transaction() as db:
+        await db.execute(
+            text("update projects set deleted_at = now() - interval '8 days' where id = :p"),
+            {"p": ids["project"]},
+        )
+    assert await maintenance.purge_deleted_projects() == 1
+    async with transaction() as db:
+        assert (await db.execute(select(Project.id))).scalars().all() == [keep["project"]]
+        assert (await db.execute(select(Asset))).scalars().all() == []
+    with pytest.raises(AppError):
+        await storage.get_bytes("users/x/purge-me.png")

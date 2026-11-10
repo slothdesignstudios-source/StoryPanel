@@ -1,0 +1,112 @@
+name: ci
+on:
+  pull_request:
+  push: { branches: [main] }
+concurrency: { group: "ci-${{ github.ref }}", cancel-in-progress: true }
+permissions: { contents: read }
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: storypanel, POSTGRES_HOST_AUTH_METHOD: trust, POSTGRES_DB: storypanel_test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U storypanel" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    defaults: { run: { working-directory: services/backend } }
+    env:
+      SP_DATABASE_URL: postgresql+asyncpg://storypanel@127.0.0.1:5432/storypanel_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - name: Format and lint
+        run: uv run ruff format --check src tests && uv run ruff check src tests
+      - name: Types
+        run: uv run mypy
+      - name: Migrations apply cleanly and match the models
+        run: |
+          psql -h 127.0.0.1 -U storypanel -d storypanel_test -c "create extension if not exists vector"
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base && uv run alembic upgrade head
+      - name: Tests (unit, integration, workflow)
+        run: uv run pytest -q --cov=storypanel --cov-report=term-missing:skip-covered
+      - name: API contract drift
+        run: |
+          uv run python ../../scripts/export-openapi.py ../../packages/api-types/openapi.json
+          git diff --exit-code -- ../../packages/api-types/openapi.json
+      - name: Fast evaluation subset (simulated providers)
+        env: { SP_ENV: test, SP_S3_ENDPOINT_URL: "http://127.0.0.1:5057", SP_S3_ACCESS_KEY_ID: test, SP_S3_SECRET_ACCESS_KEY: test }
+        run: |
+          uv run moto_server -H 127.0.0.1 -p 5057 & sleep 3
+          uv run python -m storypanel.evals.harness --subset fast
+      - name: Dependency audit
+        run: uv export --frozen --no-dev --no-emit-project --format requirements-txt -o /tmp/req.txt && uv run pip-audit -r /tmp/req.txt --disable-pip
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults: { run: { working-directory: apps/web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, cache-dependency-path: apps/web/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - name: Generated API types are up to date
+        run: pnpm gen:api && git diff --exit-code -- ../../packages/api-types/schema.d.ts
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm audit --prod --audit-level high
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [backend, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stack (fake providers)
+        run: docker compose up --build --wait --wait-timeout 300
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - working-directory: apps/web
+        run: pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium && pnpm e2e -- --trace off
+      - if: failure()
+        run: docker compose logs --no-color --tail 200
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f infra/docker/backend.Dockerfile -t storypanel-backend:ci .
+      - run: docker build -f infra/docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 -t storypanel-web:ci .
+      - name: Images run as non-root
+        run: |
+          test "$(docker run --rm storypanel-backend:ci id -u)" = 10001
+          test "$(docker run --rm --entrypoint id storypanel-web:ci -u)" = 10001
+      - name: Scan images
+        uses: aquasecurity/trivy-action@0.28.0
+        with: { image-ref: storypanel-backend:ci, severity: "CRITICAL,HIGH", exit-code: "1", ignore-unfixed: true }
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - working-directory: infra/terraform
+        run: terraform fmt -check && terraform init -backend=false && terraform validate
+      - name: Prometheus rules
+        run: docker run --rm -v "$PWD/infra/observability:/c:ro" --entrypoint promtool prom/prometheus:latest check rules /c/alerts.yml

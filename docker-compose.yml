@@ -1,0 +1,112 @@
+# Local development stack. Fake providers and dev sign-in by default: nothing here needs
+# a paid account.   docker compose up --build        (add --profile observability for telemetry)
+name: storypanel
+x-backend-env: &backend-env
+  SP_ENV: local
+  SP_PROVIDER_MODE: ${SP_PROVIDER_MODE:-fake}
+  SP_AUTH_MODE: ${SP_AUTH_MODE:-dev}
+  SP_DATABASE_URL: postgresql+asyncpg://storypanel:storypanel@postgres:5432/storypanel
+  SP_REDIS_URL: redis://redis:6379/0
+  SP_S3_ENDPOINT_URL: http://minio:9000
+  SP_S3_ACCESS_KEY_ID: storypanel
+  SP_S3_SECRET_ACCESS_KEY: storypanel-local-secret
+  SP_S3_BUCKET: storypanel-assets
+  SP_TEMPORAL_ADDRESS: temporal:7233
+  SP_CORS_ORIGINS: '["http://localhost:3000"]'
+  SP_OTLP_ENDPOINT: ${SP_OTLP_ENDPOINT:-}
+x-backend: &backend
+  build: { context: ., dockerfile: infra/docker/backend.Dockerfile }
+  env_file: [{ path: .env, required: false }]
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: { POSTGRES_USER: storypanel, POSTGRES_PASSWORD: storypanel, POSTGRES_DB: storypanel }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U storypanel"], interval: 5s, timeout: 3s, retries: 20 }
+    ports: ["127.0.0.1:5432:5432"]
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20 }
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment: { MINIO_ROOT_USER: storypanel, MINIO_ROOT_PASSWORD: storypanel-local-secret }
+    volumes: [miniodata:/data]
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 5s, timeout: 3s, retries: 20 }
+  temporal:
+    image: temporalio/temporal:latest
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    volumes: [temporaldata:/data]
+    ports: ["127.0.0.1:8233:8233"]
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-env
+    depends_on: { postgres: { condition: service_healthy } }
+  api:
+    <<: *backend
+    environment: { <<: *backend-env, SP_SERVICE_NAME: storypanel-api }
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      temporal: { condition: service_started }
+  worker:
+    <<: *backend
+    command: ["python", "-m", "storypanel.workflows.worker"]
+    environment: { <<: *backend-env, SP_SERVICE_NAME: storypanel-worker }
+    stop_grace_period: 45s
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9464/metrics', timeout=2)"], interval: 15s, timeout: 3s, retries: 3 }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      temporal: { condition: service_started }
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_AUTH_MODE: ${SP_AUTH_MODE:-dev}
+        NEXT_PUBLIC_ASSET_ORIGINS: http://localhost:9000 http://minio:9000
+        NEXT_PUBLIC_ENV: local
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [api]
+
+  # ---- optional telemetry: docker compose --profile observability up
+  otel-collector:
+    profiles: [observability]
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes: ["./infra/observability/otel-collector.yaml:/etc/otel/config.yaml:ro"]
+  tempo:
+    profiles: [observability]
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes: ["./infra/observability/tempo.yaml:/etc/tempo.yaml:ro"]
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["127.0.0.1:9090:9090"]
+  grafana:
+    profiles: [observability]
+    image: grafana/grafana:latest
+    environment: { GF_AUTH_ANONYMOUS_ENABLED: "true", GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer }
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3001:3000"]
+
+volumes: { pgdata: {}, miniodata: {}, temporaldata: {} }

@@ -73,6 +73,7 @@ ignore = ["E501", "S101", "S311", "S110", "S112", "B008", "ASYNC109", "ASYNC110"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S", "B", "E731"]
 "src/storypanel/providers/fake.py" = ["S"]
+"src/storypanel/evals/harness.py" = ["ASYNC221", "ASYNC240"]  # one-shot CLI: blocking file/git calls are fine
 
 [tool.mypy]
 python_version = "3.13"

@@ -233,3 +233,15 @@ async def pages_with_panels(db: AsyncSession, project_id: uuid.UUID) -> list[tup
     for panel in panels:
         by_page.setdefault(panel.page_id, []).append(panel)
     return [(page, by_page.get(page.id, [])) for page in pages]
+
+
+async def lock_project_of(db: AsyncSession, model: Any, row_id: uuid.UUID) -> None:
+    """Lock the parent project before locking one of its rows.
+
+    Lock order is always project -> child row -> credits. Every transaction that emits an
+    event updates the project row, so taking it first keeps concurrent panel, page and
+    balloon work from deadlocking against each other.
+    """
+    project_id = (await db.execute(select(model.project_id).where(model.id == row_id))).scalar_one_or_none()
+    if project_id is not None:
+        await db.execute(select(Project.id).where(Project.id == project_id).with_for_update())

@@ -42,6 +42,8 @@ async def owned_panel(db: AsyncSession, panel_id: uuid.UUID, owner_id: uuid.UUID
                       lock: bool = False) -> tuple[Panel, Project]:  # fmt: skip
     """Ownership is checked through the parent project on every panel-level route."""
     stmt = select(Panel).where(Panel.id == panel_id)
+    if lock:
+        await repo.lock_project_of(db, Panel, panel_id)
     panel = (await db.execute(stmt.with_for_update() if lock else stmt)).scalar_one_or_none()
     if panel is None:
         raise not_found("Panel")
@@ -50,6 +52,7 @@ async def owned_panel(db: AsyncSession, panel_id: uuid.UUID, owner_id: uuid.UUID
 
 
 async def owned_page(db: AsyncSession, page_id: uuid.UUID, owner_id: uuid.UUID) -> tuple[Page, Project]:
+    await repo.lock_project_of(db, Page, page_id)
     page = (await db.execute(select(Page).where(Page.id == page_id).with_for_update())).scalar_one_or_none()
     if page is None:
         raise not_found("Page")
@@ -173,6 +176,7 @@ def _check_text(text: str) -> None:
 
 async def patch_balloon(db: AsyncSession, balloon_id: uuid.UUID, owner_id: uuid.UUID,
                         body: api.PatchBalloon) -> api.BalloonOut:  # fmt: skip
+    await repo.lock_project_of(db, Balloon, balloon_id)
     b = (
         await db.execute(select(Balloon).where(Balloon.id == balloon_id).with_for_update())
     ).scalar_one_or_none()
@@ -230,6 +234,7 @@ async def create_balloon(db: AsyncSession, panel_id: uuid.UUID, owner_id: uuid.U
 
 
 async def delete_balloon(db: AsyncSession, balloon_id: uuid.UUID, owner_id: uuid.UUID) -> None:
+    await repo.lock_project_of(db, Balloon, balloon_id)
     b = (
         await db.execute(select(Balloon).where(Balloon.id == balloon_id).with_for_update())
     ).scalar_one_or_none()

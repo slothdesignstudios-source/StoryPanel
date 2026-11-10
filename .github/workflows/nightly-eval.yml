@@ -1,0 +1,54 @@
+name: nightly-eval
+# Full golden set with simulated providers every night. The live run is manual, needs
+# provider secrets, and always carries an explicit spend ceiling.
+on:
+  schedule: [{ cron: "17 3 * * *" }]
+  workflow_dispatch:
+    inputs:
+      live: { description: "Use real providers (costs money)", type: boolean, default: false }
+      max_usd: { description: "Spend ceiling for a live run", default: "10" }
+permissions: { contents: read }
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_USER: storypanel, POSTGRES_HOST_AUTH_METHOD: trust, POSTGRES_DB: storypanel }
+        ports: ["5432:5432"]
+      redis: { image: "redis:7-alpine", ports: ["6379:6379"] }
+    defaults: { run: { working-directory: services/backend } }
+    env:
+      SP_ENV: test
+      SP_DATABASE_URL: postgresql+asyncpg://storypanel@127.0.0.1:5432/storypanel
+      SP_S3_ENDPOINT_URL: http://127.0.0.1:5057
+      SP_S3_ACCESS_KEY_ID: test
+      SP_S3_SECRET_ACCESS_KEY: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: |
+          psql -h 127.0.0.1 -U storypanel -d storypanel -c "create extension if not exists vector"
+          uv run alembic upgrade head
+          uv run moto_server -H 127.0.0.1 -p 5057 & sleep 3
+      - if: ${{ !inputs.live }}
+        run: uv run python -m storypanel.evals.harness --subset all --concurrency 4
+      - if: ${{ inputs.live }}
+        env:
+          SP_PROVIDER_MODE: live
+          SP_ANTHROPIC_API_KEY: ${{ secrets.SP_ANTHROPIC_API_KEY }}
+          SP_FAL_KEY: ${{ secrets.SP_FAL_KEY }}
+          SP_VOYAGE_API_KEY: ${{ secrets.SP_VOYAGE_API_KEY }}
+          SP_TEXT_MODEL_STORY: ${{ vars.SP_TEXT_MODEL_STORY }}
+          SP_TEXT_MODEL_LIGHT: ${{ vars.SP_TEXT_MODEL_LIGHT }}
+          SP_VISION_MODEL: ${{ vars.SP_VISION_MODEL }}
+          SP_IMAGE_MODEL_GENERATE: ${{ vars.SP_IMAGE_MODEL_GENERATE }}
+          SP_IMAGE_MODEL_EDIT: ${{ vars.SP_IMAGE_MODEL_EDIT }}
+          SP_UPSCALE_MODEL: ${{ vars.SP_UPSCALE_MODEL }}
+          SP_EMBEDDING_MODEL: ${{ vars.SP_EMBEDDING_MODEL }}
+        run: uv run python -m storypanel.evals.harness --subset all --live --max-usd "${{ inputs.max_usd }}" --concurrency 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: eval-report, path: evals/reports/*.json }

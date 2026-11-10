@@ -1,0 +1,105 @@
+# Render Blueprint: API, worker, web, Postgres (pgvector) and Redis for one environment.
+# Apply once per environment with a different env group (storypanel-staging / storypanel-production).
+# Temporal Cloud, object storage (see infra/terraform), Clerk and Stripe are external.
+# NOT YET APPLIED: this file has not been validated against a Render workspace.
+previews: { generation: off }
+envVarGroups:
+  - name: storypanel-shared
+    envVars:
+      - { key: SP_PROVIDER_MODE, value: live }
+      - { key: SP_AUTH_MODE, value: clerk }
+      - { key: SP_TEMPORAL_TLS, value: "true" }
+      - { key: SP_TRACE_SAMPLE_RATIO, value: "0.2" }
+      # Secrets and model ids are entered in the dashboard (sync: false), never committed.
+      - { key: SP_PSEUDONYM_SALT, generateValue: true }
+      - { key: SP_ANTHROPIC_API_KEY, sync: false }
+      - { key: SP_FAL_KEY, sync: false }
+      - { key: SP_VOYAGE_API_KEY, sync: false }
+      - { key: SP_TEXT_MODEL_STORY, sync: false }
+      - { key: SP_TEXT_MODEL_LIGHT, sync: false }
+      - { key: SP_VISION_MODEL, sync: false }
+      - { key: SP_IMAGE_MODEL_GENERATE, sync: false }
+      - { key: SP_IMAGE_MODEL_EDIT, sync: false }
+      - { key: SP_UPSCALE_MODEL, sync: false }
+      - { key: SP_EMBEDDING_MODEL, sync: false }
+      - { key: SP_TEMPORAL_ADDRESS, sync: false }
+      - { key: SP_TEMPORAL_NAMESPACE, sync: false }
+      - { key: SP_TEMPORAL_API_KEY, sync: false }
+      - { key: SP_S3_BUCKET, sync: false }
+      - { key: SP_S3_REGION, sync: false }
+      - { key: SP_S3_ACCESS_KEY_ID, sync: false }
+      - { key: SP_S3_SECRET_ACCESS_KEY, sync: false }
+      - { key: SP_CLERK_ISSUER, sync: false }
+      - { key: SP_CLERK_JWKS_URL, sync: false }
+      - { key: SP_CLERK_AUTHORIZED_PARTIES, sync: false }
+      - { key: SP_CLERK_WEBHOOK_SECRET, sync: false }
+      - { key: SP_STRIPE_SECRET_KEY, sync: false }
+      - { key: SP_STRIPE_WEBHOOK_SECRET, sync: false }
+      - { key: SP_STRIPE_PRICE_CREATOR, sync: false }
+      - { key: SP_STRIPE_PRICE_PRO, sync: false }
+      - { key: SP_STRIPE_PRICE_CREDIT_PACK, sync: false }
+      - { key: SP_CORS_ORIGINS, sync: false }
+      - { key: SP_WEB_BASE_URL, sync: false }
+      - { key: SP_SENTRY_DSN, sync: false }
+      - { key: SP_LANGFUSE_PUBLIC_KEY, sync: false }
+      - { key: SP_LANGFUSE_SECRET_KEY, sync: false }
+      - { key: SP_OTLP_ENDPOINT, sync: false }
+
+databases:
+  - name: storypanel-db
+    plan: basic-1gb
+    postgresMajorVersion: "16"
+    ipAllowList: []          # private network only
+
+services:
+  - type: keyvalue
+    name: storypanel-redis
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+  - type: web
+    name: storypanel-api
+    runtime: docker
+    dockerfilePath: infra/docker/backend.Dockerfile
+    dockerContext: .
+    plan: standard
+    numInstances: 2
+    healthCheckPath: /readyz
+    # Migrations are backward compatible (expand, then contract), so they run before the
+    # new version takes traffic and the old version keeps working during the rollout.
+    preDeployCommand: alembic upgrade head
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - fromGroup: storypanel-shared
+      - { key: SP_ENV, sync: false }          # staging | production
+      - { key: SP_SERVICE_NAME, value: storypanel-api }
+      - { key: SP_DATABASE_URL, sync: false } # postgresql+asyncpg://... (internal URL of storypanel-db)
+      - { key: SP_REDIS_URL, fromService: { type: keyvalue, name: storypanel-redis, property: connectionString } }
+  - type: worker
+    name: storypanel-worker
+    runtime: docker
+    dockerfilePath: infra/docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python -m storypanel.workflows.worker
+    plan: standard
+    numInstances: 2
+    maxShutdownDelaySeconds: 45
+    envVars:
+      - fromGroup: storypanel-shared
+      - { key: SP_ENV, sync: false }
+      - { key: SP_SERVICE_NAME, value: storypanel-worker }
+      - { key: SP_DATABASE_URL, sync: false }
+      - { key: SP_REDIS_URL, fromService: { type: keyvalue, name: storypanel-redis, property: connectionString } }
+  - type: web
+    name: storypanel-web
+    runtime: docker
+    dockerfilePath: infra/docker/web.Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /sign-in
+    envVars:
+      - { key: NEXT_PUBLIC_API_URL, sync: false }
+      - { key: NEXT_PUBLIC_AUTH_MODE, value: clerk }
+      - { key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, sync: false }
+      - { key: NEXT_PUBLIC_ASSET_ORIGINS, sync: false }
+      - { key: NEXT_PUBLIC_SENTRY_DSN, sync: false }
