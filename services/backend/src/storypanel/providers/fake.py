@@ -203,13 +203,13 @@ class FakeTextProvider:
                     text = " ".join(["word"] * 30)
                 dialogue = [{"type": "speech", "speaker": speaker, "text": text}]
                 if k == 0:
-                    dialogue.insert(0, {"type": "caption", "speaker": None,
+                    dialogue.insert(0, {"type": "caption", "speaker": None,  # type: ignore[dict-item]
                                         "text": f"Page {p + 1}. The rain kept falling."})  # fmt: skip
                 if k == n_panels - 1 and len(who) > 1:
                     dialogue.append({"type": "speech", "speaker": who[(k + 1) % len(who)],
                                      "text": "Same time tomorrow?"})  # fmt: skip
                 if k == 1 and p == climax_page:
-                    dialogue.append({"type": "sfx", "speaker": None, "text": "CLANG!"})
+                    dialogue.append({"type": "sfx", "speaker": None, "text": "CLANG!"})  # type: ignore[dict-item]
                 panels.append({
                     "shot": ["wide", "medium", "close_up"][k % 3], "angle": "eye-level",
                     "location_id": locs[(p + k // 3) % len(locs)], "time_of_day": "night, light rain",
@@ -353,7 +353,7 @@ class FakeEmbeddingProvider:
         out = []
         for data in images:
             small = Image.open(io.BytesIO(data)).convert("RGB").resize((16, 16))
-            flat = [v / 255.0 for px in small.getdata() for v in px]  # 768 colour features
+            flat = [b / 255.0 for b in small.tobytes()]  # 768 colour features
             out.append((flat + [0.5] * self._dims)[: self._dims])
         return out
 

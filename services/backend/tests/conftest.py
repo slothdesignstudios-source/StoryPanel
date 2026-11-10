@@ -32,6 +32,7 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from moto.server import ThreadedMotoServer  # noqa: E402
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
 from storypanel import storage  # noqa: E402
@@ -45,6 +46,8 @@ from storypanel.providers import fake  # noqa: E402
 from storypanel.providers.registry import set_providers  # noqa: E402
 from storypanel.services import events, outbox  # noqa: E402
 
+SPANS = InMemorySpanExporter()
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _s3() -> Iterator[None]:
@@ -57,6 +60,9 @@ def _s3() -> Iterator[None]:
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _bootstrap(_s3: None) -> AsyncIterator[None]:
     configure_logging("test")
+    from storypanel.obs import tracing
+
+    tracing.configure_tracing("test", exporter=SPANS)
     await storage.ensure_bucket()
     yield
     await events.close_redis()
@@ -123,8 +129,7 @@ async def worker(temporal_env: Any, app: Any) -> AsyncIterator[Any]:
     set_temporal_client(temporal_env.client)
     app.state.temporal = temporal_env.client
     stop = asyncio.Event()
-    dispatcher = asyncio.create_task(
-        outbox.run_dispatcher(temporal_env.client, stop, app.state.outbox_wake))
+    dispatcher = asyncio.create_task(outbox.run_dispatcher(temporal_env.client, stop, app.state.outbox_wake))
     w = build_worker(temporal_env.client, queue)
     async with w:
         yield w
@@ -134,8 +139,9 @@ async def worker(temporal_env: Any, app: Any) -> AsyncIterator[Any]:
     get_settings.cache_clear()
 
 
-async def wait_for(client: httpx.AsyncClient, project_id: str, headers: dict[str, str],
-                   predicate: Any, timeout: float = 60.0) -> dict[str, Any]:
+async def wait_for(
+    client: httpx.AsyncClient, project_id: str, headers: dict[str, str], predicate: Any, timeout: float = 60.0
+) -> dict[str, Any]:
     """Poll project state until `predicate(project)` holds."""
     deadline = asyncio.get_event_loop().time() + timeout
     last: dict[str, Any] = {}
@@ -154,19 +160,23 @@ async def wait_for(client: httpx.AsyncClient, project_id: str, headers: dict[str
 PROMPT = "A shy robot who runs a night-time noodle stall learns to make friends. 2 pages, manga style."
 
 
-async def run_to_completion(client: httpx.AsyncClient, headers: dict[str, str],
-                            prompt: str = PROMPT) -> dict[str, Any]:
+async def run_to_completion(
+    client: httpx.AsyncClient, headers: dict[str, str], prompt: str = PROMPT
+) -> dict[str, Any]:
     """Drive the whole happy path through the public API."""
     resp = await client.post("/v1/projects", json={"prompt": prompt}, headers=headers)
     assert resp.status_code == 201, resp.text
     pid = resp.json()["id"]
     p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_cast_approval")
-    r = await client.post(f"/v1/projects/{pid}/characters/approve",
-                          json={"cast_version": p["cast_version"]}, headers=headers)
+    r = await client.post(
+        f"/v1/projects/{pid}/characters/approve", json={"cast_version": p["cast_version"]}, headers=headers
+    )
     assert r.status_code == 200, r.text
     p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_script_approval")
-    r = await client.post(f"/v1/projects/{pid}/script/approve",
-                          json={"script_version": p["script_version"]}, headers=headers)
+    r = await client.post(
+        f"/v1/projects/{pid}/script/approve", json={"script_version": p["script_version"]}, headers=headers
+    )
     assert r.status_code == 200, r.text
-    return await wait_for(client, pid, headers,
-                          lambda p: p["status"] in ("completed", "partially_completed", "failed"))
+    return await wait_for(
+        client, pid, headers, lambda p: p["status"] in ("completed", "partially_completed", "failed")
+    )

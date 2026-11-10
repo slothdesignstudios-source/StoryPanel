@@ -70,7 +70,10 @@ async def grant(
         return False
     bal, held = (
         await db.execute(
-            select(User.credit_balance, User.credit_reserved).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
+            select(User.credit_balance, User.credit_reserved)
+            .where(User.id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )  # fmt: skip
     ).one()
     # A clawback never cuts into credits already promised to running work; the ledger
@@ -138,7 +141,10 @@ async def charge(
         return False
     resv = (
         await db.execute(
-            select(CreditReservation).where(CreditReservation.id == reservation_id).with_for_update().execution_options(populate_existing=True)
+            select(CreditReservation)
+            .where(CreditReservation.id == reservation_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
     ).scalar_one()
     if resv.status != "open" or resv.settled + units > resv.amount:
@@ -164,7 +170,10 @@ async def close(db: AsyncSession, reservation_id: uuid.UUID) -> int:
     """Release whatever was not charged. Safe to call repeatedly."""
     resv = (
         await db.execute(
-            select(CreditReservation).where(CreditReservation.id == reservation_id).with_for_update().execution_options(populate_existing=True)
+            select(CreditReservation)
+            .where(CreditReservation.id == reservation_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
     if resv is None or resv.status != "open":

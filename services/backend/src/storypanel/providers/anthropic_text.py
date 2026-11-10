@@ -62,7 +62,7 @@ class AnthropicTextProvider:
                 model=model,
                 max_tokens=16000,
                 system=system,
-                messages=[{"role": "user", "content": content}],  # type: ignore[typeddict-item]
+                messages=[{"role": "user", "content": content}],  # type: ignore[list-item,misc,typeddict-item]
                 output_format=schema,
                 output_config={"effort": "medium" if role == "story" else "low"},
             )

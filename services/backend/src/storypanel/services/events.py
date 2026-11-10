@@ -16,10 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from storypanel.config import get_settings
 from storypanel.db.models import Project, ProjectEvent
 
-_redis: aioredis.Redis | None = None
+_redis: aioredis.Redis | None = None  # type: ignore[type-arg]
 
 
-def redis_client() -> aioredis.Redis:
+def redis_client() -> aioredis.Redis:  # type: ignore[type-arg]
     global _redis
     if _redis is None:
         _redis = aioredis.from_url(get_settings().redis_url, decode_responses=True)
@@ -29,7 +29,7 @@ def redis_client() -> aioredis.Redis:
 async def close_redis() -> None:
     global _redis
     if _redis is not None:
-        await _redis.aclose()
+        await _redis.aclose()  # type: ignore[attr-defined]
     _redis = None
 
 

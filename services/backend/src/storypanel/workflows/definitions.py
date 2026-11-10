@@ -161,7 +161,7 @@ class ComicWorkflow:
             pending = self._approvals[kind]
             try:
                 await workflow.wait_condition(
-                    lambda pending=pending: bool(pending) or (kind == "cast" and bool(self._revisions)),
+                    lambda pending=pending: bool(pending) or (kind == "cast" and bool(self._revisions)),  # type: ignore[misc]
                     timeout=timedelta(days=days))  # fmt: skip
             except TimeoutError:
                 return None

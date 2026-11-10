@@ -116,7 +116,7 @@ async def rate_limit(key: str, limit: int, window_seconds: int) -> None:
     """Distributed fixed-window limiter. Fails open if Redis is down (logged upstream)."""
     bucket = int(time.time() // window_seconds)
     try:
-        count = await redis_client().eval(_WINDOW, 1, f"sp:rl:{key}:{bucket}", window_seconds + 5)  # type: ignore[misc]
+        count = await redis_client().eval(_WINDOW, 1, f"sp:rl:{key}:{bucket}", window_seconds + 5)  # type: ignore[misc,no-untyped-call]
     except Exception:
         return
     if int(count) > limit:

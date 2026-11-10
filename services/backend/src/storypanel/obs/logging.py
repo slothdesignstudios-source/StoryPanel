@@ -83,10 +83,10 @@ def configure_logging(service: str | None = None) -> None:
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True, key="timestamp"),
-            _static,
-            _trace_processor,
+            _static,  # type: ignore[list-item]
+            _trace_processor,  # type: ignore[list-item]
             structlog.processors.format_exc_info,
-            _redact_processor,
+            _redact_processor,  # type: ignore[list-item]
             structlog.processors.EventRenamer("message"),
             structlog.processors.JSONRenderer(),
         ],

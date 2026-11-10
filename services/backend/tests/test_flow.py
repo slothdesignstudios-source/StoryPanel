@@ -31,8 +31,12 @@ async def _export(client: Any, headers: dict[str, str], pid: str, fmt: str) -> b
     r = await client.post(f"/v1/projects/{pid}/exports", json={"format": fmt}, headers=headers)
     assert r.status_code == 202, r.text
     export_id = r.json()["id"]
-    p = await wait_for(client, pid, headers, lambda p: any(
-        e["id"] == export_id and e["status"] in ("ready", "failed") for e in p["exports"]))
+    p = await wait_for(
+        client,
+        pid,
+        headers,
+        lambda p: any(e["id"] == export_id and e["status"] in ("ready", "failed") for e in p["exports"]),
+    )
     export = next(e for e in p["exports"] if e["id"] == export_id)
     assert export["status"] == "ready", export
     return await _download(export["download_url"])
@@ -49,13 +53,15 @@ async def test_prompt_to_export(client: Any, headers: dict[str, str], worker: An
     # every dialogue line became an editable vector balloon; none carry layout problems
     for panel in panels:
         assert len(panel["balloons"]) == len(panel["spec"]["dialogue"])
-        assert all("overflow" not in b["flags"] and "reading_order" not in b["flags"]
-                   for b in panel["balloons"])
+        assert all(
+            "overflow" not in b["flags"] and "reading_order" not in b["flags"] for b in panel["balloons"]
+        )
     # credits: plan (cast + script) + one per panel; nothing left on hold
     async with transaction() as db:
         from sqlalchemy import select
 
         from storypanel.db.models import User
+
         user = (await db.execute(select(User))).scalar_one()
         assert user.credit_reserved == 0
         assert user.credit_balance == 200 - 8 - len(panels)
@@ -64,36 +70,65 @@ async def test_prompt_to_export(client: Any, headers: dict[str, str], worker: An
     pid = p["id"]
     # --- edit: retype and move a balloon (optimistic concurrency)
     balloon = panels[0]["balloons"][0]
-    r = await client.patch(f"/v1/balloons/{balloon['id']}", headers=headers, json={
-        "version": balloon["version"], "text": "Edited line.",
-        "geometry": {**{k: balloon["geometry"][k] for k in ("x", "y", "w", "h", "font_size")},
-                     "x": balloon["geometry"]["x"] + 5}})
+    r = await client.patch(
+        f"/v1/balloons/{balloon['id']}",
+        headers=headers,
+        json={
+            "version": balloon["version"],
+            "text": "Edited line.",
+            "geometry": {
+                **{k: balloon["geometry"][k] for k in ("x", "y", "w", "h", "font_size")},
+                "x": balloon["geometry"]["x"] + 5,
+            },
+        },
+    )
     assert r.status_code == 200, r.text
     assert r.json()["text"] == "Edited line." and r.json()["version"] == balloon["version"] + 1
-    stale = await client.patch(f"/v1/balloons/{balloon['id']}", headers=headers,
-                               json={"version": balloon["version"], "text": "Late write"})
+    stale = await client.patch(
+        f"/v1/balloons/{balloon['id']}",
+        headers=headers,
+        json={"version": balloon["version"], "text": "Late write"},
+    )
     assert stale.status_code == 409 and stale.json()["error"]["code"] == "version_conflict"
 
     # --- regenerate a panel, compare versions, restore the original
     target = panels[1]
     r = await client.post(f"/v1/panels/{target['id']}/regenerate", headers=headers)
     assert r.status_code == 202, r.text
-    p = await wait_for(client, pid, headers, lambda p: next(
-        x for pg in p["pages"] for x in pg["panels"] if x["id"] == target["id"]
-    )["current_version_id"] != target["current_version_id"])
+    p = await wait_for(
+        client,
+        pid,
+        headers,
+        lambda p: (
+            next(x for pg in p["pages"] for x in pg["panels"] if x["id"] == target["id"])[
+                "current_version_id"
+            ]
+            != target["current_version_id"]
+        ),
+    )
     versions = (await client.get(f"/v1/panels/{target['id']}/versions", headers=headers)).json()["versions"]
     assert len(versions) == 2 and sum(v["is_current"] for v in versions) == 1
     r = await client.post(
-        f"/v1/panels/{target['id']}/versions/{target['current_version_id']}/restore", headers=headers)
+        f"/v1/panels/{target['id']}/versions/{target['current_version_id']}/restore", headers=headers
+    )
     assert r.status_code == 200
     # --- instruction edit
-    r = await client.post(f"/v1/panels/{target['id']}/edit", headers=headers,
-                          json={"instruction": "make her smile"})
+    r = await client.post(
+        f"/v1/panels/{target['id']}/edit", headers=headers, json={"instruction": "make her smile"}
+    )
     assert r.status_code == 202
-    await wait_for(client, pid, headers, lambda p: len([
-        1 for pg in p["pages"] for x in pg["panels"] if x["busy"]]) == 0 and next(
-        x for pg in p["pages"] for x in pg["panels"] if x["id"] == target["id"]
-    )["current_version_id"] != target["current_version_id"])
+    await wait_for(
+        client,
+        pid,
+        headers,
+        lambda p: (
+            len([1 for pg in p["pages"] for x in pg["panels"] if x["busy"]]) == 0
+            and next(x for pg in p["pages"] for x in pg["panels"] if x["id"] == target["id"])[
+                "current_version_id"
+            ]
+            != target["current_version_id"]
+        ),
+    )
 
     # --- exports: valid files, right page count and order, real dimensions
     pdf = PdfReader(io.BytesIO(await _export(client, headers, pid, "pdf")))
@@ -114,8 +149,9 @@ async def test_strip_with_clarifying_question(client: Any, headers: dict[str, st
     pid = r.json()["id"]
     p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_answers")
     assert 1 <= len(p["questions"]) <= 3
-    r = await client.post(f"/v1/projects/{pid}/brief/answers", headers=headers,
-                          json={"answers": {"length": "A 4-panel strip"}})
+    r = await client.post(
+        f"/v1/projects/{pid}/brief/answers", headers=headers, json={"answers": {"length": "A 4-panel strip"}}
+    )
     assert r.status_code == 202
     p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_cast_approval")
     assert p["format"] == "strip" and p["brief"]["pages"] == 1

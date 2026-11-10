@@ -5,6 +5,7 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -23,7 +24,7 @@ from storypanel.obs import metrics
 from storypanel.services import editor, events, projects, repo
 
 router = APIRouter(prefix="/v1", tags=["projects"])
-ERR = {400: {"model": api.ErrorResponse}, 401: {"model": api.ErrorResponse},
+ERR: dict[int | str, dict[str, Any]] = {400: {"model": api.ErrorResponse}, 401: {"model": api.ErrorResponse},
        402: {"model": api.ErrorResponse}, 404: {"model": api.ErrorResponse},
        409: {"model": api.ErrorResponse}, 422: {"model": api.ErrorResponse},
        429: {"model": api.ErrorResponse}}  # fmt: skip
@@ -103,7 +104,7 @@ async def answer_questions(project_id: uuid.UUID, body: api.Answers, request: Re
     """Answer (or skip, with an empty object) the clarifying questions."""
     async with transaction() as db:
         project = await repo.get_project(db, project_id, owner_id=user.id, lock=True)
-        await projects.submit_answers(db, project, dict(body.answers), key)
+        await projects.submit_answers(db, project, {str(k): v for k, v in body.answers.items()}, key)
     await _after_commit(request, db)
     return api.Accepted(request_id=key)
 
@@ -274,7 +275,7 @@ async def project_events(project_id: uuid.UUID, request: Request, after: int | N
             metrics.sse_connections.dec()
             if pubsub is not None:
                 try:
-                    await pubsub.aclose()  # type: ignore[no-untyped-call]
+                    await pubsub.aclose()  # type: ignore[attr-defined,no-untyped-call]
                 except Exception:
                     pass
 

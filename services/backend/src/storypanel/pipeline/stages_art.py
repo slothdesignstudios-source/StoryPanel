@@ -187,10 +187,10 @@ async def stage_generate_panel(
     image = storage.validate_image(result.data)
 
     async with transaction() as db:
-        asset = await repo.save_image(db, owner_id=owner, project_id=project_id, kind="panel",
+        asset = await repo.save_image(db, owner_id=owner, project_id=project_id, kind="panel",  # type: ignore[assignment]
                                       image=image)  # fmt: skip
         version = PanelVersion(
-            id=uuid.uuid4(), panel_id=panel_id, image_asset_id=asset.id, kind=kind,
+            id=uuid.uuid4(), panel_id=panel_id, image_asset_id=asset.id, kind=kind,  # type: ignore[union-attr]
             instruction=instruction, provider=result.provider, model=result.model,
             prompt_version=PROMPT_VERSION, prompt_sha256=prompt_sha, seed=result.seed or seed,
             references=used, spec_version=spec_version, attempt=attempt, cost_usd=usage.cost_usd,

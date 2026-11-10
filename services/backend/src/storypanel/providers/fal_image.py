@@ -126,7 +126,7 @@ class _FalBase:
             return cached[1]
         url = await self._client.upload(data, media_type)
         self._uploads[digest] = (time.monotonic(), url)
-        return url
+        return url  # type: ignore[no-any-return]
 
     async def _wait(self, app: str, request_id: str, wait_seconds: float) -> Any:
         deadline = time.monotonic() + wait_seconds

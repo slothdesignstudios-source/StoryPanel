@@ -65,7 +65,7 @@ async def provider_slot(kind: str, lease_seconds: float = 300.0) -> AsyncIterato
     delay = 0.05
     while True:
         now = time.time()
-        if await r.eval(_ACQUIRE, 1, key, now, now + lease_seconds, limit, token):  # type: ignore[misc]
+        if await r.eval(_ACQUIRE, 1, key, now, now + lease_seconds, limit, token):  # type: ignore[misc,no-untyped-call]
             break
         await asyncio.sleep(delay)
         delay = min(1.0, delay * 1.5)

@@ -82,7 +82,7 @@ def _configure_sentry(service: str) -> None:
         sentry_sdk.init(
             dsn=s.sentry_dsn.get_secret_value(), environment=s.env, release=s.release,
             send_default_pii=False, include_local_variables=False, traces_sample_rate=0.0,
-            before_send=_scrub_sentry, server_name=service,
+            before_send=_scrub_sentry, server_name=service,  # type: ignore[arg-type]
         )  # fmt: skip
     except Exception as exc:
         metrics.telemetry_failures.labels("sentry").inc()

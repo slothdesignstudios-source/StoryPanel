@@ -22,6 +22,7 @@ from storypanel.db.models import (
     CharacterRef,
     Export,
     Job,
+    Location,
     Page,
     Panel,
     PanelVersion,
@@ -377,8 +378,8 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
                          images=images.get(c.slug, {}))
         for c in await repo.cast_rows(db, pid)]  # fmt: skip
     loc_rows = (await db.execute(
-        select(repo.Location, Asset.storage_key).outerjoin(Asset, Asset.id == repo.Location.reference_asset_id)
-        .where(repo.Location.project_id == pid).order_by(repo.Location.slug))).all()  # fmt: skip
+        select(Location, Asset.storage_key).outerjoin(Asset, Asset.id == Location.reference_asset_id)
+        .where(Location.project_id == pid).order_by(Location.slug))).all()  # fmt: skip
     locations = [api.LocationOut(slug=loc.slug, name=loc.spec.get("name", loc.slug),
                                  description=loc.spec.get("description", ""), image_url=_url(key))
                  for loc, key in loc_rows]  # fmt: skip
@@ -435,7 +436,7 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
             layout_options=options, panels=panel_out))  # fmt: skip
     exports = await list_exports(db, pid)
     cast_rows = await repo.cast_rows(db, pid)
-    cover = preview_keys.get(pages_out and uuid.UUID(pages_out[0].id)) if pages_out else None
+    cover = preview_keys.get(uuid.UUID(pages_out[0].id)) if pages_out else None
     return api.ProjectOut(
         **summary(project, cover), prompt=project.prompt, brief=project.brief,  # type: ignore[arg-type]
         questions=project.questions or [], bible=bible, cast_version=project.cast_version,
