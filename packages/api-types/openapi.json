@@ -1,0 +1,5826 @@
+{
+ "components": {
+  "schemas": {
+   "Accepted": {
+    "properties": {
+     "request_id": {
+      "title": "Request Id",
+      "type": "string"
+     },
+     "status": {
+      "default": "accepted",
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "request_id"
+    ],
+    "title": "Accepted",
+    "type": "object"
+   },
+   "AgeRating": {
+    "enum": [
+     "all_ages",
+     "teen",
+     "mature"
+    ],
+    "title": "AgeRating",
+    "type": "string"
+   },
+   "Answers": {
+    "additionalProperties": false,
+    "properties": {
+     "answers": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "propertyNames": {
+       "enum": [
+        "audience",
+        "length",
+        "style"
+       ]
+      },
+      "title": "Answers",
+      "type": "object"
+     }
+    },
+    "title": "Answers",
+    "type": "object"
+   },
+   "ApproveCast": {
+    "additionalProperties": false,
+    "properties": {
+     "cast_version": {
+      "minimum": 1.0,
+      "title": "Cast Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "cast_version"
+    ],
+    "title": "ApproveCast",
+    "type": "object"
+   },
+   "ApproveScript": {
+    "additionalProperties": false,
+    "properties": {
+     "script_version": {
+      "minimum": 1.0,
+      "title": "Script Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "script_version"
+    ],
+    "title": "ApproveScript",
+    "type": "object"
+   },
+   "BalloonOut": {
+    "properties": {
+     "flags": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Flags",
+      "type": "array"
+     },
+     "geometry": {
+      "additionalProperties": true,
+      "title": "Geometry",
+      "type": "object"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "order_index": {
+      "title": "Order Index",
+      "type": "integer"
+     },
+     "panel_id": {
+      "title": "Panel Id",
+      "type": "string"
+     },
+     "speaker_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Speaker Id"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     },
+     "type": {
+      "title": "Type",
+      "type": "string"
+     },
+     "user_edited": {
+      "title": "User Edited",
+      "type": "boolean"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id",
+     "panel_id",
+     "order_index",
+     "type",
+     "speaker_id",
+     "text",
+     "geometry",
+     "flags",
+     "user_edited",
+     "version"
+    ],
+    "title": "BalloonOut",
+    "type": "object"
+   },
+   "Beat": {
+    "additionalProperties": false,
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "pages": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Pages",
+      "type": "array"
+     },
+     "summary": {
+      "title": "Summary",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "summary",
+     "pages"
+    ],
+    "title": "Beat",
+    "type": "object"
+   },
+   "BeatSheet": {
+    "additionalProperties": false,
+    "properties": {
+     "beats": {
+      "items": {
+       "$ref": "#/components/schemas/Beat"
+      },
+      "title": "Beats",
+      "type": "array"
+     },
+     "structure": {
+      "enum": [
+       "kishotenketsu",
+       "three_act"
+      ],
+      "title": "Structure",
+      "type": "string"
+     }
+    },
+    "required": [
+     "structure",
+     "beats"
+    ],
+    "title": "BeatSheet",
+    "type": "object"
+   },
+   "CharacterOut": {
+    "properties": {
+     "images": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Images",
+      "type": "object"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "revising": {
+      "title": "Revising",
+      "type": "boolean"
+     },
+     "sheet_status": {
+      "title": "Sheet Status",
+      "type": "string"
+     },
+     "sheet_version": {
+      "title": "Sheet Version",
+      "type": "integer"
+     },
+     "slug": {
+      "title": "Slug",
+      "type": "string"
+     },
+     "spec": {
+      "$ref": "#/components/schemas/CharacterSpec"
+     }
+    },
+    "required": [
+     "slug",
+     "name",
+     "spec",
+     "sheet_status",
+     "sheet_version",
+     "revising",
+     "images"
+    ],
+    "title": "CharacterOut",
+    "type": "object"
+   },
+   "CharacterSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "personality": {
+      "title": "Personality",
+      "type": "string"
+     },
+     "role": {
+      "title": "Role",
+      "type": "string"
+     },
+     "visual": {
+      "$ref": "#/components/schemas/CharacterVisual"
+     },
+     "voice": {
+      "title": "Voice",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "role",
+     "personality",
+     "voice",
+     "visual"
+    ],
+    "title": "CharacterSpec",
+    "type": "object"
+   },
+   "CharacterVisual": {
+    "additionalProperties": false,
+    "properties": {
+     "body": {
+      "title": "Body",
+      "type": "string"
+     },
+     "hair": {
+      "title": "Hair",
+      "type": "string"
+     },
+     "head": {
+      "title": "Head",
+      "type": "string"
+     },
+     "outfit": {
+      "title": "Outfit",
+      "type": "string"
+     },
+     "palette": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Palette",
+      "type": "object"
+     },
+     "signature_features": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Signature Features",
+      "type": "array"
+     },
+     "type": {
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "type",
+     "body",
+     "head",
+     "hair",
+     "outfit",
+     "palette",
+     "signature_features"
+    ],
+    "title": "CharacterVisual",
+    "type": "object"
+   },
+   "Checkout": {
+    "additionalProperties": false,
+    "properties": {
+     "product": {
+      "enum": [
+       "creator",
+       "pro",
+       "credit_pack"
+      ],
+      "title": "Product",
+      "type": "string"
+     }
+    },
+    "required": [
+     "product"
+    ],
+    "title": "Checkout",
+    "type": "object"
+   },
+   "ClarifyingQuestion": {
+    "additionalProperties": false,
+    "properties": {
+     "default": {
+      "title": "Default",
+      "type": "string"
+     },
+     "id": {
+      "enum": [
+       "audience",
+       "length",
+       "style"
+      ],
+      "title": "Id",
+      "type": "string"
+     },
+     "options": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Options",
+      "type": "array"
+     },
+     "question": {
+      "title": "Question",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "question",
+     "options",
+     "default"
+    ],
+    "title": "ClarifyingQuestion",
+    "type": "object"
+   },
+   "ComicBrief": {
+    "additionalProperties": false,
+    "properties": {
+     "audience": {
+      "$ref": "#/components/schemas/AgeRating"
+     },
+     "format": {
+      "$ref": "#/components/schemas/ComicFormat"
+     },
+     "genre": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Genre",
+      "type": "array"
+     },
+     "must_haves": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Must Haves",
+      "type": "array"
+     },
+     "named_characters": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Named Characters",
+      "type": "array"
+     },
+     "pages": {
+      "title": "Pages",
+      "type": "integer"
+     },
+     "setting": {
+      "title": "Setting",
+      "type": "string"
+     },
+     "style_preset": {
+      "title": "Style Preset",
+      "type": "string"
+     },
+     "summary": {
+      "title": "Summary",
+      "type": "string"
+     },
+     "tone": {
+      "title": "Tone",
+      "type": "string"
+     }
+    },
+    "required": [
+     "summary",
+     "genre",
+     "tone",
+     "audience",
+     "pages",
+     "format",
+     "style_preset",
+     "named_characters",
+     "setting",
+     "must_haves"
+    ],
+    "title": "ComicBrief",
+    "type": "object"
+   },
+   "ComicFormat": {
+    "enum": [
+     "western_page",
+     "strip"
+    ],
+    "title": "ComicFormat",
+    "type": "string"
+   },
+   "ComicScript": {
+    "additionalProperties": false,
+    "properties": {
+     "pages": {
+      "items": {
+       "$ref": "#/components/schemas/PageSpec"
+      },
+      "title": "Pages",
+      "type": "array"
+     }
+    },
+    "required": [
+     "pages"
+    ],
+    "title": "ComicScript",
+    "type": "object"
+   },
+   "CreateBalloon": {
+    "additionalProperties": false,
+    "properties": {
+     "speaker_id": {
+      "anyOf": [
+       {
+        "maxLength": 40,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Speaker Id"
+     },
+     "text": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+     },
+     "type": {
+      "enum": [
+       "speech",
+       "thought",
+       "caption",
+       "sfx"
+      ],
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "type",
+     "text"
+    ],
+    "title": "CreateBalloon",
+    "type": "object"
+   },
+   "CreateExport": {
+    "additionalProperties": false,
+    "properties": {
+     "format": {
+      "enum": [
+       "pdf",
+       "png",
+       "cbz"
+      ],
+      "title": "Format",
+      "type": "string"
+     }
+    },
+    "required": [
+     "format"
+    ],
+    "title": "CreateExport",
+    "type": "object"
+   },
+   "CreateProject": {
+    "additionalProperties": false,
+    "properties": {
+     "audience": {
+      "anyOf": [
+       {
+        "enum": [
+         "all_ages",
+         "teen",
+         "mature"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Audience"
+     },
+     "format": {
+      "anyOf": [
+       {
+        "enum": [
+         "western_page",
+         "strip"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Format"
+     },
+     "pages": {
+      "anyOf": [
+       {
+        "maximum": 8.0,
+        "minimum": 1.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pages"
+     },
+     "prompt": {
+      "maxLength": 2000,
+      "minLength": 10,
+      "title": "Prompt",
+      "type": "string"
+     },
+     "style_preset": {
+      "anyOf": [
+       {
+        "maxLength": 60,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Style Preset"
+     }
+    },
+    "required": [
+     "prompt"
+    ],
+    "title": "CreateProject",
+    "type": "object"
+   },
+   "CreditsOut": {
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "integer"
+     },
+     "balance": {
+      "title": "Balance",
+      "type": "integer"
+     },
+     "billing_enabled": {
+      "title": "Billing Enabled",
+      "type": "boolean"
+     },
+     "history": {
+      "items": {
+       "$ref": "#/components/schemas/LedgerEntry"
+      },
+      "title": "History",
+      "type": "array"
+     },
+     "plan": {
+      "title": "Plan",
+      "type": "string"
+     },
+     "plans": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Plans",
+      "type": "object"
+     },
+     "prices": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Prices",
+      "type": "object"
+     },
+     "reserved": {
+      "title": "Reserved",
+      "type": "integer"
+     },
+     "subscription_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subscription Status"
+     }
+    },
+    "required": [
+     "plan",
+     "balance",
+     "reserved",
+     "available",
+     "subscription_status",
+     "history",
+     "prices",
+     "plans",
+     "billing_enabled"
+    ],
+    "title": "CreditsOut",
+    "type": "object"
+   },
+   "DialogueItem": {
+    "additionalProperties": false,
+    "properties": {
+     "speaker": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Speaker"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     },
+     "type": {
+      "enum": [
+       "speech",
+       "thought",
+       "caption",
+       "sfx"
+      ],
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "type",
+     "text"
+    ],
+    "title": "DialogueItem",
+    "type": "object"
+   },
+   "EditPanel": {
+    "additionalProperties": false,
+    "properties": {
+     "instruction": {
+      "maxLength": 400,
+      "minLength": 3,
+      "title": "Instruction",
+      "type": "string"
+     }
+    },
+    "required": [
+     "instruction"
+    ],
+    "title": "EditPanel",
+    "type": "object"
+   },
+   "ErrorBody": {
+    "properties": {
+     "code": {
+      "title": "Code",
+      "type": "string"
+     },
+     "fields": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/ErrorField"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fields"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "request_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Request Id"
+     },
+     "retryable": {
+      "title": "Retryable",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "code",
+     "message",
+     "retryable"
+    ],
+    "title": "ErrorBody",
+    "type": "object"
+   },
+   "ErrorField": {
+    "properties": {
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     }
+    },
+    "required": [
+     "field",
+     "message"
+    ],
+    "title": "ErrorField",
+    "type": "object"
+   },
+   "ErrorResponse": {
+    "properties": {
+     "error": {
+      "$ref": "#/components/schemas/ErrorBody"
+     }
+    },
+    "required": [
+     "error"
+    ],
+    "title": "ErrorResponse",
+    "type": "object"
+   },
+   "EstimateOut": {
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "integer"
+     },
+     "balance": {
+      "title": "Balance",
+      "type": "integer"
+     },
+     "breakdown": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Breakdown",
+      "type": "object"
+     },
+     "credits": {
+      "title": "Credits",
+      "type": "integer"
+     },
+     "note": {
+      "title": "Note",
+      "type": "string"
+     },
+     "step": {
+      "title": "Step",
+      "type": "string"
+     },
+     "sufficient": {
+      "title": "Sufficient",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "step",
+     "credits",
+     "breakdown",
+     "balance",
+     "available",
+     "sufficient",
+     "note"
+    ],
+    "title": "EstimateOut",
+    "type": "object"
+   },
+   "ExportOut": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "download_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Download Url"
+     },
+     "edit_version": {
+      "title": "Edit Version",
+      "type": "integer"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "format": {
+      "title": "Format",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "format",
+     "status",
+     "created_at",
+     "download_url",
+     "error",
+     "edit_version"
+    ],
+    "title": "ExportOut",
+    "type": "object"
+   },
+   "Feedback": {
+    "additionalProperties": false,
+    "properties": {
+     "rating": {
+      "enum": [
+       -1,
+       1
+      ],
+      "title": "Rating",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rating"
+    ],
+    "title": "Feedback",
+    "type": "object"
+   },
+   "FormatSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "pages": {
+      "title": "Pages",
+      "type": "integer"
+     },
+     "panels_per_page": {
+      "title": "Panels Per Page",
+      "type": "string"
+     },
+     "type": {
+      "$ref": "#/components/schemas/ComicFormat"
+     }
+    },
+    "required": [
+     "type",
+     "pages",
+     "panels_per_page"
+    ],
+    "title": "FormatSpec",
+    "type": "object"
+   },
+   "Geometry": {
+    "additionalProperties": false,
+    "properties": {
+     "font_size": {
+      "default": 22,
+      "maximum": 120.0,
+      "minimum": 8.0,
+      "title": "Font Size",
+      "type": "number"
+     },
+     "h": {
+      "exclusiveMinimum": 10.0,
+      "title": "H",
+      "type": "number"
+     },
+     "rotation": {
+      "default": 0,
+      "maximum": 45.0,
+      "minimum": -45.0,
+      "title": "Rotation",
+      "type": "number"
+     },
+     "tail": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "number"
+        },
+        "propertyNames": {
+         "enum": [
+          "x",
+          "y"
+         ]
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tail"
+     },
+     "w": {
+      "exclusiveMinimum": 10.0,
+      "title": "W",
+      "type": "number"
+     },
+     "x": {
+      "title": "X",
+      "type": "number"
+     },
+     "y": {
+      "title": "Y",
+      "type": "number"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "w",
+     "h"
+    ],
+    "title": "Geometry",
+    "type": "object"
+   },
+   "LayoutOut": {
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "page": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Page",
+      "type": "array"
+     },
+     "panel_count": {
+      "title": "Panel Count",
+      "type": "integer"
+     },
+     "rects": {
+      "items": {
+       "items": {
+        "type": "integer"
+       },
+       "type": "array"
+      },
+      "title": "Rects",
+      "type": "array"
+     }
+    },
+    "required": [
+     "id",
+     "panel_count",
+     "page",
+     "rects"
+    ],
+    "title": "LayoutOut",
+    "type": "object"
+   },
+   "LedgerEntry": {
+    "properties": {
+     "balance_after": {
+      "title": "Balance After",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "delta": {
+      "title": "Delta",
+      "type": "integer"
+     },
+     "id": {
+      "title": "Id",
+      "type": "integer"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id"
+     },
+     "reason": {
+      "title": "Reason",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "delta",
+     "kind",
+     "reason",
+     "project_id",
+     "balance_after",
+     "created_at"
+    ],
+    "title": "LedgerEntry",
+    "type": "object"
+   },
+   "LocationOut": {
+    "properties": {
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "image_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Url"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "slug": {
+      "title": "Slug",
+      "type": "string"
+     }
+    },
+    "required": [
+     "slug",
+     "name",
+     "description",
+     "image_url"
+    ],
+    "title": "LocationOut",
+    "type": "object"
+   },
+   "LocationSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "description"
+    ],
+    "title": "LocationSpec",
+    "type": "object"
+   },
+   "MeOut": {
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "integer"
+     },
+     "balance": {
+      "title": "Balance",
+      "type": "integer"
+     },
+     "email": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "plan": {
+      "title": "Plan",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "email",
+     "plan",
+     "balance",
+     "available"
+    ],
+    "title": "MeOut",
+    "type": "object"
+   },
+   "MetaOut": {
+    "properties": {
+     "auth_mode": {
+      "title": "Auth Mode",
+      "type": "string"
+     },
+     "credit_prices": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Credit Prices",
+      "type": "object"
+     },
+     "default_pages": {
+      "title": "Default Pages",
+      "type": "integer"
+     },
+     "default_style": {
+      "title": "Default Style",
+      "type": "string"
+     },
+     "limits": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Limits",
+      "type": "object"
+     },
+     "max_pages": {
+      "title": "Max Pages",
+      "type": "integer"
+     },
+     "provider_mode": {
+      "title": "Provider Mode",
+      "type": "string"
+     },
+     "styles": {
+      "items": {
+       "$ref": "#/components/schemas/StyleOut"
+      },
+      "title": "Styles",
+      "type": "array"
+     }
+    },
+    "required": [
+     "styles",
+     "default_style",
+     "default_pages",
+     "max_pages",
+     "limits",
+     "credit_prices",
+     "auth_mode",
+     "provider_mode"
+    ],
+    "title": "MetaOut",
+    "type": "object"
+   },
+   "PageOut": {
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "index": {
+      "title": "Index",
+      "type": "integer"
+     },
+     "layout_options": {
+      "items": {
+       "$ref": "#/components/schemas/LayoutOut"
+      },
+      "title": "Layout Options",
+      "type": "array"
+     },
+     "layout_template_id": {
+      "title": "Layout Template Id",
+      "type": "string"
+     },
+     "panels": {
+      "items": {
+       "$ref": "#/components/schemas/PanelOut"
+      },
+      "title": "Panels",
+      "type": "array"
+     },
+     "preview_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Preview Url"
+     },
+     "size": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Size",
+      "type": "array"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "index",
+     "layout_template_id",
+     "size",
+     "status",
+     "preview_url",
+     "layout_options",
+     "panels"
+    ],
+    "title": "PageOut",
+    "type": "object"
+   },
+   "PageSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "panels": {
+      "items": {
+       "$ref": "#/components/schemas/PanelSpec"
+      },
+      "title": "Panels",
+      "type": "array"
+     }
+    },
+    "required": [
+     "panels"
+    ],
+    "title": "PageSpec",
+    "type": "object"
+   },
+   "PanelCharacter": {
+    "additionalProperties": false,
+    "properties": {
+     "expression": {
+      "title": "Expression",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "pose": {
+      "title": "Pose",
+      "type": "string"
+     },
+     "position": {
+      "enum": [
+       "left",
+       "center",
+       "right"
+      ],
+      "title": "Position",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "position",
+     "pose",
+     "expression"
+    ],
+    "title": "PanelCharacter",
+    "type": "object"
+   },
+   "PanelOut": {
+    "properties": {
+     "balloons": {
+      "items": {
+       "$ref": "#/components/schemas/BalloonOut"
+      },
+      "title": "Balloons",
+      "type": "array"
+     },
+     "busy": {
+      "title": "Busy",
+      "type": "boolean"
+     },
+     "current_version_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Current Version Id"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "image_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Url"
+     },
+     "index": {
+      "title": "Index",
+      "type": "integer"
+     },
+     "qa_problems": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Qa Problems",
+      "type": "array"
+     },
+     "rect": {
+      "items": {
+       "type": "number"
+      },
+      "title": "Rect",
+      "type": "array"
+     },
+     "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "index",
+     "rect",
+     "status",
+     "spec",
+     "current_version_id",
+     "image_url",
+     "qa_problems",
+     "balloons",
+     "busy"
+    ],
+    "title": "PanelOut",
+    "type": "object"
+   },
+   "PanelSpec": {
+    "additionalProperties": false,
+    "properties": {
+     "action": {
+      "title": "Action",
+      "type": "string"
+     },
+     "angle": {
+      "title": "Angle",
+      "type": "string"
+     },
+     "characters": {
+      "items": {
+       "$ref": "#/components/schemas/PanelCharacter"
+      },
+      "title": "Characters",
+      "type": "array"
+     },
+     "dialogue": {
+      "items": {
+       "$ref": "#/components/schemas/DialogueItem"
+      },
+      "title": "Dialogue",
+      "type": "array"
+     },
+     "emphasis": {
+      "default": "normal",
+      "enum": [
+       "normal",
+       "large"
+      ],
+      "title": "Emphasis",
+      "type": "string"
+     },
+     "location_id": {
+      "title": "Location Id",
+      "type": "string"
+     },
+     "mood": {
+      "title": "Mood",
+      "type": "string"
+     },
+     "shot": {
+      "enum": [
+       "wide",
+       "medium",
+       "close_up"
+      ],
+      "title": "Shot",
+      "type": "string"
+     },
+     "time_of_day": {
+      "title": "Time Of Day",
+      "type": "string"
+     }
+    },
+    "required": [
+     "shot",
+     "angle",
+     "location_id",
+     "time_of_day",
+     "characters",
+     "action",
+     "mood"
+    ],
+    "title": "PanelSpec",
+    "type": "object"
+   },
+   "PatchBalloon": {
+    "additionalProperties": false,
+    "properties": {
+     "geometry": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Geometry"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "text": {
+      "anyOf": [
+       {
+        "maxLength": 300,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Text"
+     },
+     "version": {
+      "minimum": 1.0,
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "version"
+    ],
+    "title": "PatchBalloon",
+    "type": "object"
+   },
+   "PatchBible": {
+    "additionalProperties": false,
+    "properties": {
+     "cast_version": {
+      "minimum": 1.0,
+      "title": "Cast Version",
+      "type": "integer"
+     },
+     "logline": {
+      "anyOf": [
+       {
+        "maxLength": 600,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Logline"
+     },
+     "setting": {
+      "anyOf": [
+       {
+        "maxLength": 600,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Setting"
+     },
+     "themes": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 8,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Themes"
+     },
+     "title": {
+      "anyOf": [
+       {
+        "maxLength": 200,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Title"
+     },
+     "tone": {
+      "anyOf": [
+       {
+        "maxLength": 200,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tone"
+     },
+     "world_rules": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 8,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "World Rules"
+     }
+    },
+    "required": [
+     "cast_version"
+    ],
+    "title": "PatchBible",
+    "type": "object"
+   },
+   "PatchLayout": {
+    "additionalProperties": false,
+    "properties": {
+     "layout_template_id": {
+      "maxLength": 40,
+      "title": "Layout Template Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "layout_template_id"
+    ],
+    "title": "PatchLayout",
+    "type": "object"
+   },
+   "PatchScript": {
+    "additionalProperties": false,
+    "properties": {
+     "base_version": {
+      "minimum": 1.0,
+      "title": "Base Version",
+      "type": "integer"
+     },
+     "script": {
+      "$ref": "#/components/schemas/ComicScript"
+     }
+    },
+    "required": [
+     "base_version",
+     "script"
+    ],
+    "title": "PatchScript",
+    "type": "object"
+   },
+   "ProgressOut": {
+    "description": "Counts of finished units. Deliberately not a percentage or a time estimate.",
+    "properties": {
+     "characters_ready": {
+      "title": "Characters Ready",
+      "type": "integer"
+     },
+     "characters_total": {
+      "title": "Characters Total",
+      "type": "integer"
+     },
+     "pages_ready": {
+      "title": "Pages Ready",
+      "type": "integer"
+     },
+     "pages_total": {
+      "title": "Pages Total",
+      "type": "integer"
+     },
+     "panels_done": {
+      "title": "Panels Done",
+      "type": "integer"
+     },
+     "panels_total": {
+      "title": "Panels Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "panels_total",
+     "panels_done",
+     "pages_total",
+     "pages_ready",
+     "characters_total",
+     "characters_ready"
+    ],
+    "title": "ProgressOut",
+    "type": "object"
+   },
+   "ProjectList": {
+    "properties": {
+     "projects": {
+      "items": {
+       "$ref": "#/components/schemas/ProjectSummary"
+      },
+      "title": "Projects",
+      "type": "array"
+     }
+    },
+    "required": [
+     "projects"
+    ],
+    "title": "ProjectList",
+    "type": "object"
+   },
+   "ProjectOut": {
+    "properties": {
+     "approved_cast_version": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Approved Cast Version"
+     },
+     "approved_script_version": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Approved Script Version"
+     },
+     "bible": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/StoryBible"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "brief": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ComicBrief"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "cast_version": {
+      "title": "Cast Version",
+      "type": "integer"
+     },
+     "characters": {
+      "items": {
+       "$ref": "#/components/schemas/CharacterOut"
+      },
+      "title": "Characters",
+      "type": "array"
+     },
+     "cover_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cover Url"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "edit_version": {
+      "title": "Edit Version",
+      "type": "integer"
+     },
+     "event_seq": {
+      "title": "Event Seq",
+      "type": "integer"
+     },
+     "exports": {
+      "items": {
+       "$ref": "#/components/schemas/ExportOut"
+      },
+      "title": "Exports",
+      "type": "array"
+     },
+     "failure": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Failure"
+     },
+     "format": {
+      "title": "Format",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "locations": {
+      "items": {
+       "$ref": "#/components/schemas/LocationOut"
+      },
+      "title": "Locations",
+      "type": "array"
+     },
+     "pages": {
+      "items": {
+       "$ref": "#/components/schemas/PageOut"
+      },
+      "title": "Pages",
+      "type": "array"
+     },
+     "pages_requested": {
+      "title": "Pages Requested",
+      "type": "integer"
+     },
+     "progress": {
+      "$ref": "#/components/schemas/ProgressOut"
+     },
+     "prompt": {
+      "title": "Prompt",
+      "type": "string"
+     },
+     "questions": {
+      "items": {
+       "$ref": "#/components/schemas/ClarifyingQuestion"
+      },
+      "title": "Questions",
+      "type": "array"
+     },
+     "resume_from": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Resume From"
+     },
+     "script": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ScriptOut"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "script_version": {
+      "title": "Script Version",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "style_preset": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Style Preset"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "status",
+     "format",
+     "style_preset",
+     "pages_requested",
+     "created_at",
+     "updated_at",
+     "cover_url",
+     "failure",
+     "prompt",
+     "brief",
+     "questions",
+     "bible",
+     "cast_version",
+     "script_version",
+     "edit_version",
+     "event_seq",
+     "approved_cast_version",
+     "approved_script_version",
+     "resume_from",
+     "characters",
+     "locations",
+     "script",
+     "pages",
+     "exports",
+     "progress"
+    ],
+    "title": "ProjectOut",
+    "type": "object"
+   },
+   "ProjectSummary": {
+    "properties": {
+     "cover_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cover Url"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "failure": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Failure"
+     },
+     "format": {
+      "title": "Format",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "pages_requested": {
+      "title": "Pages Requested",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "style_preset": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Style Preset"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "status",
+     "format",
+     "style_preset",
+     "pages_requested",
+     "created_at",
+     "updated_at",
+     "cover_url",
+     "failure"
+    ],
+    "title": "ProjectSummary",
+    "type": "object"
+   },
+   "ReorderPanels": {
+    "additionalProperties": false,
+    "properties": {
+     "panel_ids": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 1,
+      "title": "Panel Ids",
+      "type": "array"
+     }
+    },
+    "required": [
+     "panel_ids"
+    ],
+    "title": "ReorderPanels",
+    "type": "object"
+   },
+   "ReviseCharacter": {
+    "additionalProperties": false,
+    "properties": {
+     "instruction": {
+      "maxLength": 400,
+      "minLength": 3,
+      "title": "Instruction",
+      "type": "string"
+     }
+    },
+    "required": [
+     "instruction"
+    ],
+    "title": "ReviseCharacter",
+    "type": "object"
+   },
+   "ScriptIssue": {
+    "additionalProperties": false,
+    "properties": {
+     "code": {
+      "title": "Code",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "path": {
+      "title": "Path",
+      "type": "string"
+     },
+     "severity": {
+      "default": "error",
+      "enum": [
+       "error",
+       "warning"
+      ],
+      "title": "Severity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "code",
+     "path",
+     "message"
+    ],
+    "title": "ScriptIssue",
+    "type": "object"
+   },
+   "ScriptOut": {
+    "properties": {
+     "beats": {
+      "$ref": "#/components/schemas/BeatSheet"
+     },
+     "content": {
+      "$ref": "#/components/schemas/ComicScript"
+     },
+     "has_errors": {
+      "title": "Has Errors",
+      "type": "boolean"
+     },
+     "issues": {
+      "items": {
+       "$ref": "#/components/schemas/ScriptIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+     },
+     "source": {
+      "title": "Source",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "version",
+     "source",
+     "beats",
+     "content",
+     "issues",
+     "has_errors"
+    ],
+    "title": "ScriptOut",
+    "type": "object"
+   },
+   "StoryBible": {
+    "additionalProperties": false,
+    "properties": {
+     "audience": {
+      "$ref": "#/components/schemas/AgeRating"
+     },
+     "cast": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Cast",
+      "type": "array"
+     },
+     "format": {
+      "$ref": "#/components/schemas/FormatSpec"
+     },
+     "genre": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Genre",
+      "type": "array"
+     },
+     "locations": {
+      "items": {
+       "$ref": "#/components/schemas/LocationSpec"
+      },
+      "title": "Locations",
+      "type": "array"
+     },
+     "logline": {
+      "title": "Logline",
+      "type": "string"
+     },
+     "palette": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Palette",
+      "type": "array"
+     },
+     "setting": {
+      "title": "Setting",
+      "type": "string"
+     },
+     "style_preset": {
+      "title": "Style Preset",
+      "type": "string"
+     },
+     "themes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Themes",
+      "type": "array"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "tone": {
+      "title": "Tone",
+      "type": "string"
+     },
+     "world_rules": {
+      "items": {
+       "type": "string"
+      },
+      "title": "World Rules",
+      "type": "array"
+     }
+    },
+    "required": [
+     "title",
+     "logline",
+     "audience",
+     "genre",
+     "format",
+     "style_preset",
+     "setting",
+     "tone",
+     "themes",
+     "world_rules",
+     "palette",
+     "locations",
+     "cast"
+    ],
+    "title": "StoryBible",
+    "type": "object"
+   },
+   "StyleOut": {
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     },
+     "blurb": {
+      "title": "Blurb",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "swatch": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Swatch",
+      "type": "array"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "blurb",
+     "swatch",
+     "available"
+    ],
+    "title": "StyleOut",
+    "type": "object"
+   },
+   "UrlOut": {
+    "properties": {
+     "url": {
+      "title": "Url",
+      "type": "string"
+     }
+    },
+    "required": [
+     "url"
+    ],
+    "title": "UrlOut",
+    "type": "object"
+   },
+   "VersionList": {
+    "properties": {
+     "versions": {
+      "items": {
+       "$ref": "#/components/schemas/VersionOut"
+      },
+      "title": "Versions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "versions"
+    ],
+    "title": "VersionList",
+    "type": "object"
+   },
+   "VersionOut": {
+    "properties": {
+     "attempt": {
+      "title": "Attempt",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "image_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Url"
+     },
+     "instruction": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Instruction"
+     },
+     "is_current": {
+      "title": "Is Current",
+      "type": "boolean"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "model": {
+      "title": "Model",
+      "type": "string"
+     },
+     "qa_problems": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Qa Problems",
+      "type": "array"
+     },
+     "qa_status": {
+      "title": "Qa Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "kind",
+     "instruction",
+     "qa_status",
+     "qa_problems",
+     "attempt",
+     "created_at",
+     "image_url",
+     "is_current",
+     "model"
+    ],
+    "title": "VersionOut",
+    "type": "object"
+   }
+  }
+ },
+ "info": {
+  "title": "StoryPanel API",
+  "version": "1.0.0"
+ },
+ "openapi": "3.1.0",
+ "paths": {
+  "/v1/balloons/{balloon_id}": {
+   "delete": {
+    "operationId": "delete_balloon_v1_balloons__balloon_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "balloon_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Balloon Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Delete Balloon",
+    "tags": [
+     "editor"
+    ]
+   },
+   "patch": {
+    "description": "Move, resize or retype a balloon. `version` must match (409 version_conflict if not).",
+    "operationId": "patch_balloon_v1_balloons__balloon_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "balloon_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Balloon Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PatchBalloon"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BalloonOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Patch Balloon",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/billing/checkout": {
+   "post": {
+    "operationId": "checkout_v1_billing_checkout_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Checkout"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UrlOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Checkout",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/v1/billing/portal": {
+   "post": {
+    "operationId": "portal_v1_billing_portal_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UrlOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Portal",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/v1/credits": {
+   "get": {
+    "description": "Balance and usage history.",
+    "operationId": "get_credits_v1_credits_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CreditsOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Get Credits",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/v1/estimate": {
+   "get": {
+    "operationId": "estimate_new_v1_estimate_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "pages",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maximum": 8,
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Pages"
+      }
+     },
+     {
+      "in": "query",
+      "name": "format",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "pattern": "^(western_page|strip)$",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Format"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/EstimateOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Estimate New",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/exports/{export_id}/retry": {
+   "post": {
+    "operationId": "retry_export_v1_exports__export_id__retry_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "export_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Export Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Retry Export",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/me": {
+   "delete": {
+    "description": "Delete the account and all of its comics, images and exports.",
+    "operationId": "delete_account_v1_me_delete",
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Delete Account",
+    "tags": [
+     "account"
+    ]
+   },
+   "get": {
+    "operationId": "me_v1_me_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MeOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Me",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/v1/meta": {
+   "get": {
+    "description": "Public product catalog: styles, limits and credit prices.",
+    "operationId": "meta_v1_meta_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MetaOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Meta",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/v1/pages/{page_id}/layout": {
+   "patch": {
+    "operationId": "change_layout_v1_pages__page_id__layout_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "page_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Page Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PatchLayout"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Change Layout",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/pages/{page_id}/reorder": {
+   "post": {
+    "operationId": "reorder_panels_v1_pages__page_id__reorder_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "page_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Page Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReorderPanels"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Reorder Panels",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/panels/{panel_id}/balloons": {
+   "post": {
+    "operationId": "create_balloon_v1_panels__panel_id__balloons_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "panel_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Panel Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateBalloon"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BalloonOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Create Balloon",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/panels/{panel_id}/edit": {
+   "post": {
+    "description": "Instruction-based edit (\"make her smile\") of the current image.",
+    "operationId": "edit_panel_v1_panels__panel_id__edit_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "panel_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Panel Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/EditPanel"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Edit Panel",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/panels/{panel_id}/feedback": {
+   "post": {
+    "operationId": "panel_feedback_v1_panels__panel_id__feedback_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "panel_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Panel Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Feedback"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Panel Feedback",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/panels/{panel_id}/regenerate": {
+   "post": {
+    "description": "New version from the same spec with a new seed. Costs credits only if it delivers.",
+    "operationId": "regenerate_panel_v1_panels__panel_id__regenerate_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "panel_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Panel Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Regenerate Panel",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/panels/{panel_id}/versions": {
+   "get": {
+    "operationId": "panel_versions_v1_panels__panel_id__versions_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "panel_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Panel Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VersionList"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Panel Versions",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/panels/{panel_id}/versions/{version_id}/restore": {
+   "post": {
+    "operationId": "restore_version_v1_panels__panel_id__versions__version_id__restore_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "panel_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Panel Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "version_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Version Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Restore Version",
+    "tags": [
+     "editor"
+    ]
+   }
+  },
+  "/v1/projects": {
+   "get": {
+    "operationId": "list_projects_v1_projects_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectList"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "List Projects",
+    "tags": [
+     "projects"
+    ]
+   },
+   "post": {
+    "description": "Create a comic from a prompt. Reserves planning credits and starts the workflow.",
+    "operationId": "create_project_v1_projects_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateProject"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Create Project",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}": {
+   "delete": {
+    "operationId": "delete_project_v1_projects__project_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Delete Project",
+    "tags": [
+     "projects"
+    ]
+   },
+   "get": {
+    "description": "Full project state: bible, cast, script, pages, exports and measured progress.",
+    "operationId": "get_project_v1_projects__project_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Get Project",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/bible": {
+   "patch": {
+    "operationId": "patch_bible_v1_projects__project_id__bible_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PatchBible"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Patch Bible",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/brief/answers": {
+   "post": {
+    "description": "Answer (or skip, with an empty object) the clarifying questions.",
+    "operationId": "answer_questions_v1_projects__project_id__brief_answers_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Answers"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Answer Questions",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/cancel": {
+   "post": {
+    "operationId": "cancel_project_v1_projects__project_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Cancel Project",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/characters/approve": {
+   "post": {
+    "description": "Approve one exact cast version. A stale version returns 409 version_conflict.",
+    "operationId": "approve_cast_v1_projects__project_id__characters_approve_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApproveCast"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Approve Cast",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/characters/{slug}/revise": {
+   "post": {
+    "operationId": "revise_character_v1_projects__project_id__characters__slug__revise_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "slug",
+      "required": true,
+      "schema": {
+       "title": "Slug",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReviseCharacter"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Revise Character",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/estimate": {
+   "get": {
+    "description": "Credits the next paid step will hold. Shown before the user approves spending.",
+    "operationId": "estimate_project_v1_projects__project_id__estimate_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/EstimateOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Estimate Project",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/events": {
+   "get": {
+    "description": "Server-sent progress events. Resumes from `Last-Event-ID` (or `?after=`); events are\npersisted, so anything missed while disconnected is replayed in order. If the requested\nposition is older than retained history a `reset` event tells the client to refetch.",
+    "operationId": "project_events_v1_projects__project_id__events_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "after",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "minimum": 0,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "After"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       },
+       "text/event-stream": {}
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Project Events",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/exports": {
+   "post": {
+    "description": "Export an immutable snapshot of the comic as PDF, PNG or CBZ.",
+    "operationId": "create_export_v1_projects__project_id__exports_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CreateExport"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExportOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Create Export",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/resume": {
+   "post": {
+    "description": "Recover a failed, expired or partially completed comic from its last durable stage.",
+    "operationId": "resume_project_v1_projects__project_id__resume_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Resume Project",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/script": {
+   "patch": {
+    "description": "Save an edited script as a new version. Invalidates any earlier approval.",
+    "operationId": "patch_script_v1_projects__project_id__script_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PatchScript"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ScriptOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Patch Script",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/script/approve": {
+   "post": {
+    "description": "Approve one exact script version, hold illustration credits and start drawing.",
+    "operationId": "approve_script_v1_projects__project_id__script_approve_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApproveScript"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Accepted"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Approve Script",
+    "tags": [
+     "projects"
+    ]
+   }
+  }
+ }
+}

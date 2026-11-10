@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource/comic-neue/400.css";
+@import "@fontsource/comic-neue/700.css";
+@import "@fontsource/bangers/400.css";
+
+@theme {
+  --color-paper: #fbf7f0;
+  --color-card: #ffffff;
+  --color-ink: #16130f;
+  --color-muted: #675f54;
+  --color-line: #e4dccf;
+  --color-accent: #d93a24;
+  --color-accent-ink: #ffffff;
+  --color-teal: #17726d;
+  --color-sun: #ffd23f;
+  --color-ok: #1d7a45;
+  --color-warn: #9a5b00;
+  --color-danger: #b3261e;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Inter Variable", sans-serif;
+  --font-comic: "Comic Neue", "Comic Sans MS", cursive;
+  --font-sfx: "Bangers", Impact, sans-serif;
+  --shadow-panel: 4px 4px 0 0 var(--color-ink);
+  --shadow-panel-sm: 2px 2px 0 0 var(--color-ink);
+}
+
+html { background: var(--color-paper); color: var(--color-ink); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; min-height: 100dvh; }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+
+/* One visible focus treatment everywhere, for keyboard users. */
+:focus-visible { outline: 3px solid var(--color-teal); outline-offset: 2px; border-radius: 4px; }
+
+.halftone {
+  background-image: radial-gradient(var(--color-line) 1.2px, transparent 1.2px);
+  background-size: 14px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
