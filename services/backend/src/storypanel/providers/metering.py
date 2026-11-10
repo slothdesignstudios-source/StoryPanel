@@ -1,11 +1,23 @@
-"""Everything that wraps a provider call: spend limits, distributed concurrency caps,
-usage rows, metrics, and reconciliation of paid requests after ambiguous outcomes.
+"""Everything around a paid provider call: price lookup, spend reservation, concurrency,
+fallback routing, settlement, cancellation and reconciliation.
 
-We do not claim exactly-once charging by providers. What we do guarantee:
-- one ProviderUsage row per logical paid operation (unique idempotency key);
-- the provider's request id is stored *before* waiting for the result;
-- a retry first asks the provider about the stored request id, and only submits a new
-  request once the earlier one is known to have failed or is unknown to the provider.
+Lifecycle of one logical paid operation (one `provider_usage` row, unique key):
+
+    reserved -> submitting -> started(request id) -> succeeded | failed | cancelled
+                    \\-> ambiguous (outcome unknown; never auto-resubmitted)
+
+- Before dispatch the *estimated* cost is reserved against the per-project, per-user-day
+  and global-day ceilings inside one serialised transaction, so concurrent calls cannot
+  jointly exceed a ceiling. `cost_counted_usd` is what budgets see: the estimate while the
+  outcome is open, the actual cost once known.
+- The provider request id is stored before waiting. A retry resumes that id; it submits
+  anew only when the provider has said the earlier request failed or never existed.
+- If submission itself timed out, or a worker died between "submitting" and storing the
+  id, the outcome is unknown. The row becomes `ambiguous`, keeps its estimated cost, and
+  the operation fails permanently instead of risking a second paid generation. A local
+  idempotency key is not a provider-side deduplication guarantee, so we never rely on it.
+
+Customer credits live in the credit ledger and are never computed from these figures.
 """
 
 from __future__ import annotations
@@ -13,14 +25,15 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from storypanel.config import get_settings
 from storypanel.db.models import ProviderUsage
@@ -29,12 +42,14 @@ from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
 from storypanel.obs.logging import get_logger
 from storypanel.obs.tracing import generation_span, record_generation
+from storypanel.providers import pricing
 from storypanel.providers.base import (
     CallContext,
     ImageInput,
     ImageRequest,
     ImageResult,
     RequestPending,
+    RequestUnknown,
     T,
     TextRole,
     Usage,
@@ -43,6 +58,7 @@ from storypanel.providers.registry import get_providers
 from storypanel.services.events import redis_client
 
 log = get_logger("providers")
+OPEN_STATES = ("reserved", "submitting", "started", "ambiguous", "cancelled")
 
 _ACQUIRE = """
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
@@ -78,233 +94,434 @@ async def provider_slot(kind: str, lease_seconds: float = 300.0) -> AsyncIterato
             pass  # the lease expires on its own
 
 
-def _day() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d")
-
-
-async def check_spend_limits(ctx: CallContext) -> None:
-    """Refuse new paid work once a configured budget is used up (non-retryable)."""
-    s, r = get_settings(), redis_client()
-    scopes = [("global", f"sp:spend:global:{_day()}", s.spend_limit_global_daily_usd)]
-    if ctx.user_id:
-        scopes.append(("user", f"sp:spend:user:{ctx.user_id}:{_day()}", s.spend_limit_user_daily_usd))
-    if ctx.project_id:
-        scopes.append(("project", f"sp:spend:project:{ctx.project_id}", s.spend_limit_project_usd))
-    values = await r.mget([k for _, k, _ in scopes])
-    for (scope, _, limit), raw in zip(scopes, values, strict=True):
-        if raw is not None and Decimal(raw) >= limit:
-            metrics.spend_limit_hits.labels(scope).inc()
-            log.warning("spend_limit_reached", scope=scope)
-            raise AppError(ErrorCode.SPEND_LIMIT,
-                           "This comic has reached its generation budget. Contact support to continue."
-                           if scope != "global" else
-                           "Generation is paused for now. Please try again later.")  # fmt: skip
-
-
-async def _add_spend(ctx: CallContext, cost: Decimal) -> None:
-    if cost <= 0:
-        return
-    r = redis_client()
-    pipe = r.pipeline()
-    pipe.incrbyfloat(f"sp:spend:global:{_day()}", float(cost))
-    pipe.expire(f"sp:spend:global:{_day()}", 3 * 86400)
-    if ctx.user_id:
-        pipe.incrbyfloat(f"sp:spend:user:{ctx.user_id}:{_day()}", float(cost))
-        pipe.expire(f"sp:spend:user:{ctx.user_id}:{_day()}", 3 * 86400)
-    if ctx.project_id:
-        pipe.incrbyfloat(f"sp:spend:project:{ctx.project_id}", float(cost))
-        pipe.expire(f"sp:spend:project:{ctx.project_id}", 90 * 86400)
-    await pipe.execute()
-
-
 def _uuid(value: str | None) -> uuid.UUID | None:
     return uuid.UUID(value) if value else None
 
 
-def _observe(usage: Usage, outcome: str) -> None:
-    metrics.provider_calls.labels(usage.provider, usage.operation, outcome).inc()
-    metrics.provider_latency.labels(usage.provider, usage.operation).observe(usage.latency_ms / 1000)
-    if usage.input_tokens:
-        metrics.provider_tokens.labels(usage.provider, "input").inc(usage.input_tokens)
-        metrics.provider_tokens.labels(usage.provider, "output").inc(usage.output_tokens)
-    if usage.images:
-        metrics.provider_images.labels(usage.provider, usage.operation).inc(usage.images)
-    if usage.cost_usd:
-        metrics.provider_cost.labels(usage.provider, usage.operation).inc(float(usage.cost_usd))
+# ------------------------------------------------------------------ spend ceilings
+def _day_start() -> datetime:
+    now = datetime.now(UTC)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-async def _record(ctx: CallContext, usage: Usage, *, key: str, status: str = "succeeded",
-                  error_code: str | None = None) -> None:  # fmt: skip
+async def spend_totals(db: AsyncSession, ctx: CallContext) -> dict[str, Decimal]:
+    day = _day_start()
+    counted = func.coalesce(func.sum(ProviderUsage.cost_counted_usd), 0)
+    totals = {
+        "global": (await db.execute(select(counted).where(ProviderUsage.created_at >= day))).scalar_one()
+    }
+    if ctx.user_id:
+        totals["user"] = (await db.execute(select(counted).where(
+            ProviderUsage.created_at >= day, ProviderUsage.user_id == _uuid(ctx.user_id)))).scalar_one()  # fmt: skip
+    if ctx.project_id:
+        totals["project"] = (await db.execute(select(counted).where(
+            ProviderUsage.project_id == _uuid(ctx.project_id)))).scalar_one()  # fmt: skip
+    return {k: Decimal(v) for k, v in totals.items()}
+
+
+def _limits() -> dict[str, Decimal]:
+    s = get_settings()
+    return {"global": s.spend_limit_global_daily_usd, "user": s.spend_limit_user_daily_usd,
+            "project": s.spend_limit_project_usd}  # fmt: skip
+
+
+async def check_spend_limits(ctx: CallContext, estimate: Decimal = Decimal(0)) -> None:
+    """Refuse when reserving `estimate` would cross any ceiling. Read-only variant."""
     async with transaction() as db:
-        await db.execute(
-            insert(ProviderUsage)
-            .values(id=uuid.uuid4(), user_id=_uuid(ctx.user_id), project_id=_uuid(ctx.project_id),
-                    stage=ctx.stage, target_id=ctx.target_id, provider=usage.provider,
-                    model=usage.model, operation=usage.operation, idempotency_key=key,
-                    provider_request_id=usage.request_id, status=status,
-                    input_tokens=usage.input_tokens, output_tokens=usage.output_tokens,
-                    images=usage.images, cost_usd=usage.cost_usd, latency_ms=usage.latency_ms,
-                    prompt_version=ctx.prompt_version, error_code=error_code)
-            .on_conflict_do_nothing(index_elements=["idempotency_key"])
-        )  # fmt: skip
-    await _add_spend(ctx, usage.cost_usd)
-    log.info("provider_call", provider=usage.provider, model=usage.model,
-             operation=usage.operation, stage=ctx.stage, status=status,
-             duration_ms=usage.latency_ms, input_tokens=usage.input_tokens,
-             output_tokens=usage.output_tokens, images=usage.images,
-             cost_usd=float(usage.cost_usd), prompt_version=ctx.prompt_version,
-             error_code=error_code, provider_request_id=usage.request_id)  # fmt: skip
+        _enforce(await spend_totals(db, ctx), estimate)
 
 
+def _enforce(totals: dict[str, Decimal], estimate: Decimal) -> None:
+    for scope, total in totals.items():
+        if total + estimate > _limits()[scope]:
+            metrics.spend_limit_hits.labels(scope).inc()
+            log.warning(
+                "spend_limit_reached", scope=scope, total_usd=float(total), estimate_usd=float(estimate)
+            )
+            raise AppError(ErrorCode.SPEND_LIMIT,
+                           "Generation is paused for now. Please try again later." if scope == "global" else
+                           "This comic has reached its generation budget. Contact support to continue.")  # fmt: skip
+
+
+async def _reserve(ctx: CallContext, *, key: str, provider: str, model: str, operation: str,
+                   estimate: Decimal, price: pricing.Price) -> ProviderUsage:  # fmt: skip
+    """Create (or reopen after a definitive failure) the usage row, holding `estimate`
+    against every ceiling. Returns the row as it stands after the reservation."""
+    async with transaction() as db:
+        # One lock serialises all reservations, so two calls cannot both see room under a
+        # ceiling and jointly exceed it. Each transaction is a few milliseconds long.
+        await db.execute(text("select pg_advisory_xact_lock(hashtext('sp-provider-spend'))"))
+        row = (await db.execute(select(ProviderUsage).where(ProviderUsage.idempotency_key == key)
+                                .with_for_update())).scalar_one_or_none()  # fmt: skip
+        if row is not None and row.status not in ("failed",):
+            return row  # reserved/started/ambiguous/succeeded: the caller decides what that means
+        _enforce(await spend_totals(db, ctx), estimate)
+        values = dict(user_id=_uuid(ctx.user_id), project_id=_uuid(ctx.project_id), stage=ctx.stage,
+                      target_id=ctx.target_id, provider=provider, model=model, operation=operation,
+                      status="reserved", cost_estimate_usd=estimate, cost_counted_usd=estimate,
+                      cost_usd=Decimal(0), cost_basis="estimated", price_ref=price.ref(),
+                      prompt_version=ctx.prompt_version, provider_request_id=None, error_code=None)  # fmt: skip
+        if row is None:
+            await db.execute(insert(ProviderUsage).values(id=uuid.uuid4(), idempotency_key=key,
+                                                          submissions=0, **values))  # fmt: skip
+        else:
+            for k, v in values.items():
+                setattr(row, k, v)
+        await db.flush()
+        return (
+            await db.execute(select(ProviderUsage).where(ProviderUsage.idempotency_key == key))
+        ).scalar_one()
+
+
+async def _update(key: str, **fields: Any) -> tuple[str, str]:
+    async with transaction() as db:
+        row = (await db.execute(select(ProviderUsage).where(ProviderUsage.idempotency_key == key)
+                                .with_for_update())).scalar_one()  # fmt: skip
+        for k, v in fields.items():
+            setattr(row, k, v)
+        if fields.get("status") == "submitting":
+            row.submissions += 1
+        return row.provider, row.operation
+
+
+async def _settle(key: str, *, status: str, actual: Decimal | None, estimate: Decimal, **fields: Any) -> None:
+    """Close the row. Known cost replaces the estimate; unknown cost keeps the estimate."""
+    s = get_settings()
+    if actual is not None:
+        counted, basis = actual, "actual"
+    elif status == "failed":
+        # The provider said the request failed. Whether failed requests are billed is not
+        # documented for every provider, so by default we keep counting the estimate.
+        counted = estimate if s.count_failed_requests_as_billed else Decimal(0)
+        basis = "estimated_failed" if s.count_failed_requests_as_billed else "assumed_unbilled"
+    elif status == "released":
+        counted, basis = Decimal(0), "never_submitted"
+    else:
+        counted, basis = estimate, "estimated"
+    provider, operation = await _update(key, status=status, cost_counted_usd=counted, cost_basis=basis,
+                                        cost_usd=actual if actual is not None else Decimal(0), **fields)  # fmt: skip
+    if counted:
+        metrics.provider_cost.labels(provider, operation, basis).inc(float(counted))
+
+
+def _observe(provider: str, operation: str, outcome: str, latency_ms: int) -> None:
+    metrics.provider_calls.labels(provider, operation, outcome).inc()
+    metrics.provider_latency.labels(provider, operation).observe(latency_ms / 1000)
+
+
+# ------------------------------------------------------------------ text
 async def structured(
     *, role: TextRole, system: str, user: str, schema: type[T], ctx: CallContext,
     images: tuple[ImageInput, ...] = (),
 ) -> T:  # fmt: skip
-    """Metered structured LLM call. Text calls have no provider idempotency; an ambiguous
-    timeout is retried by the activity and both attempts are recorded."""
-    await check_spend_limits(ctx)
+    """Metered structured LLM call. LLM APIs offer no request id to resume by, so a timeout
+    is a failure of this attempt; its estimated cost stays counted."""
     provider = get_providers().text
+    model = provider.model_for(role)
+    price = pricing.require(provider.name, model)
+    images_px = [_pixels(i.data) for i in images]
+    estimate = pricing.text_estimate(price, input_chars=len(system) + len(user), images_px=images_px,
+                                     max_tokens=provider.max_tokens)  # fmt: skip
+    key = f"text:{uuid.uuid4().hex}"
+    operation = f"text_{role}"
+    await _reserve(ctx, key=key, provider=provider.name, model=model, operation=operation, estimate=estimate,
+                   price=price)  # fmt: skip
     started = time.monotonic()
     meta = {"stage": ctx.stage, "prompt_version": ctx.prompt_version, "attempt": ctx.attempt,
             "project_id": ctx.project_id, "schema": schema.__name__}  # fmt: skip
-    kind = "vision" if images else "text"
-    async with provider_slot(kind):
-        with generation_span(f"{ctx.stage}.{schema.__name__}", model=role, metadata=meta) as obs:
+    async with provider_slot("vision" if images else "text"):
+        await _update(key, status="submitting")
+        with generation_span(f"{ctx.stage}.{schema.__name__}", model=model, metadata=meta) as obs:
             try:
-                result, usage = await provider.structured(
-                    role=role, system=system, user=user, schema=schema, ctx=ctx, images=images
-                )
+                result, usage = await provider.structured(role=role, system=system, user=user, schema=schema,
+                                                          ctx=ctx, images=images)  # fmt: skip
             except AppError as exc:
-                failed = Usage(provider.name, role, f"text_{role}",
-                               latency_ms=int((time.monotonic() - started) * 1000))  # fmt: skip
+                latency = int((time.monotonic() - started) * 1000)
                 outcome = "throttled" if exc.code is ErrorCode.PROVIDER_THROTTLED else "error"
-                _observe(failed, outcome)
-                await _record(ctx, failed, key=f"text:{uuid.uuid4().hex}", status="failed",
-                              error_code=exc.code.value)  # fmt: skip
+                _observe(provider.name, operation, outcome, latency)
+                # A refusal or a 4xx was answered by the provider: billed or not, the outcome is
+                # known. Timeouts and connection errors leave it unknown (estimate kept).
+                known = exc.code in (ErrorCode.MODERATION_BLOCKED, ErrorCode.PROVIDER_BAD_OUTPUT,
+                                     ErrorCode.PROVIDER_THROTTLED) or not exc.retryable  # fmt: skip
+                await _settle(key, status="failed" if known else "ambiguous", actual=None, estimate=estimate,
+                              error_code=exc.code.value, latency_ms=latency)  # fmt: skip
                 raise
+            except asyncio.CancelledError:
+                await asyncio.shield(_settle(key, status="cancelled", actual=None, estimate=estimate))
+                raise
+            served = pricing.table().get((provider.name, usage.model))
+            actual = pricing.text_cost(served, usage.input_tokens, usage.output_tokens) if served else None
             record_generation(obs, usage={"input": usage.input_tokens, "output": usage.output_tokens},
-                              cost_usd=float(usage.cost_usd))  # fmt: skip
-    _observe(usage, "ok")
-    await _record(ctx, usage, key=f"text:{uuid.uuid4().hex}")
+                              cost_usd=float(actual if actual is not None else estimate))  # fmt: skip
+    latency = int((time.monotonic() - started) * 1000)
+    await _settle(key, status="succeeded", actual=actual, estimate=estimate, model=usage.model,
+                  input_tokens=usage.input_tokens, output_tokens=usage.output_tokens, latency_ms=latency,
+                  provider_request_id=usage.request_id)  # fmt: skip
+    _observe(provider.name, operation, "ok", latency)
+    metrics.provider_tokens.labels(provider.name, "input").inc(usage.input_tokens)
+    metrics.provider_tokens.labels(provider.name, "output").inc(usage.output_tokens)
+    log.info("provider_call", provider=provider.name, model=usage.model, operation=operation, stage=ctx.stage,
+             status="succeeded", duration_ms=latency, input_tokens=usage.input_tokens,
+             output_tokens=usage.output_tokens, cost_usd=float(actual if actual is not None else estimate),
+             cost_basis="actual" if actual is not None else "estimated", prompt_version=ctx.prompt_version,
+             provider_request_id=usage.request_id)  # fmt: skip
     return result
 
 
-async def _paid_request(
-    *, key: str, ctx: CallContext, operation: str, provider_name: str, model: str,
-    unit_cost: Decimal, submit: Any, fetch: Any, wait_seconds: float,
-) -> ImageResult:  # fmt: skip
-    """Submit-or-resume a paid image-type request under one idempotency key."""
-    started = time.monotonic()
-    async with transaction() as db:
-        await db.execute(
-            insert(ProviderUsage)
-            .values(id=uuid.uuid4(), user_id=_uuid(ctx.user_id), project_id=_uuid(ctx.project_id),
-                    stage=ctx.stage, target_id=ctx.target_id, provider=provider_name, model=model,
-                    operation=operation, idempotency_key=key, status="started",
-                    prompt_version=ctx.prompt_version)
-            .on_conflict_do_nothing(index_elements=["idempotency_key"])
-        )  # fmt: skip
-        row = (
-            await db.execute(
-                select(ProviderUsage).where(ProviderUsage.idempotency_key == key).with_for_update()
-            )
-        ).scalar_one()
-        request_id = row.provider_request_id
-        if row.status == "failed":
-            # A previous attempt is known to have failed: a fresh submission is safe.
-            row.status, row.provider_request_id, request_id = "started", None, None
+def _pixels(data: bytes) -> int:
+    import io
 
-    async def mark(status: str, **fields: Any) -> None:
-        async with transaction() as db2:
-            r = (
-                await db2.execute(
-                    select(ProviderUsage).where(ProviderUsage.idempotency_key == key).with_for_update()
-                )
-            ).scalar_one()
-            r.status = status
-            for k, v in fields.items():
-                setattr(r, k, v)
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            return int(img.width * img.height)
+    except Exception:
+        return 4_000_000  # unknown: assume large, which over-reserves rather than under
+
+
+# ------------------------------------------------------------------ paid async requests
+async def _paid_request(
+    *, key: str, ctx: CallContext, operation: str, provider_name: str, model: str, price: pricing.Price,
+    estimate: Decimal, submit: Callable[[], Awaitable[str]], fetch: Callable[[str, float], Awaitable[ImageResult]],
+    cancel: Callable[[str], Awaitable[None]], wait_seconds: float,
+) -> ImageResult:  # fmt: skip
+    """Submit-or-resume one paid request under one key (see module docstring)."""
+    started = time.monotonic()
+    row = await _reserve(ctx, key=key, provider=provider_name, model=model, operation=operation,
+                         estimate=estimate, price=price)  # fmt: skip
+    if row.status == "succeeded":
+        raise AppError(ErrorCode.CONFLICT, "This request already completed.", retryable=False)
+    if row.status == "ambiguous" or (row.status == "submitting" and not row.provider_request_id):
+        # A previous attempt may have reached the provider without us learning its id.
+        if row.status == "submitting":
+            await _settle(key, status="ambiguous", actual=None, estimate=row.cost_estimate_usd,
+                          error_code=ErrorCode.PROVIDER_AMBIGUOUS_FINAL.value)  # fmt: skip
+        metrics.provider_calls.labels(provider_name, operation, "ambiguous").inc()
+        raise AppError(ErrorCode.PROVIDER_AMBIGUOUS_FINAL,
+                       "We couldn't confirm whether the illustration service received this request, "
+                       "so we didn't send it again. You can retry it.")  # fmt: skip
+    request_id = row.provider_request_id
+    model = row.model  # a resumed request stays on the model that accepted it
+    estimate = row.cost_estimate_usd
 
     async with provider_slot("image"):
         if request_id is None:
-            await check_spend_limits(ctx)
+            await _update(key, status="submitting")
             try:
                 request_id = await submit()
             except AppError as exc:
-                # A timeout while submitting is ambiguous (the request may exist) but we
-                # hold no id to reconcile with; record it as such for the reconciliation job.
-                status = "ambiguous" if exc.code is ErrorCode.PROVIDER_AMBIGUOUS else "failed"
-                await mark(status, error_code=exc.code.value)
-                metrics.provider_calls.labels(provider_name, operation, status).inc()
+                latency = int((time.monotonic() - started) * 1000)
+                if exc.code is ErrorCode.PROVIDER_AMBIGUOUS:
+                    await _settle(key, status="ambiguous", actual=None, estimate=estimate,
+                                  error_code=ErrorCode.PROVIDER_AMBIGUOUS_FINAL.value, latency_ms=latency)  # fmt: skip
+                    _observe(provider_name, operation, "ambiguous", latency)
+                    raise AppError(ErrorCode.PROVIDER_AMBIGUOUS_FINAL,
+                                   "We couldn't confirm whether the illustration service received this "
+                                   "request, so we didn't send it again. You can retry it.") from exc  # fmt: skip
+                # Rejected at submission: nothing was queued, so nothing was produced.
+                await _settle(key, status="released", actual=None, estimate=estimate,
+                              error_code=exc.code.value, latency_ms=latency)  # fmt: skip
+                await _update(key, status="failed")
+                _observe(provider_name, operation, "throttled" if exc.code is ErrorCode.PROVIDER_THROTTLED
+                         else "error", latency)  # fmt: skip
                 raise
-            await mark("started", provider_request_id=request_id)
+            await _update(key, status="started", provider_request_id=request_id)
         else:
             log.info("provider_request_resumed", operation=operation, provider_request_id=request_id)
             metrics.provider_calls.labels(provider_name, operation, "resumed").inc()
         try:
-            result: ImageResult = await fetch(request_id, wait_seconds)
+            result = await fetch(request_id, wait_seconds)
         except RequestPending as exc:
-            # Still running at the provider: keep the id, let the activity retry and resume.
+            # Still running at the provider: keep the id; the activity retry resumes it.
             raise AppError(ErrorCode.TIMEOUT, "Illustration is taking longer than usual.") from exc
+        except RequestUnknown as exc:
+            await _settle(key, status="released", actual=None, estimate=estimate,
+                          error_code="provider_request_unknown")  # fmt: skip
+            await _update(key, status="failed")
+            raise AppError(ErrorCode.PROVIDER_ERROR, "The illustration service lost this request.") from exc
         except AppError as exc:
-            if exc.code is ErrorCode.PROVIDER_AMBIGUOUS:
-                raise  # id is kept; the next attempt resumes instead of resubmitting
-            await mark("failed", error_code=exc.code.value)
-            metrics.provider_calls.labels(provider_name, operation, "error").inc()
+            if exc.code in (ErrorCode.PROVIDER_AMBIGUOUS, ErrorCode.TIMEOUT):
+                raise  # id kept; the next attempt resumes instead of resubmitting
+            await _settle(key, status="failed", actual=None, estimate=estimate, error_code=exc.code.value,
+                          latency_ms=int((time.monotonic() - started) * 1000))  # fmt: skip
+            _observe(provider_name, operation, "error", int((time.monotonic() - started) * 1000))
             raise
-    usage = Usage(provider=result.provider, model=result.model, operation=operation, images=1,
-                  cost_usd=unit_cost, latency_ms=int((time.monotonic() - started) * 1000),
-                  request_id=request_id)  # fmt: skip
-    await mark("succeeded", cost_usd=unit_cost, images=1, latency_ms=usage.latency_ms)
-    await _add_spend(ctx, unit_cost)
-    _observe(usage, "ok")
-    log.info("provider_call", provider=usage.provider, model=usage.model, operation=operation,
-             stage=ctx.stage, status="succeeded", duration_ms=usage.latency_ms, images=1,
-             cost_usd=float(unit_cost), prompt_version=ctx.prompt_version,
-             provider_request_id=request_id)  # fmt: skip
+        except asyncio.CancelledError:
+            # The workflow was cancelled: stop the provider work too, and keep the estimate
+            # counted because the provider may already have billed it.
+            async def _stop() -> None:
+                try:
+                    await cancel(request_id)
+                except Exception:
+                    log.warning("provider_cancel_failed", provider_request_id=request_id)
+                await _settle(key, status="cancelled", actual=None, estimate=estimate)
+
+            await asyncio.shield(_stop())
+            raise
+    latency = int((time.monotonic() - started) * 1000)
+    actual = (
+        pricing.image_cost(price, pixels=_pixels(result.data)) if price.unit != "per_image" else price.usd
+    )
+    await _settle(key, status="succeeded", actual=actual, estimate=estimate, images=1, latency_ms=latency,
+                  model=result.model)  # fmt: skip
+    _observe(provider_name, operation, "ok", latency)
+    metrics.provider_images.labels(provider_name, operation).inc()
+    log.info("provider_call", provider=provider_name, model=result.model, operation=operation, stage=ctx.stage,
+             status="succeeded", duration_ms=latency, images=1, cost_usd=float(actual), cost_basis="actual",
+             prompt_version=ctx.prompt_version, provider_request_id=request_id)  # fmt: skip
     return result
+
+
+# ------------------------------------------------------------------ fallback routing
+async def _breaker_open(model: str) -> bool:
+    try:
+        return bool(await redis_client().exists(f"sp:breaker:{model}"))
+    except Exception:
+        return False
+
+
+async def _breaker_failure(model: str) -> None:
+    s = get_settings()
+    try:
+        r = redis_client()
+        n = await r.incr(f"sp:breakerfail:{model}")
+        await r.expire(f"sp:breakerfail:{model}", 60)
+        if n >= s.image_breaker_failures:
+            await r.set(f"sp:breaker:{model}", "1", ex=s.image_breaker_open_seconds)
+            log.warning("provider_breaker_open", model=model, failures=n)
+            metrics.provider_calls.labels("fal", "breaker", "open").inc()
+    except Exception:
+        pass
+
+
+def _image_pixels(req: ImageRequest, model: str) -> int:
+    from storypanel.providers.fal_profiles import profile_for
+
+    p = profile_for(model, req.role)  # type: ignore[arg-type]
+    if p is not None and p.aspect_mode == "image_size_wh":
+        size = p.size_args(req.aspect)["image_size"]
+        return int(size["width"] * size["height"])
+    return 1_048_576  # 1K output
 
 
 async def generate_image(req: ImageRequest, ctx: CallContext, *, key: str,
                          wait_seconds: float = 150.0) -> tuple[ImageResult, Usage]:  # fmt: skip
-    s, provider = get_settings(), get_providers().image
-    model = provider.model_for(req)
-    cost = s.price_image_edit if (req.mode == "edit" or req.references) else s.price_image_generate
-    result = await _paid_request(
-        key=key, ctx=ctx, operation=f"image_{req.mode}", provider_name=provider.name, model=model,
-        unit_cost=cost, submit=lambda: provider.submit(req, ctx),
-        fetch=lambda rid, wait: provider.fetch(model, rid, wait_seconds=wait),
-        wait_seconds=wait_seconds,
-    )  # fmt: skip
-    return result, Usage(result.provider, result.model, f"image_{req.mode}", images=1, cost_usd=cost,
+    """Paid image call with automatic fallback when the primary model is failing.
+
+    Fallback happens only for a *new* submission (a resumed request stays where it is), and
+    only when the circuit breaker for the primary is open. Content refusals never trigger it.
+    """
+    provider = get_providers().image
+    primary = provider.model_for(req)
+    fallback = provider.fallback_for(req)
+    model = fallback if fallback and await _breaker_open(primary) else primary
+    if model != primary:
+        log.warning("provider_fallback_used", primary=primary, fallback=model, stage=ctx.stage)
+    price = pricing.require(provider.name, model)
+    estimate = pricing.image_cost(price, pixels=_image_pixels(req, model))
+    try:
+        result = await _paid_request(
+            key=key, ctx=ctx, operation=f"image_{req.role}", provider_name=provider.name, model=model,
+            price=price, estimate=estimate, submit=lambda: provider.submit(req, ctx, model=model),
+            fetch=lambda rid, wait: provider.fetch(model, rid, wait_seconds=wait),
+            cancel=lambda rid: provider.cancel(model, rid), wait_seconds=wait_seconds,
+        )  # fmt: skip
+    except AppError as exc:
+        if (
+            model == primary
+            and exc.code in (ErrorCode.PROVIDER_ERROR, ErrorCode.PROVIDER_THROTTLED)
+            and exc.retryable
+        ):
+            await _breaker_failure(primary)
+        raise
+    return result, Usage(result.provider, result.model, f"image_{req.role}", images=1,
+                         cost_usd=pricing.image_cost(pricing.require(provider.name, result.model),
+                                                     pixels=_pixels(result.data)),
                          request_id=result.request_id)  # fmt: skip
 
 
-async def upscale_image(image: bytes, ctx: CallContext, *, key: str,
-                        wait_seconds: float = 150.0) -> ImageResult:  # fmt: skip
+async def upscale_image(
+    image: bytes, ctx: CallContext, *, key: str, wait_seconds: float = 150.0
+) -> ImageResult:
     s, provider = get_settings(), get_providers().upscale
+    price = pricing.require(provider.name, provider.model)
+    pixels = _pixels(image) * s.upscale_factor**2
     return await _paid_request(
-        key=key, ctx=ctx, operation="upscale", provider_name=provider.name, model=provider.model,
-        unit_cost=s.price_upscale, submit=lambda: provider.submit(image, s.upscale_factor, ctx),
-        fetch=lambda rid, wait: provider.fetch(rid, wait_seconds=wait), wait_seconds=wait_seconds,
+        key=key, ctx=ctx, operation="upscale", provider_name=provider.name, model=provider.model, price=price,
+        estimate=pricing.image_cost(price, pixels=pixels),
+        submit=lambda: provider.submit(image, s.upscale_factor, ctx),
+        fetch=lambda rid, wait: provider.fetch(rid, wait_seconds=wait), cancel=provider.cancel,
+        wait_seconds=wait_seconds,
     )  # fmt: skip
 
 
 async def embed_images(images: list[bytes], ctx: CallContext) -> list[list[float]]:
-    s, provider = get_settings(), get_providers().embedding
-    await check_spend_limits(ctx)
+    provider = get_providers().embedding
+    price = pricing.require(provider.name, provider.model)
+    pixels = sum(_pixels(i) for i in images)
+    cost = pricing.image_cost(price, images=1, pixels=pixels)
+    key = f"embed:{uuid.uuid4().hex}"
+    await _reserve(ctx, key=key, provider=provider.name, model=provider.model, operation="embed",
+                   estimate=cost, price=price)  # fmt: skip
     started = time.monotonic()
     async with provider_slot("vision"):
+        await _update(key, status="submitting")
         try:
             vectors = await provider.embed_images(images, ctx)
         except AppError as exc:
-            metrics.provider_calls.labels(provider.name, "embed", "error").inc()
-            log.warning("provider_call", provider=provider.name, operation="embed", status="failed",
-                        error_code=exc.code.value)  # fmt: skip
+            latency = int((time.monotonic() - started) * 1000)
+            _observe(provider.name, "embed", "error", latency)
+            await _settle(key, status="failed" if not exc.retryable else "ambiguous", actual=None,
+                          estimate=cost, error_code=exc.code.value, latency_ms=latency)  # fmt: skip
             raise
-    usage = Usage(provider.name, provider.model, "embed", images=len(images),
-                  cost_usd=s.price_embedding_per_image * len(images),
-                  latency_ms=int((time.monotonic() - started) * 1000))  # fmt: skip
-    _observe(usage, "ok")
-    await _record(ctx, usage, key=f"embed:{uuid.uuid4().hex}")
+    latency = int((time.monotonic() - started) * 1000)
+    await _settle(key, status="succeeded", actual=cost, estimate=cost, images=len(images), latency_ms=latency)
+    _observe(provider.name, "embed", "ok", latency)
     return vectors
+
+
+# ------------------------------------------------------------------ reconciliation
+async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30)) -> dict[str, int]:
+    """Resolve rows whose worker went away. Asks the provider about every stored request id;
+    rows with no id are released (never sent) or marked ambiguous (maybe sent)."""
+    cutoff = datetime.now(UTC) - older_than
+    outcome = {"released": 0, "ambiguous": 0, "succeeded_unused": 0, "failed": 0, "pending": 0}
+    async with transaction() as db:
+        rows = list((await db.execute(select(ProviderUsage).where(
+            ProviderUsage.status.in_(("reserved", "submitting", "started")),
+            ProviderUsage.updated_at < cutoff).limit(200))).scalars())  # fmt: skip
+    providers = get_providers()
+    for row in rows:
+        if row.status == "reserved":
+            await _settle(row.idempotency_key, status="released", actual=None, estimate=row.cost_estimate_usd)
+            outcome["released"] += 1
+            continue
+        if row.status == "submitting" or not row.provider_request_id:
+            await _settle(row.idempotency_key, status="ambiguous", actual=None, estimate=row.cost_estimate_usd,
+                          error_code=ErrorCode.PROVIDER_AMBIGUOUS_FINAL.value)  # fmt: skip
+            outcome["ambiguous"] += 1
+            continue
+        try:
+            if row.operation == "upscale":
+                await providers.upscale.fetch(row.provider_request_id, wait_seconds=0)
+            else:
+                await providers.image.fetch(row.model, row.provider_request_id, wait_seconds=0)
+            # Produced and (presumably) billed, but nobody stored the result.
+            await _settle(row.idempotency_key, status="succeeded_unused", actual=row.cost_estimate_usd,
+                          estimate=row.cost_estimate_usd)  # fmt: skip
+            outcome["succeeded_unused"] += 1
+        except RequestPending:
+            outcome["pending"] += 1
+        except RequestUnknown:
+            await _settle(row.idempotency_key, status="released", actual=None, estimate=row.cost_estimate_usd)
+            outcome["released"] += 1
+        except AppError as exc:
+            await _settle(row.idempotency_key, status="failed", actual=None, estimate=row.cost_estimate_usd,
+                          error_code=exc.code.value)  # fmt: skip
+            outcome["failed"] += 1
+    async with transaction() as db:
+        unresolved = (await db.execute(select(func.coalesce(func.sum(ProviderUsage.cost_counted_usd), 0)).where(
+            ProviderUsage.status.in_(OPEN_STATES), ProviderUsage.cost_basis != "actual"))).scalar_one()  # fmt: skip
+    metrics.provider_unreconciled_usd.set(float(unresolved))
+    return outcome

@@ -1,0 +1,25 @@
+{
+ "_comment": "Copy to a private location, verify every figure against the provider's own pricing page, set verified_at to the date you checked, and point SP_PRICING_FILE at it. Entries with an empty verified_at are rejected on purpose: the app will not start in live mode until each price has been checked. Zero prices are rejected unless \"free\": true.",
+ "entries": [
+  {"provider": "anthropic", "model": "claude-sonnet-5-5", "unit": "per_mtok", "input_usd": "2.00", "output_usd": "10.00",
+   "source": "Anthropic model table (claude-api reference, cached 2026-11-03). Re-check on https://platform.claude.com pricing.", "verified_at": "2026-11-03"},
+  {"provider": "anthropic", "model": "claude-haiku-5-5", "unit": "per_mtok", "input_usd": "0.10", "output_usd": "0.50",
+   "source": "Anthropic model table (claude-api reference, cached 2026-11-03); applies to prompts up to 100K tokens.", "verified_at": "2026-11-03"},
+  {"provider": "anthropic", "model": "claude-opus-4-8", "unit": "per_mtok", "input_usd": "5.00", "output_usd": "25.00",
+   "source": "Anthropic model table (claude-api reference, cached 2026-11-03). Possible refusal-fallback target for Sonnet 5.5.", "verified_at": "2026-11-03"},
+  {"provider": "fal", "model": "fal-ai/nano-banana-2", "unit": "per_image", "usd": "0.08",
+   "source": "UNVERIFIED: third-party listings and fal's comparison page give ~$0.08 at 1K. Check fal.ai/models/fal-ai/nano-banana-2.", "verified_at": ""},
+  {"provider": "fal", "model": "fal-ai/nano-banana-2/edit", "unit": "per_image", "usd": "0.08",
+   "source": "UNVERIFIED: as above, 1K output. Check fal.ai/models/fal-ai/nano-banana-2/edit.", "verified_at": ""},
+  {"provider": "fal", "model": "fal-ai/bytedance/seedream/v5/lite/edit", "unit": "per_image", "usd": "0.035",
+   "source": "UNVERIFIED: product document estimate for Seedream 5.0 Lite. Check fal's model page.", "verified_at": ""},
+  {"provider": "fal", "model": "fal-ai/bytedance/seedream/v5/lite/text-to-image", "unit": "per_image", "usd": "0.035",
+   "source": "UNVERIFIED: product document estimate. Check fal's model page.", "verified_at": ""},
+  {"provider": "fal", "model": "fal-ai/flux-pro/v1/fill", "unit": "per_megapixel", "usd": "0.05",
+   "source": "UNVERIFIED: BFL lists $0.05/image; fal states billing scales with output megapixels. Check fal's model page.", "verified_at": ""},
+  {"provider": "fal", "model": "fal-ai/esrgan", "unit": "per_image", "usd": "0.01",
+   "source": "UNVERIFIED placeholder. Check fal.ai/models/fal-ai/esrgan.", "verified_at": ""},
+  {"provider": "voyage", "model": "voyage-multimodal-3.5", "unit": "per_billion_pixels", "usd": "0.60",
+   "source": "UNVERIFIED: OpenRouter and a model directory quoting Voyage docs ($0.60 per billion pixels). Check docs.voyageai.com/docs/pricing.", "verified_at": ""}
+ ]
+}

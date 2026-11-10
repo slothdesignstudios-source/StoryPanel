@@ -335,17 +335,27 @@ class ProviderUsage(Base):
     operation: Mapped[str] = mapped_column(String(30))
     idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
     provider_request_id: Mapped[str | None] = mapped_column(String(200))
-    status: Mapped[str] = mapped_column(String(15), default="started")  # started|succeeded|failed|ambiguous
+    # reserved|submitting|started|succeeded|succeeded_unused|failed|released|ambiguous|cancelled
+    status: Mapped[str] = mapped_column(String(20), default="reserved", index=True)
     result: Mapped[JSON | None] = mapped_column(JSONB)
+    cost_estimate_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0)
+    # what spend ceilings count: the estimate while open/unknown, the actual cost once known
+    cost_counted_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0)
+    cost_basis: Mapped[str] = mapped_column(String(20), default="estimated")
+    price_ref: Mapped[JSON | None] = mapped_column(JSONB)
+    submissions: Mapped[int] = mapped_column(Integer, default=0)
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     images: Mapped[int] = mapped_column(Integer, default=0)
-    cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 5), default=0)
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     prompt_version: Mapped[str | None] = mapped_column(String(20))
     error_code: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 

@@ -1,0 +1,193 @@
+"""Provider price table with provenance, and conservative cost estimates.
+
+Prices are operator-supplied data (SP_PRICING_FILE or SP_PRICING_JSON), one entry per
+(provider, model). Each entry must say where the number came from and when it was last
+checked. With live providers:
+
+- a billable call whose model has no entry is refused;
+- a price of zero is refused unless the entry is explicitly marked "free": true;
+- an entry older than SP_PRICING_MAX_AGE_DAYS is refused (stale);
+- a malformed table stops the process at startup.
+
+Fake providers use a built-in *simulated* table with non-zero prices, so budget and
+reservation logic is exercised in tests. Customer credits are never derived from these.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Literal
+
+from storypanel.config import Settings, get_settings
+from storypanel.errors import AppError, ErrorCode
+
+Unit = Literal["per_image", "per_megapixel", "per_mtok", "per_billion_pixels"]
+UNITS: tuple[str, ...] = ("per_image", "per_megapixel", "per_mtok", "per_billion_pixels")
+
+
+@dataclass(frozen=True)
+class Price:
+    provider: str
+    model: str
+    unit: Unit
+    usd: Decimal  # per unit (for per_mtok: input tokens)
+    output_usd: Decimal  # per_mtok only
+    free: bool
+    source: str
+    verified_at: date
+
+    def ref(self) -> dict[str, Any]:
+        return {"unit": self.unit, "usd": str(self.usd), "output_usd": str(self.output_usd),
+                "free": self.free, "source": self.source, "verified_at": self.verified_at.isoformat()}  # fmt: skip
+
+
+class PricingError(ValueError):
+    pass
+
+
+def _dec(value: Any, what: str) -> Decimal:
+    try:
+        d = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise PricingError(f"{what}: not a number") from exc
+    if not d.is_finite() or d < 0:
+        raise PricingError(f"{what}: must be a finite, non-negative number")
+    return d
+
+
+def parse_table(raw: dict[str, Any]) -> dict[tuple[str, str], Price]:
+    table: dict[tuple[str, str], Price] = {}
+    for n, e in enumerate(raw.get("entries", [])):
+        where = f"pricing entry {n} ({e.get('provider')}/{e.get('model')})"
+        for key in ("provider", "model", "unit", "source", "verified_at"):
+            if not e.get(key):
+                raise PricingError(f"{where}: '{key}' is required")
+        if e["unit"] not in UNITS:
+            raise PricingError(f"{where}: unit must be one of {', '.join(UNITS)}")
+        try:
+            verified = date.fromisoformat(str(e["verified_at"]))
+        except ValueError as exc:
+            raise PricingError(f"{where}: verified_at must be an ISO date") from exc
+        usd = _dec(e.get("input_usd" if e["unit"] == "per_mtok" else "usd"), where)
+        out = _dec(e.get("output_usd", 0), where) if e["unit"] == "per_mtok" else Decimal(0)
+        free = e.get("free") is True
+        if not free and (usd == 0 or (e["unit"] == "per_mtok" and out == 0)):
+            raise PricingError(f'{where}: price is zero; set "free": true if that is intended')
+        ident = (str(e["provider"]), str(e["model"]))
+        if ident in table:
+            raise PricingError(f"{where}: duplicate entry")
+        table[ident] = Price(ident[0], ident[1], e["unit"], usd, out, free, str(e["source"]), verified)
+    return table
+
+
+SIMULATED = {
+    "entries": [
+        {"provider": "fake", "model": m, "unit": u, "usd": p, "input_usd": p, "output_usd": o,
+         "source": "simulated (fake providers)", "verified_at": "2099-01-01"}
+        for m, u, p, o in (
+            ("fake-story", "per_mtok", "2", "10"), ("fake-light", "per_mtok", "0.1", "0.5"),
+            ("fake-vision", "per_mtok", "0.1", "0.5"), ("fake-image", "per_image", "0.04", "0"),
+            ("fake-edit", "per_image", "0.08", "0"), ("fake-fallback", "per_image", "0.035", "0"),
+            ("fake-inpaint", "per_image", "0.05", "0"), ("fake-upscale", "per_image", "0.01", "0"),
+            ("fake-embed", "per_billion_pixels", "0.6", "0"),
+        )
+    ]
+}  # fmt: skip
+
+
+@lru_cache
+def _load(provider_mode: str, file: str | None, inline: str | None) -> dict[tuple[str, str], Price]:
+    if provider_mode == "fake":
+        return parse_table(SIMULATED)
+    if inline:
+        return parse_table(json.loads(inline))
+    if file:
+        return parse_table(json.loads(Path(file).read_text()))
+    return {}
+
+
+def table(settings: Settings | None = None) -> dict[tuple[str, str], Price]:
+    s = settings or get_settings()
+    return _load(
+        s.provider_mode, s.pricing_file, s.pricing_json.get_secret_value() if s.pricing_json else None
+    )
+
+
+def reset_cache() -> None:
+    _load.cache_clear()
+
+
+def configured_models(s: Settings) -> list[tuple[str, str | None]]:
+    if s.provider_mode == "fake":
+        return []
+    return [("anthropic", s.text_model_story), ("anthropic", s.text_model_light), ("anthropic", s.vision_model),
+            ("fal", s.image_model_generate), ("fal", s.image_model_edit), ("fal", s.image_model_fallback),
+            ("fal", s.image_model_fallback_generate), ("fal", s.inpaint_model), ("fal", s.upscale_model),
+            ("voyage", s.embedding_model)]  # fmt: skip
+
+
+def startup_problems(s: Settings) -> list[str]:
+    """Problems that must stop a live deployment from starting."""
+    if s.provider_mode != "live":
+        return []
+    try:
+        table(s)
+    except (PricingError, json.JSONDecodeError, OSError) as exc:
+        return [f"pricing table is invalid: {exc}"]
+    problems = []
+    for provider, model in configured_models(s):
+        if model is None:
+            continue
+        try:
+            require(provider, model, settings=s)
+        except AppError as exc:
+            problems.append(exc.message)
+    return problems
+
+
+def require(provider: str, model: str, *, settings: Settings | None = None) -> Price:
+    """The price for a billable call, or a non-retryable refusal."""
+    s = settings or get_settings()
+    price = table(s).get((provider, model))
+    if price is None:
+        raise AppError(ErrorCode.PRICING_UNAVAILABLE,
+                       f"No verified price is configured for {provider}/{model}.")  # fmt: skip
+    age = (datetime.now(UTC).date() - price.verified_at).days
+    if s.provider_mode == "live" and age > s.pricing_max_age_days:
+        raise AppError(ErrorCode.PRICING_UNAVAILABLE,
+                       f"The price for {provider}/{model} was last verified {age} days ago "
+                       f"(limit {s.pricing_max_age_days}). Re-check it before spending.")  # fmt: skip
+    return price
+
+
+# ------------------------------------------------------------------ estimates
+def text_estimate(price: Price, *, input_chars: int, images_px: list[int], max_tokens: int) -> Decimal:
+    """Upper bound before the call: generous input estimate plus the full output budget."""
+    in_tokens = math.ceil(input_chars / 3) + sum(math.ceil(px / 750) for px in images_px) + 500
+    return text_cost(price, in_tokens, max_tokens)
+
+
+def text_cost(price: Price, input_tokens: int, output_tokens: int) -> Decimal:
+    if price.free:
+        return Decimal(0)
+    return (Decimal(input_tokens) * price.usd + Decimal(output_tokens) * price.output_usd) / Decimal(
+        1_000_000
+    )
+
+
+def image_cost(price: Price, *, images: int = 1, pixels: int = 1_048_576) -> Decimal:
+    if price.free:
+        return Decimal(0)
+    if price.unit == "per_image":
+        return price.usd * images
+    if price.unit == "per_megapixel":
+        return price.usd * Decimal(pixels * images) / Decimal(1_000_000)
+    if price.unit == "per_billion_pixels":
+        return price.usd * Decimal(pixels * images) / Decimal(1_000_000_000)
+    raise AppError(ErrorCode.PRICING_UNAVAILABLE, f"Unit {price.unit} cannot price an image call.")

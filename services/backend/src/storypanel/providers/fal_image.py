@@ -1,13 +1,15 @@
-"""fal.ai adapter for multi-reference image generation, editing and upscaling.
+"""fal.ai adapter: multi-reference generation and editing, region repair, upscaling.
 
-Built on the official `fal-client` queue API (submit / status / result), which gives a
-request id immediately. That id is persisted before waiting, so a worker crash or
-timeout is reconciled by asking fal about the original request instead of paying twice.
+Contracts come from `fal_profiles.PROFILES` (fal's published endpoint types). Transport is
+the official `fal-client` queue API: `submit` returns a request id at once, which the
+caller persists before waiting. Afterwards the request can be resumed (`status`/`result`)
+or cancelled (`cancel`) by that id.
 
-The request/response field names differ per hosted model. They are configuration
-(`ModelProfile`), not code. The built-in profile follows fal's published examples for
-multi-reference edit endpoints (`prompt` + `image_urls`); confirm it against the model's
-schema page before enabling a new model. See docs/providers.md.
+Outcome classification, from the SDK's own status model:
+- `Queued` / `InProgress` past our wait budget  -> RequestPending (resume later by id)
+- `Completed` with `error`                       -> definitive failure (no image)
+- HTTP 404 on status                             -> RequestUnknown (never accepted)
+- transport timeout                              -> ambiguous (id kept, resume)
 """
 
 from __future__ import annotations
@@ -17,7 +19,6 @@ import hashlib
 import ipaddress
 import socket
 import time
-from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
@@ -27,35 +28,23 @@ from fal_client.client import Completed, FalClientHTTPError, FalClientTimeoutErr
 
 from storypanel.config import Settings
 from storypanel.errors import AppError, ErrorCode
-from storypanel.providers.base import CallContext, ImageRequest, ImageResult, RequestPending
+from storypanel.providers.base import CallContext, ImageRequest, ImageResult, RequestPending, RequestUnknown
+from storypanel.providers.fal_profiles import FalProfile, profile_for
 
 MAX_DOWNLOAD_BYTES = 30 * 1024 * 1024
-
-
-@dataclass(frozen=True)
-class ModelProfile:
-    prompt_field: str = "prompt"
-    references_field: str = "image_urls"
-    aspect_field: str | None = "aspect_ratio"
-    seed_field: str | None = "seed"
-    supported_aspects: tuple[str, ...] = ("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9")
-    extra: dict[str, Any] = field(default_factory=lambda: {"num_images": 1, "output_format": "png"})
-    result_path: tuple[str | int, ...] = ("images", 0, "url")
-
-
-@dataclass(frozen=True)
-class UpscaleProfile:
-    image_field: str = "image_url"
-    scale_field: str = "scale"
-    result_path: tuple[str | int, ...] = ("image", "url")
+_SAFETY_WORDS = ("content_policy", "nsfw", "safety", "moderation", "prohibited")
+_TOLERANCE = {"all_ages": "2", "teen": "3", "mature": "4"}
 
 
 def _map_error(exc: Exception, what: str) -> AppError:
     if isinstance(exc, FalClientTimeoutError | httpx.TimeoutException | asyncio.TimeoutError):
         return AppError(ErrorCode.PROVIDER_AMBIGUOUS, f"The {what} service timed out.", retryable=True)
     if isinstance(exc, FalClientHTTPError):
+        detail = f"{getattr(exc, 'error_type', '') or ''} {exc}".lower()
         if exc.status_code == 429:
             return AppError(ErrorCode.PROVIDER_THROTTLED, f"The {what} service is busy.")
+        if exc.status_code == 422 and any(w in detail for w in _SAFETY_WORDS):
+            return AppError(ErrorCode.MODERATION_BLOCKED, "The illustration service refused this content.")
         if exc.status_code >= 500:
             return AppError(ErrorCode.PROVIDER_ERROR, f"The {what} service is having problems.")
         return AppError(ErrorCode.PROVIDER_ERROR, f"The {what} service rejected the request.",
@@ -99,14 +88,50 @@ async def download_image(url: str) -> bytes:
     return b"".join(chunks)
 
 
-def _dig(data: Any, path: tuple[str | int, ...]) -> Any:
+def build_arguments(profile: FalProfile, req: ImageRequest, *, reference_urls: list[str],
+                    image_url: str | None, mask_url: str | None) -> dict[str, Any]:  # fmt: skip
+    """The exact JSON body for one request. Pure, so tests can check it field by field
+    against the published schema without network access."""
+    args: dict[str, Any] = {**profile.fixed, "prompt": req.prompt}
+    args.update(profile.size_args(req.aspect))
+    if profile.reference_field:
+        if not reference_urls:
+            raise AppError(ErrorCode.VALIDATION, f"{profile.endpoint} needs at least one reference image.",
+                           retryable=False)  # fmt: skip
+        args[profile.reference_field] = reference_urls[: profile.max_references]
+    elif reference_urls:
+        raise AppError(
+            ErrorCode.VALIDATION, f"{profile.endpoint} takes no reference images.", retryable=False
+        )
+    if profile.image_field:
+        if image_url is None:
+            raise AppError(ErrorCode.VALIDATION, f"{profile.endpoint} needs an input image.", retryable=False)
+        args[profile.image_field] = image_url
+    if profile.mask_field:
+        if mask_url is None:
+            raise AppError(ErrorCode.VALIDATION, f"{profile.endpoint} needs a mask.", retryable=False)
+        args[profile.mask_field] = mask_url
+    if profile.seed_field and req.seed is not None:
+        args[profile.seed_field] = req.seed
+    if "safety_tolerance" in profile.fixed or profile.endpoint.startswith("fal-ai/nano-banana"):
+        args["safety_tolerance"] = _TOLERANCE.get(req.audience, "2")
+    return args
+
+
+def extract_result_url(profile: FalProfile, result: Any) -> str:
     try:
-        for key in path:
-            data = data[key]
-        return data
+        if profile.nsfw_flags_field and any(result.get(profile.nsfw_flags_field) or []):
+            raise AppError(ErrorCode.MODERATION_BLOCKED, "The illustration service flagged this image.")
+        url = result["image"]["url"] if profile.result == "image" else result["images"][0]["url"]
+    except AppError:
+        raise
     except (KeyError, IndexError, TypeError) as exc:
-        raise AppError(ErrorCode.PROVIDER_BAD_OUTPUT,
-                       "The image service returned an unexpected response.") from exc  # fmt: skip
+        raise AppError(
+            ErrorCode.PROVIDER_BAD_OUTPUT, "The image service returned an unexpected response."
+        ) from exc
+    if not isinstance(url, str):
+        raise AppError(ErrorCode.PROVIDER_BAD_OUTPUT, "The image service returned an unexpected response.")
+    return url
 
 
 class _FalBase:
@@ -115,8 +140,7 @@ class _FalBase:
     def __init__(self, settings: Settings) -> None:
         assert settings.fal_key is not None
         self._s = settings
-        self._client = fal_client.AsyncClient(key=settings.fal_key.get_secret_value(),
-                                              default_timeout=120.0)  # fmt: skip
+        self._client = fal_client.AsyncClient(key=settings.fal_key.get_secret_value(), default_timeout=120.0)
         self._uploads: dict[str, tuple[float, str]] = {}
 
     async def _upload(self, data: bytes, media_type: str) -> str:
@@ -134,77 +158,110 @@ class _FalBase:
             while True:
                 status = await self._client.status(app, request_id)
                 if isinstance(status, Completed):
+                    if status.error:
+                        text = f"{status.error_type or ''} {status.error}".lower()
+                        if any(w in text for w in _SAFETY_WORDS):
+                            raise AppError(ErrorCode.MODERATION_BLOCKED,
+                                           "The illustration service refused this content.")  # fmt: skip
+                        # Definitive failure: nothing was produced, a new request is safe.
+                        raise AppError(ErrorCode.PROVIDER_ERROR, "The illustration failed at the provider.",
+                                       meta={"error_type": status.error_type})  # fmt: skip
                     return await self._client.result(app, request_id)
                 if time.monotonic() >= deadline:
                     raise RequestPending(request_id)
                 await asyncio.sleep(1.0)
-        except RequestPending:
+        except (RequestPending, AppError):
             raise
+        except FalClientHTTPError as exc:
+            if exc.status_code == 404:
+                raise RequestUnknown(request_id) from exc
+            raise _map_error(exc, "illustration") from exc
         except Exception as exc:
+            raise _map_error(exc, "illustration") from exc
+
+    async def _cancel(self, app: str, request_id: str) -> None:
+        try:
+            await self._client.cancel(app, request_id)
+        except Exception as exc:  # best effort: a finished request cannot be cancelled
             raise _map_error(exc, "illustration") from exc
 
 
 class FalImageProvider(_FalBase):
-    def __init__(self, settings: Settings, profile: ModelProfile | None = None) -> None:
-        super().__init__(settings)
-        self.profile = profile or ModelProfile()
+    def _profile(self, model: str, role: str) -> FalProfile:
+        p = profile_for(model, role)  # type: ignore[arg-type]
+        if p is None:
+            raise AppError(
+                ErrorCode.VALIDATION, f"No verified contract for {model} as {role}.", retryable=False
+            )
+        return p
 
     def model_for(self, req: ImageRequest) -> str:
         if req.model:
             return req.model
-        use_edit = req.mode == "edit" or bool(req.references)
-        model = self._s.image_model_edit if use_edit else self._s.image_model_generate
-        assert model is not None
+        model = {"generate": self._s.image_model_generate, "edit": self._s.image_model_edit,
+                 "inpaint": self._s.inpaint_model}[req.role]  # fmt: skip
+        if model is None:
+            raise AppError(ErrorCode.VALIDATION, f"No {req.role} model is configured.", retryable=False)
         return model
 
-    async def submit(self, req: ImageRequest, ctx: CallContext) -> str:
-        p = self.profile
-        args: dict[str, Any] = {**p.extra, p.prompt_field: req.prompt}
+    def fallback_for(self, req: ImageRequest) -> str | None:
+        return {"generate": self._s.image_model_fallback_generate, "edit": self._s.image_model_fallback}.get(
+            req.role
+        )
+
+    async def submit(self, req: ImageRequest, ctx: CallContext, *, model: str) -> str:
+        profile = self._profile(model, req.role)
         try:
-            if req.references:
-                refs = req.references[: self._s.image_max_references]
-                args[p.references_field] = [await self._upload(r.data, r.media_type) for r in refs]
-            if p.aspect_field and req.aspect in p.supported_aspects:
-                args[p.aspect_field] = req.aspect
-            if p.seed_field and req.seed is not None:
-                args[p.seed_field] = req.seed
-            handle = await self._client.submit(self.model_for(req), args)
+            limit = min(self._s.image_max_references, profile.max_references)
+            refs = [await self._upload(r.data, r.media_type) for r in req.references[:limit]]
+            image_url = await self._upload(req.image, "image/png") if req.image is not None else None
+            mask_url = await self._upload(req.mask, "image/png") if req.mask is not None else None
+            args = build_arguments(profile, req, reference_urls=refs, image_url=image_url, mask_url=mask_url)
+            handle = await self._client.submit(model, args)
+        except AppError:
+            raise
         except Exception as exc:
             raise _map_error(exc, "illustration") from exc
         return str(handle.request_id)
 
     async def fetch(self, model: str, request_id: str, *, wait_seconds: float) -> ImageResult:
+        profile = next(p for role in ("generate", "edit", "inpaint")
+                       if (p := profile_for(model, role)) is not None)  # type: ignore[arg-type]  # fmt: skip
         result = await self._wait(model, request_id, wait_seconds)
-        url = _dig(result, self.profile.result_path)
-        try:
-            data = await download_image(str(url))
-        except AppError:
-            raise
-        except Exception as exc:
-            raise _map_error(exc, "illustration") from exc
+        data = await download_image(extract_result_url(profile, result))
         seed = result.get("seed") if isinstance(result, dict) else None
         return ImageResult(data=data, provider=self.name, model=model, request_id=request_id,
                            seed=seed if isinstance(seed, int) else None)  # fmt: skip
 
+    async def cancel(self, model: str, request_id: str) -> None:
+        await self._cancel(model, request_id)
+
 
 class FalUpscaleProvider(_FalBase):
-    def __init__(self, settings: Settings, profile: UpscaleProfile | None = None) -> None:
+    def __init__(self, settings: Settings) -> None:
         super().__init__(settings)
         assert settings.upscale_model is not None
         self.model = settings.upscale_model
-        self.profile = profile or UpscaleProfile()
+        p = profile_for(self.model, "upscale")
+        if p is None:
+            raise AppError(
+                ErrorCode.VALIDATION, f"No verified contract for upscaler {self.model}.", retryable=False
+            )
+        self.profile = p
 
     async def submit(self, image: bytes, factor: int, ctx: CallContext) -> str:
         try:
             url = await self._upload(image, "image/png")
-            handle = await self._client.submit(
-                self.model, {self.profile.image_field: url, self.profile.scale_field: factor}
-            )
+            args = {**self.profile.fixed, "image_url": url, "scale": factor}
+            handle = await self._client.submit(self.model, args)
         except Exception as exc:
             raise _map_error(exc, "upscaling") from exc
         return str(handle.request_id)
 
     async def fetch(self, request_id: str, *, wait_seconds: float) -> ImageResult:
         result = await self._wait(self.model, request_id, wait_seconds)
-        data = await download_image(str(_dig(result, self.profile.result_path)))
+        data = await download_image(extract_result_url(self.profile, result))
         return ImageResult(data=data, provider=self.name, model=self.model, request_id=request_id)
+
+    async def cancel(self, request_id: str) -> None:
+        await self._cancel(self.model, request_id)

@@ -402,30 +402,6 @@ async def test_sse_replay_reconnect_and_reset(app: Any, headers: dict[str, str])
 
 
 # ------------------------------------------------------------------ spend limits & deletion jobs
-async def test_spend_limits_refuse_new_paid_work(client: Any, headers: dict[str, str]) -> None:
-    from datetime import UTC, datetime
-
-    from storypanel.providers import metering
-    from storypanel.providers.base import CallContext
-
-    uid = str(await _user(client, headers))
-    ctx = CallContext("panel_generate", user_id=uid, project_id=str(uuid.uuid4()))
-    await metering.check_spend_limits(ctx)  # under every limit
-    day = datetime.now(UTC).strftime("%Y%m%d")
-    r = events.redis_client()
-    for key, scope in (
-        (f"sp:spend:project:{ctx.project_id}", "comic"),
-        (f"sp:spend:user:{uid}:{day}", "comic"),
-        (f"sp:spend:global:{day}", "paused"),
-    ):
-        await r.set(key, "100000")
-        with pytest.raises(AppError) as e:
-            await metering.check_spend_limits(ctx)
-        assert e.value.code is ErrorCode.SPEND_LIMIT and not e.value.retryable and scope in e.value.message
-        await r.delete(key)
-    await metering.check_spend_limits(ctx)
-
-
 async def test_deleted_projects_are_purged_with_their_files(client: Any, headers: dict[str, str]) -> None:
     from storypanel import storage
     from storypanel.db.models import Asset

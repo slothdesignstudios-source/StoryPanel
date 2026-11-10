@@ -19,7 +19,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 NON_RETRYABLE = [
     "validation_error", "unauthenticated", "forbidden", "not_found", "conflict",
     "version_conflict", "invalid_state", "quota_exceeded", "insufficient_credits",
-    "spend_limit_reached", "moderation_blocked", "provider_outcome_unknown_final",
+    "spend_limit_reached", "moderation_blocked", "provider_outcome_unknown_final", "pricing_unavailable",
     "payload_too_large",
 ]  # fmt: skip
 

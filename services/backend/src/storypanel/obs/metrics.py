@@ -29,7 +29,15 @@ provider_latency = Histogram(
 )
 provider_tokens = Counter("sp_provider_tokens_total", "LLM tokens", ["provider", "direction"])
 provider_images = Counter("sp_provider_images_total", "Images produced", ["provider", "operation"])
-provider_cost = Counter("sp_provider_cost_usd_total", "Provider spend in USD", ["provider", "operation"])
+provider_cost = Counter(
+    "sp_provider_cost_usd_total",
+    "Provider spend in USD (basis: actual or estimated)",
+    ["provider", "operation", "basis"],
+)
+provider_unreconciled_usd = Gauge(
+    "sp_provider_unreconciled_usd",
+    "Provider cost counted at estimate because the outcome is still open or unknown",
+)
 spend_limit_hits = Counter("sp_spend_limit_hits_total", "Spend-limit rejections", ["scope"])
 
 time_to_first_page = Histogram(

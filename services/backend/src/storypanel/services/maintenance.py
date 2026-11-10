@@ -13,7 +13,7 @@ from sqlalchemy import delete, func, select, text, update
 
 from storypanel import storage
 from storypanel.config import get_settings
-from storypanel.db.models import Asset, Export, IdempotencyKey, Outbox, Project, ProviderUsage, User
+from storypanel.db.models import Asset, Export, IdempotencyKey, Outbox, Project, User
 from storypanel.db.session import transaction
 from storypanel.domain.states import ACTIVE
 from storypanel.obs import metrics
@@ -94,11 +94,6 @@ async def measure_health() -> None:
                      < now() - interval '15 minutes'"""),
             {"active": [s.value for s in ACTIVE]})).scalar_one()  # fmt: skip
         metrics.stuck_projects.set(stuck)
-        ambiguous = (await db.execute(select(func.count()).select_from(ProviderUsage).where(
-            ProviderUsage.status.in_(("ambiguous", "started")),
-            ProviderUsage.created_at < func.now() - text("interval '30 minutes'")))).scalar_one()  # fmt: skip
-        if ambiguous:
-            log.warning("provider_requests_unreconciled", count=ambiguous)
         drift = await credits.reconcile(db)
         if drift:
             log.error("credit_reconciliation_drift", users=len(drift))
@@ -108,12 +103,25 @@ async def measure_health() -> None:
             IdempotencyKey.created_at < func.now() - text("interval '2 days'")))  # fmt: skip
 
 
+async def reconcile_provider_requests() -> dict[str, int]:
+    from storypanel.providers import metering
+
+    outcome = await metering.reconcile_open_requests()
+    if any(outcome[k] for k in ("ambiguous", "succeeded_unused")):
+        log.warning("provider_requests_reconciled", **outcome)
+    return outcome
+
+
 async def run_once() -> dict[str, int]:
     async with transaction() as db:
         purged_events = await events.purge_expired(db)
     result = {"events": purged_events, "projects": await purge_deleted_projects(),
               "exports": await expire_exports()}  # fmt: skip
     await measure_health()
+    try:
+        result.update({f"provider_{k}": v for k, v in (await reconcile_provider_requests()).items()})
+    except Exception:
+        log.error("provider_reconciliation_failed", exc_info=True)
     return result
 
 

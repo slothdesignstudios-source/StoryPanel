@@ -1,0 +1,486 @@
+{
+ "source": "@fal-ai/client 1.10.1 src/types/endpoints.d.ts (npm), extracted by script; do not edit by hand",
+ "endpoints": {
+  "fal-ai/nano-banana-2": {
+   "input_type": "NanoBanana2Input",
+   "input": {
+    "aspect_ratio": {
+     "required": false,
+     "enum": [
+      "auto",
+      "21:9",
+      "16:9",
+      "3:2",
+      "4:3",
+      "5:4",
+      "1:1",
+      "4:5",
+      "3:4",
+      "2:3",
+      "9:16",
+      "4:1",
+      "1:4",
+      "8:1",
+      "1:8"
+     ],
+     "type": "\"auto\" | \"21:9\" | \"16:9\" | \"3:2\" | \"4:3\" | \"5:4\" | \"1:1\" | \"4:5\" | \"3:4\" | \"2:3\""
+    },
+    "enable_web_search": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "limit_generations": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "num_images": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "output_format": {
+     "required": false,
+     "enum": [
+      "jpeg",
+      "png",
+      "webp"
+     ],
+     "type": "\"jpeg\" | \"png\" | \"webp\""
+    },
+    "prompt": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "resolution": {
+     "required": false,
+     "enum": [
+      "0.5K",
+      "1K",
+      "2K",
+      "4K"
+     ],
+     "type": "\"0.5K\" | \"1K\" | \"2K\" | \"4K\""
+    },
+    "safety_tolerance": {
+     "required": false,
+     "enum": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+     ],
+     "type": "\"1\" | \"2\" | \"3\" | \"4\" | \"5\" | \"6\""
+    },
+    "seed": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "sync_mode": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "thinking_level": {
+     "required": false,
+     "enum": [
+      "minimal",
+      "high"
+     ],
+     "type": "\"minimal\" | \"high\""
+    }
+   },
+   "output_type": "NanoBananaOutput",
+   "output": {
+    "description": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "images": {
+     "required": true,
+     "enum": null,
+     "type": "Array<ImageFile>"
+    }
+   }
+  },
+  "fal-ai/nano-banana-2/edit": {
+   "input_type": "NanoBanana2EditInput",
+   "input": {
+    "aspect_ratio": {
+     "required": false,
+     "enum": [
+      "auto",
+      "21:9",
+      "16:9",
+      "3:2",
+      "4:3",
+      "5:4",
+      "1:1",
+      "4:5",
+      "3:4",
+      "2:3",
+      "9:16",
+      "4:1",
+      "1:4",
+      "8:1",
+      "1:8"
+     ],
+     "type": "\"auto\" | \"21:9\" | \"16:9\" | \"3:2\" | \"4:3\" | \"5:4\" | \"1:1\" | \"4:5\" | \"3:4\" | \"2:3\""
+    },
+    "enable_web_search": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "image_urls": {
+     "required": true,
+     "enum": null,
+     "type": "Array<string>"
+    },
+    "limit_generations": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "num_images": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "output_format": {
+     "required": false,
+     "enum": [
+      "jpeg",
+      "png",
+      "webp"
+     ],
+     "type": "\"jpeg\" | \"png\" | \"webp\""
+    },
+    "prompt": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "resolution": {
+     "required": false,
+     "enum": [
+      "0.5K",
+      "1K",
+      "2K",
+      "4K"
+     ],
+     "type": "\"0.5K\" | \"1K\" | \"2K\" | \"4K\""
+    },
+    "safety_tolerance": {
+     "required": false,
+     "enum": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+     ],
+     "type": "\"1\" | \"2\" | \"3\" | \"4\" | \"5\" | \"6\""
+    },
+    "seed": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "sync_mode": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "thinking_level": {
+     "required": false,
+     "enum": [
+      "minimal",
+      "high"
+     ],
+     "type": "\"minimal\" | \"high\""
+    }
+   },
+   "output_type": "NanoBananaOutput",
+   "output": {
+    "description": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "images": {
+     "required": true,
+     "enum": null,
+     "type": "Array<ImageFile>"
+    }
+   }
+  },
+  "fal-ai/bytedance/seedream/v5/lite/edit": {
+   "input_type": "SeedDream50LiteEditInput",
+   "input": {
+    "enable_safety_checker": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "image_size": {
+     "required": false,
+     "enum": [
+      "square_hd",
+      "square",
+      "portrait_4_3",
+      "portrait_16_9",
+      "landscape_4_3",
+      "landscape_16_9",
+      "auto_2K",
+      "auto_3K"
+     ],
+     "type": "ImageSize | \"square_hd\" | \"square\" | \"portrait_4_3\" | \"portrait_16_9\" | \"landsca"
+    },
+    "image_urls": {
+     "required": true,
+     "enum": null,
+     "type": "Array<string>"
+    },
+    "max_images": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "num_images": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "prompt": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "sync_mode": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    }
+   },
+   "output_type": "pulidOutput",
+   "output": {
+    "images": {
+     "required": true,
+     "enum": null,
+     "type": "Array<Image>"
+    },
+    "seed": {
+     "required": true,
+     "enum": null,
+     "type": "number"
+    }
+   }
+  },
+  "fal-ai/bytedance/seedream/v5/lite/text-to-image": {
+   "input_type": "SeedDream50LiteT2IInput",
+   "input": {
+    "enable_safety_checker": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "image_size": {
+     "required": false,
+     "enum": [
+      "square_hd",
+      "square",
+      "portrait_4_3",
+      "portrait_16_9",
+      "landscape_4_3",
+      "landscape_16_9",
+      "auto_2K",
+      "auto_3K"
+     ],
+     "type": "ImageSize | \"square_hd\" | \"square\" | \"portrait_4_3\" | \"portrait_16_9\" | \"landsca"
+    },
+    "max_images": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "num_images": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "prompt": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "sync_mode": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    }
+   },
+   "output_type": "pulidOutput",
+   "output": {
+    "images": {
+     "required": true,
+     "enum": null,
+     "type": "Array<Image>"
+    },
+    "seed": {
+     "required": true,
+     "enum": null,
+     "type": "number"
+    }
+   }
+  },
+  "fal-ai/flux-pro/v1/fill": {
+   "input_type": "FluxProFillInput",
+   "input": {
+    "enhance_prompt": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "image_url": {
+     "required": true,
+     "enum": null,
+     "type": "string | Blob | File"
+    },
+    "mask_url": {
+     "required": true,
+     "enum": null,
+     "type": "string | Blob | File"
+    },
+    "num_images": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "output_format": {
+     "required": false,
+     "enum": [
+      "jpeg",
+      "png"
+     ],
+     "type": "\"jpeg\" | \"png\""
+    },
+    "prompt": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "safety_tolerance": {
+     "required": false,
+     "enum": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6"
+     ],
+     "type": "\"1\" | \"2\" | \"3\" | \"4\" | \"5\" | \"6\""
+    },
+    "seed": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "sync_mode": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    }
+   },
+   "output_type": "FluxProNewOutput",
+   "output": {
+    "has_nsfw_concepts": {
+     "required": true,
+     "enum": null,
+     "type": "Array<boolean>"
+    },
+    "images": {
+     "required": true,
+     "enum": null,
+     "type": "Array<RegistryImageFastSdxlModelsImage>"
+    },
+    "prompt": {
+     "required": true,
+     "enum": null,
+     "type": "string"
+    },
+    "seed": {
+     "required": true,
+     "enum": null,
+     "type": "number"
+    },
+    "timings": {
+     "required": true,
+     "enum": null,
+     "type": "unknown"
+    }
+   }
+  },
+  "fal-ai/esrgan": {
+   "input_type": "esrganInput",
+   "input": {
+    "face": {
+     "required": false,
+     "enum": null,
+     "type": "boolean"
+    },
+    "image_url": {
+     "required": true,
+     "enum": null,
+     "type": "string | Blob | File"
+    },
+    "model": {
+     "required": false,
+     "enum": [
+      "RealESRGAN_x4plus",
+      "RealESRGAN_x2plus",
+      "RealESRGAN_x4plus_anime_6B",
+      "RealESRGAN_x4_v3",
+      "RealESRGAN_x4_wdn_v3",
+      "RealESRGAN_x4_anime_v3"
+     ],
+     "type": "\"RealESRGAN_x4plus\" | \"RealESRGAN_x2plus\" | \"RealESRGAN_x4plus_anime_6B\" | \"Real"
+    },
+    "output_format": {
+     "required": false,
+     "enum": [
+      "png",
+      "jpeg"
+     ],
+     "type": "\"png\" | \"jpeg\""
+    },
+    "scale": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    },
+    "tile": {
+     "required": false,
+     "enum": null,
+     "type": "number"
+    }
+   },
+   "output_type": "HEDOutput",
+   "output": {
+    "image": {
+     "required": true,
+     "enum": null,
+     "type": "Image"
+    }
+   }
+  }
+ }
+}

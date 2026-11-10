@@ -1,4 +1,11 @@
-"""Voyage multimodal embeddings for the identity-similarity check."""
+"""Voyage multimodal embeddings for the identity-similarity check.
+
+Images are accepted only by Voyage's multimodal models via `multimodal_embed` (Voyage SDK
+0.5 rejects other models for that call). `voyage-multimodal-3.5` supports output
+dimensions 256/512/1024/2048 with 1024 as default (AWS Marketplace listing and Voyage's
+published model card via search; not re-checked against docs.voyageai.com, which is
+unreachable from the build environment). Billing is per input pixel.
+"""
 
 from __future__ import annotations
 
@@ -27,7 +34,10 @@ class VoyageEmbeddingProvider:
     async def embed_images(self, images: list[bytes], ctx: CallContext) -> list[list[float]]:
         inputs = [[Image.open(io.BytesIO(b)).convert("RGB")] for b in images]
         try:
-            result = await self._client.multimodal_embed(inputs=inputs, model=self.model)
+            # Similarity is symmetric here (crop vs reference crop), so no input_type is set.
+            result = await self._client.multimodal_embed(
+                inputs=inputs, model=self.model, output_dimension=self._dims
+            )
         except verr.RateLimitError as exc:
             raise AppError(ErrorCode.PROVIDER_THROTTLED, "The similarity service is busy.") from exc
         except (verr.InvalidRequestError, verr.AuthenticationError) as exc:

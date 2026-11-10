@@ -52,10 +52,19 @@ class ImageRequest:
     prompt: str
     aspect: str  # e.g. "4:3"; mapped by the adapter to what the model supports
     references: tuple[ImageInput, ...] = ()
-    mode: Literal["generate", "edit"] = "generate"
+    mode: Literal["generate", "edit", "inpaint"] = "generate"
     seed: int | None = None
     model: str | None = None  # override (fallback model)
     inputs: dict[str, Any] = field(default_factory=dict)
+    image: bytes | None = None  # inpaint: the image to repair
+    mask: bytes | None = None  # inpaint: white = repaint, black = keep; same size as image
+    audience: str = "all_ages"
+
+    @property
+    def role(self) -> str:
+        if self.mode == "inpaint":
+            return "inpaint"
+        return "edit" if (self.mode == "edit" or self.references) else "generate"
 
 
 @dataclass(frozen=True)
@@ -71,8 +80,16 @@ class RequestPending(Exception):
     """The provider still holds the request; it has neither succeeded nor failed."""
 
 
+class RequestUnknown(Exception):
+    """The provider has no record of this request id: it was never accepted, so nothing
+    was produced or billed and a new submission is safe."""
+
+
 class TextProvider(Protocol):
     name: str
+    max_tokens: int
+
+    def model_for(self, role: TextRole) -> str: ...
 
     async def structured(
         self, *, role: TextRole, system: str, user: str, schema: type[T], ctx: CallContext,
@@ -87,9 +104,13 @@ class ImageProvider(Protocol):
 
     def model_for(self, req: ImageRequest) -> str: ...
 
-    async def submit(self, req: ImageRequest, ctx: CallContext) -> str: ...
+    def fallback_for(self, req: ImageRequest) -> str | None: ...
+
+    async def submit(self, req: ImageRequest, ctx: CallContext, *, model: str) -> str: ...
 
     async def fetch(self, model: str, request_id: str, *, wait_seconds: float) -> ImageResult: ...
+
+    async def cancel(self, model: str, request_id: str) -> None: ...
 
 
 class EmbeddingProvider(Protocol):
@@ -106,6 +127,8 @@ class UpscaleProvider(Protocol):
     async def submit(self, image: bytes, factor: int, ctx: CallContext) -> str: ...
 
     async def fetch(self, request_id: str, *, wait_seconds: float) -> ImageResult: ...
+
+    async def cancel(self, request_id: str) -> None: ...
 
 
 ASPECTS: dict[str, float] = {

@@ -81,16 +81,20 @@ class Settings(BaseSettings):
     provider_concurrency_image: int = 6
     provider_concurrency_vision: int = 8
 
-    # Provider prices in USD, used for cost accounting only. Unverified estimates must be
-    # replaced with the provider's published rates before budgets are trusted.
-    price_text_story_in_per_mtok: Decimal = Decimal("0")
-    price_text_story_out_per_mtok: Decimal = Decimal("0")
-    price_text_light_in_per_mtok: Decimal = Decimal("0")
-    price_text_light_out_per_mtok: Decimal = Decimal("0")
-    price_image_generate: Decimal = Decimal("0")
-    price_image_edit: Decimal = Decimal("0")
-    price_upscale: Decimal = Decimal("0")
-    price_embedding_per_image: Decimal = Decimal("0")
+    # Fallback models are used only when the primary is failing (circuit breaker) or rejects
+    # a request as malformed; see providers/metering.py. They must have verified profiles.
+    image_model_fallback_generate: str | None = None
+    inpaint_model: str | None = None
+    image_breaker_failures: int = 5  # provider errors within 60 s that open the breaker
+    image_breaker_open_seconds: int = 120
+    text_refusal_fallback: bool = True  # server-side refusal fallback where the model supports it
+
+    # Provider price table (see providers/pricing.py). Never derived from defaults.
+    pricing_file: str | None = None
+    pricing_json: SecretStr | None = None  # inline alternative for platforms without files
+    pricing_max_age_days: int = 60
+    # Whether a request the provider reports as failed still counts against spend ceilings.
+    count_failed_requests_as_billed: bool = True
 
     # --- product limits (document constraints; see docs/requirements-matrix.md)
     default_pages: int = 4
@@ -164,9 +168,11 @@ class Settings(BaseSettings):
                 problems.append("SP_PSEUDONYM_SALT must be set")
             if "*" in self.cors_origins:
                 problems.append("wildcard CORS origin is not permitted")
-            for name in ("stripe_secret_key", "stripe_webhook_secret", "s3_access_key_id"):
-                if getattr(self, name) is None and name.startswith("stripe"):
+            for name in ("stripe_secret_key", "stripe_webhook_secret"):
+                if getattr(self, name) is None:
                     problems.append(f"SP_{name.upper()} must be set")
+            if self.signup_bonus_credits > 50:
+                problems.append("SP_SIGNUP_BONUS_CREDITS above 50 is not permitted in staging/production")
         if self.auth_mode == "clerk" and not (self.clerk_issuer and self.clerk_jwks_url):
             problems.append("clerk auth requires SP_CLERK_ISSUER and SP_CLERK_JWKS_URL")
         if self.provider_mode == "live":
@@ -177,9 +183,35 @@ class Settings(BaseSettings):
             )  # fmt: skip
             problems += [f"SP_{n.upper()} must be set for live providers" for n in required
                          if getattr(self, n) is None]  # fmt: skip
+            problems += _live_model_problems(self)
         if problems:
             raise ValueError("invalid configuration: " + "; ".join(problems))
         return self
+
+
+def _live_model_problems(s: Settings) -> list[str]:
+    """Every configured model must have a verified contract and a valid, current price."""
+    from storypanel.providers import fal_profiles, pricing
+
+    problems = []
+    for role, name in (("generate", "image_model_generate"), ("edit", "image_model_edit"),
+                       ("edit", "image_model_fallback"), ("generate", "image_model_fallback_generate"),
+                       ("inpaint", "inpaint_model"), ("upscale", "upscale_model")):  # fmt: skip
+        model = getattr(s, name)
+        if model and fal_profiles.profile_for(model, role) is None:  # type: ignore[arg-type]
+            problems.append(f"SP_{name.upper()}={model} has no verified fal schema for role '{role}'")
+    if s.embedding_model and s.embedding_model not in VOYAGE_IMAGE_MODELS:
+        problems.append(
+            f"SP_EMBEDDING_MODEL={s.embedding_model} is not a Voyage model known to accept images"
+        )
+    if s.embedding_dimensions not in (256, 512, 1024, 2048):
+        problems.append("SP_EMBEDDING_DIMENSIONS must be 256, 512, 1024 or 2048")
+    return problems + pricing.startup_problems(s)
+
+
+# Voyage models that accept image inputs through multimodal_embed (Voyage SDK 0.5 only
+# routes images to multimodal models). Output dimensions 256/512/1024/2048, default 1024.
+VOYAGE_IMAGE_MODELS = frozenset({"voyage-multimodal-3.5", "voyage-multimodal-3"})
 
 
 @lru_cache

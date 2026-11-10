@@ -6,6 +6,7 @@ there, and the registry has no fallback path from live to fake.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import json
@@ -25,6 +26,7 @@ from storypanel.providers.base import (
     ImageRequest,
     ImageResult,
     RequestPending,
+    RequestUnknown,
     T,
     TextRole,
     Usage,
@@ -44,6 +46,9 @@ class FakeControl:
     errors: dict[str, list[AppError]] = field(default_factory=dict)  # op -> queue of raises
     pending_fetches: int = 0  # next N image fetches report "still running"
     submits: list[str] = field(default_factory=list)
+    models_used: list[str] = field(default_factory=list)
+    cancelled: list[str] = field(default_factory=list)
+    hang_fetches: int = 0
     calls: list[tuple[str, str]] = field(default_factory=list)
     malformed_text: int = 0
 
@@ -75,6 +80,10 @@ def _h(*parts: object) -> int:
 # ------------------------------------------------------------------ text
 class FakeTextProvider:
     name = "fake"
+    max_tokens = 16000
+
+    def model_for(self, role: TextRole) -> str:
+        return f"fake-{role}"
 
     async def structured(
         self, *, role: TextRole, system: str, user: str, schema: type[T], ctx: CallContext,
@@ -316,17 +325,45 @@ def render_fake_image(req: ImageRequest) -> bytes:
     return out.getvalue()
 
 
+def render_fake_repair(req: ImageRequest) -> bytes:
+    """Repaint the masked region with a flat colour: lets tests prove that pixels outside
+    the mask are untouched after compositing."""
+    assert req.image is not None and req.mask is not None
+    base = Image.open(io.BytesIO(req.image)).convert("RGB")
+    mask = Image.open(io.BytesIO(req.mask)).convert("L")
+    seed = _h(req.prompt, req.seed)
+    patch = Image.new(
+        "RGB", base.size, ((seed >> 3) % 200 + 30, (seed >> 9) % 200 + 30, (seed >> 15) % 200 + 30)
+    )
+    base.paste(patch, (0, 0), mask)
+    out = io.BytesIO()
+    base.save(out, format="PNG")
+    return out.getvalue()
+
+
 class FakeImageProvider:
     name = "fake"
 
     def __init__(self) -> None:
         self._jobs: dict[str, ImageRequest] = {}
+        self.cancelled: list[str] = []
 
     def model_for(self, req: ImageRequest) -> str:
-        return req.model or ("fake-edit" if req.mode == "edit" else "fake-image")
+        return (
+            req.model or {"generate": "fake-image", "edit": "fake-edit", "inpaint": "fake-inpaint"}[req.role]
+        )
 
-    async def submit(self, req: ImageRequest, ctx: CallContext) -> str:
-        control.raise_if_queued("image:submit")
+    def fallback_for(self, req: ImageRequest) -> str | None:
+        return "fake-fallback" if req.role in ("generate", "edit") else None
+
+    async def cancel(self, model: str, request_id: str) -> None:
+        self.cancelled.append(request_id)
+        control.cancelled.append(request_id)
+
+    async def submit(self, req: ImageRequest, ctx: CallContext, *, model: str) -> str:
+        control.models_used.append(model)
+        if model != "fake-fallback":
+            control.raise_if_queued("image:submit")
         request_id = f"fake-{_h(req.prompt, req.seed, len(control.submits)):x}"
         control.submits.append(ctx.target_id or "")
         self._jobs[request_id] = req
@@ -337,9 +374,15 @@ class FakeImageProvider:
         if control.pending_fetches > 0:
             control.pending_fetches -= 1
             raise RequestPending(request_id)
+        if control.hang_fetches > 0:
+            control.hang_fetches -= 1
+            await asyncio.sleep(3600)  # until cancelled
         req = self._jobs.get(request_id)
         if req is None:
-            raise AppError(ErrorCode.PROVIDER_ERROR, "Unknown fake request.", retryable=False)
+            raise RequestUnknown(request_id)
+        if req.mode == "inpaint" and req.image is not None:
+            return ImageResult(data=render_fake_repair(req), provider=self.name, model=model,
+                               request_id=request_id, seed=req.seed)  # fmt: skip
         return ImageResult(data=render_fake_image(req), provider=self.name, model=model,
                            request_id=request_id, seed=req.seed)  # fmt: skip
 
@@ -364,6 +407,9 @@ class FakeEmbeddingProvider:
 class FakeUpscaleProvider:
     name = "fake"
     model = "fake-upscale"
+
+    async def cancel(self, request_id: str) -> None:
+        control.cancelled.append(request_id)
 
     def __init__(self) -> None:
         self._jobs: dict[str, tuple[bytes, int]] = {}

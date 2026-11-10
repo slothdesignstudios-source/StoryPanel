@@ -27,6 +27,8 @@ class ErrorCode(StrEnum):
     PROVIDER_THROTTLED = "provider_throttled"
     PROVIDER_BAD_OUTPUT = "provider_bad_output"
     PROVIDER_AMBIGUOUS = "provider_outcome_unknown"
+    PROVIDER_AMBIGUOUS_FINAL = "provider_outcome_unknown_final"
+    PRICING_UNAVAILABLE = "pricing_unavailable"
     TIMEOUT = "timeout"
     STORAGE = "storage_error"
     PAYLOAD_TOO_LARGE = "payload_too_large"
@@ -40,7 +42,8 @@ _STATUS: dict[ErrorCode, int] = {
     ErrorCode.INSUFFICIENT_CREDITS: 402, ErrorCode.SPEND_LIMIT: 429,
     ErrorCode.MODERATION_BLOCKED: 422, ErrorCode.PROVIDER_ERROR: 502,
     ErrorCode.PROVIDER_THROTTLED: 503, ErrorCode.PROVIDER_BAD_OUTPUT: 502,
-    ErrorCode.PROVIDER_AMBIGUOUS: 502, ErrorCode.TIMEOUT: 504, ErrorCode.STORAGE: 503,
+    ErrorCode.PROVIDER_AMBIGUOUS: 502, ErrorCode.PROVIDER_AMBIGUOUS_FINAL: 502,
+    ErrorCode.PRICING_UNAVAILABLE: 503, ErrorCode.TIMEOUT: 504, ErrorCode.STORAGE: 503,
     ErrorCode.PAYLOAD_TOO_LARGE: 413, ErrorCode.INTERNAL: 500,
 }  # fmt: skip
 
