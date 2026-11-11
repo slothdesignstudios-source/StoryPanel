@@ -65,16 +65,26 @@ def _verify(token: str, s: Settings) -> dict[str, Any]:
         raise AppError(ErrorCode.UNAUTHENTICATED, "Please sign in again.") from exc
 
 
-async def _load_user(subject: str, email: str | None) -> User:
+async def _load_user(subject: str, email: str | None, issued_at: int | None = None) -> User:
+    from storypanel.services import deletion
+
     s = get_settings()
     async with transaction() as db:
         user = (await db.execute(select(User).where(User.auth_subject == subject))).scalar_one_or_none()
         if user is None:
+            # A subject whose account was deleted: tokens from before the deletion stay dead,
+            # and a later sign-in gets a new, empty account without a second welcome grant.
+            if await deletion.blocked_subject(db, subject, issued_at):
+                raise AppError(ErrorCode.UNAUTHENTICATED, "This account has been deleted.")
             new_id = uuid.uuid4()
-            await db.execute(insert(User).values(id=new_id, auth_subject=subject, email=email)
-                             .on_conflict_do_nothing(index_elements=["auth_subject"]))  # fmt: skip
+            created = await db.execute(insert(User).values(id=new_id, auth_subject=subject, email=email)
+                                       .on_conflict_do_nothing(index_elements=["auth_subject"]))  # fmt: skip
             user = (await db.execute(select(User).where(User.auth_subject == subject))).scalar_one()
-            if s.signup_bonus_credits:
+            if (
+                created.rowcount  # type: ignore[attr-defined]
+                and s.signup_bonus_credits
+                and await deletion.record_signup_grant(db, subject, email)
+            ):  # type: ignore[attr-defined]
                 await credits.grant(db, user.id, s.signup_bonus_credits, kind="grant",
                                     reason="Welcome credits", dedupe_key=f"signup:{user.id}")  # fmt: skip
         if user.deleted_at is not None:
@@ -97,7 +107,10 @@ async def current_user(request: Request) -> AuthUser:
         raise AppError(ErrorCode.UNAUTHENTICATED, "Please sign in.")
     s = get_settings()
     claims = await asyncio.to_thread(_verify, header[7:].strip(), s)
-    user = await _load_user(str(claims["sub"]), claims.get("email"))
+    iat = claims.get("iat")
+    user = await _load_user(
+        str(claims["sub"]), claims.get("email"), int(iat) if isinstance(iat, int | float) else None
+    )
     auth = AuthUser(user.id, user.auth_subject, user.plan, pseudonymize(user.id, s))
     request.state.user_ref = auth.ref
     bind_context(user=auth.ref)

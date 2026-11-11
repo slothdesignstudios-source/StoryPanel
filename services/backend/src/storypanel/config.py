@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     clerk_jwks_url: str | None = None
     clerk_authorized_parties: list[str] = Field(default_factory=list)
     clerk_webhook_secret: SecretStr | None = None
+    # Backend API key, used only to delete the identity during account deletion.
+    clerk_secret_key: SecretStr | None = None
+    clerk_api_url: str = "https://api.clerk.com/v1"
+    # how long account deletion waits for in-flight work to stop before cancelling it at the provider
+    deletion_drain_seconds: int = 600
     dev_auth_secret: SecretStr = SecretStr("local-dev-only-secret-change-me-32bytes")
 
     # --- http security
@@ -168,7 +173,12 @@ class Settings(BaseSettings):
                 problems.append("SP_PSEUDONYM_SALT must be set")
             if "*" in self.cors_origins:
                 problems.append("wildcard CORS origin is not permitted")
-            for name in ("stripe_secret_key", "stripe_webhook_secret"):
+            for name in (
+                "stripe_secret_key",
+                "stripe_webhook_secret",
+                "clerk_secret_key",
+                "clerk_webhook_secret",
+            ):
                 if getattr(self, name) is None:
                     problems.append(f"SP_{name.upper()} must be set")
             if self.signup_bonus_credits > 50:

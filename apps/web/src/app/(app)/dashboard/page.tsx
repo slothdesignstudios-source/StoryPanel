@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge, Button, Card, EmptyState, Notice, Spinner } from "@/components/ui";
 import { api, describeError } from "@/lib/api";
 import { ACTIVE, STATUS_LABEL, WORKING, type ProjectSummary } from "@/lib/types";
+import { pk } from "@/lib/session";
 
 export function statusTone(status: string) {
   if (status.startsWith("awaiting")) return "action" as const;
@@ -40,7 +41,7 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
 }
 
 export default function Dashboard() {
-  const q = useQuery({ queryKey: ["projects"], queryFn: async () => (await api.GET("/v1/projects")).data!.projects, refetchInterval: (query) => (query.state.data?.some((p) => WORKING.has(p.status)) ? 4000 : false) });
+  const q = useQuery({ queryKey: pk("projects"), queryFn: async () => (await api.GET("/v1/projects")).data!.projects, refetchInterval: (query) => (query.state.data?.some((p) => WORKING.has(p.status)) ? 4000 : false) });
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">

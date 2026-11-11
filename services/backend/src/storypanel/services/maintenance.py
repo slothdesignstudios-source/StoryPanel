@@ -10,10 +10,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select, text, update
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from storypanel import storage
 from storypanel.config import get_settings
-from storypanel.db.models import Asset, Export, IdempotencyKey, Outbox, Project, User
+from storypanel.db.models import Asset, Export, IdempotencyKey, Outbox, PendingObjectDeletion, Project
 from storypanel.db.session import transaction
 from storypanel.domain.states import ACTIVE
 from storypanel.obs import metrics
@@ -23,14 +25,59 @@ from storypanel.services import credits, events
 log = get_logger("maintenance")
 
 
-async def purge_project(project_id: uuid.UUID) -> int:
-    """Hard-delete a project: stored objects first, then rows (FK cascades do the rest)."""
+async def delete_objects_durably(db: AsyncSession, keys: list[str], *, owner_id: uuid.UUID | None,
+                                 reason: str) -> storage.DeleteResult:  # fmt: skip
+    """Delete objects; every key whose deletion S3 did not confirm is recorded in
+    `pending_object_deletions` in the caller's transaction, so removing the asset rows
+    never drops the only reference to a still-stored object."""
+    result = await storage.delete_keys(keys)
+    for key, code in result.failed.items():
+        await db.execute(insert(PendingObjectDeletion).values(
+            storage_key=key, owner_id=owner_id, reason=reason[:40], last_error=code[:60], attempts=1)
+            .on_conflict_do_update(index_elements=["storage_key"], set_={
+                "attempts": PendingObjectDeletion.attempts + 1, "last_error": code[:60]}))  # fmt: skip
+    if result.failed:
+        log.warning("object_deletion_unconfirmed", count=len(result.failed), reason=reason,
+                    codes=sorted(set(result.failed.values())))  # fmt: skip
+    return result
+
+
+async def retry_pending_object_deletions(owner_id: uuid.UUID | None = None, limit: int = 500) -> int:
+    """Retry unconfirmed deletions. Returns how many are still unconfirmed."""
     async with transaction() as db:
+        q = select(PendingObjectDeletion).where(PendingObjectDeletion.next_attempt_at <= func.now())
+        if owner_id is not None:
+            q = select(PendingObjectDeletion).where(PendingObjectDeletion.owner_id == owner_id)
+        rows = list((await db.execute(q.limit(limit).with_for_update(skip_locked=True))).scalars())
+        if rows:
+            result = await storage.delete_keys([r.storage_key for r in rows])
+            done = set(result.deleted)
+            for r in rows:
+                if r.storage_key in done:
+                    await db.delete(r)
+                else:
+                    r.attempts += 1
+                    r.last_error = result.failed.get(r.storage_key, "unknown")[:60]
+                    r.next_attempt_at = datetime.now(UTC) + timedelta(
+                        seconds=min(86400, 60 * 2 ** min(r.attempts, 10))
+                    )
+        remaining = (await db.execute(select(func.count()).select_from(PendingObjectDeletion))).scalar_one()
+    metrics.object_deletions_pending.set(remaining)
+    return int(remaining)
+
+
+async def purge_project(project_id: uuid.UUID, reason: str = "project_deleted") -> int:
+    """Hard-delete a project: stored objects first (unconfirmed ones are recorded), then
+    rows (FK cascades do the rest). Safe to repeat."""
+    async with transaction() as db:
+        project = (
+            await db.execute(select(Project.owner_id).where(Project.id == project_id))
+        ).scalar_one_or_none()
+        if project is None:
+            return 0
         keys = list((await db.execute(select(Asset.storage_key).where(
             Asset.project_id == project_id))).scalars())  # fmt: skip
-    if keys:
-        await storage.delete_keys(keys)
-    async with transaction() as db:
+        await delete_objects_durably(db, keys, owner_id=project, reason=reason)
         await credits.close_for_project(db, project_id)
         # panel_versions/character_refs hold RESTRICT references to assets: remove them first.
         await db.execute(text("delete from panel_versions where panel_id in "
@@ -52,31 +99,13 @@ async def purge_deleted_projects() -> int:
     return len(ids)
 
 
-async def purge_user(user_id: uuid.UUID) -> None:
-    """Account deletion: remove all content now, anonymise the account row.
-    Ledger rows are kept (financial record) but no longer identify a person."""
-    async with transaction() as db:
-        ids = list((await db.execute(select(Project.id).where(Project.owner_id == user_id))).scalars())
-    for pid in ids:
-        await purge_project(pid)
-    async with transaction() as db:
-        keys = list((await db.execute(select(Asset.storage_key).where(Asset.owner_id == user_id))).scalars())
-        if keys:
-            await storage.delete_keys(keys)
-        await db.execute(delete(Asset).where(Asset.owner_id == user_id))
-        await db.execute(delete(IdempotencyKey).where(IdempotencyKey.user_id == user_id))
-        await db.execute(update(User).where(User.id == user_id).values(
-            email=None, auth_subject=f"deleted:{user_id}", stripe_customer_id=None,
-            subscription_id=None, deleted_at=func.now()))  # fmt: skip
-
-
 async def expire_exports() -> int:
     async with transaction() as db:
         rows = (await db.execute(
             select(Export.id, Asset.storage_key, Asset.id).join(Asset, Asset.id == Export.asset_id)
             .where(Export.expires_at < func.now(), Export.status == "ready").limit(100))).all()  # fmt: skip
         if rows:
-            await storage.delete_keys([r[1] for r in rows])
+            await delete_objects_durably(db, [r[1] for r in rows], owner_id=None, reason="export_expired")
             await db.execute(update(Export).where(Export.id.in_([r[0] for r in rows]))
                              .values(status="expired", asset_id=None))  # fmt: skip
             await db.execute(delete(Asset).where(Asset.id.in_([r[2] for r in rows])))
@@ -122,6 +151,13 @@ async def run_once() -> dict[str, int]:
         result.update({f"provider_{k}": v for k, v in (await reconcile_provider_requests()).items()})
     except Exception:
         log.error("provider_reconciliation_failed", exc_info=True)
+    try:
+        from storypanel.services import deletion
+
+        result["account_deletions_advanced"] = len(await deletion.process_due())
+        result["objects_pending_deletion"] = await retry_pending_object_deletions()
+    except Exception:
+        log.error("deletion_maintenance_failed", exc_info=True)
     return result
 
 

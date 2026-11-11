@@ -73,6 +73,12 @@ def stage_activity(name: str) -> Callable[[Body], Body]:
                 outcome = "cancelled"
                 raise
             except Exception as exc:
+                if "account deleted" in str(
+                    getattr(exc, "orig", "")
+                ):  # owner deleted mid-run: stop, don't retry
+                    outcome = "account_deleted"
+                    raise ApplicationError("This account has been deleted.", type="account_deleted",
+                                           non_retryable=True) from exc  # fmt: skip
                 outcome = "internal_error"
                 metrics.errors.labels("internal_error", "worker").inc()
                 log.error("activity_crashed", error_code="internal_error", exc_info=True)

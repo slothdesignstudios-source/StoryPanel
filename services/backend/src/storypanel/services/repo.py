@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +28,7 @@ from storypanel.db.models import (
 )  # fmt: skip
 from storypanel.domain.schemas import CharacterSpec, ComicScript, LocationSpec, StoryBible
 from storypanel.domain.states import ProjectStatus, assert_transition
-from storypanel.errors import not_found
+from storypanel.errors import AppError, ErrorCode, not_found
 from storypanel.services import credits, events
 
 
@@ -73,8 +73,19 @@ async def fail_project(db: AsyncSession, project: Project, *, code: str, message
                       {"status": status.value, "failure": project.failure})  # fmt: skip
 
 
+async def assert_owner_active(db: AsyncSession, owner_id: uuid.UUID) -> None:
+    """Refuse to store content for an account being deleted. FOR SHARE makes deletion's
+    update of `deleted_at` wait for in-progress writes, and later writes see the flag, so
+    no object can be written after deletion has started purging."""
+    deleted = (await db.execute(text("select deleted_at from users where id = :u for share"),
+                                {"u": owner_id})).scalar_one_or_none()  # fmt: skip
+    if deleted is not None:
+        raise AppError(ErrorCode.INVALID_STATE, "This account has been deleted.", retryable=False)
+
+
 async def save_image(db: AsyncSession, *, owner_id: uuid.UUID, project_id: uuid.UUID | None,
                      kind: str, image: storage.ValidatedImage) -> Asset:  # fmt: skip
+    await assert_owner_active(db, owner_id)
     key = storage.new_key(owner_id, project_id, kind, "png")
     await storage.put_bytes(key, image.data, image.content_type)
     asset = Asset(id=uuid.uuid4(), owner_id=owner_id, project_id=project_id, kind=kind,
@@ -87,6 +98,7 @@ async def save_image(db: AsyncSession, *, owner_id: uuid.UUID, project_id: uuid.
 
 async def save_blob(db: AsyncSession, *, owner_id: uuid.UUID, project_id: uuid.UUID | None,
                     kind: str, data: bytes, content_type: str, ext: str, sha256: str) -> Asset:  # fmt: skip
+    await assert_owner_active(db, owner_id)
     key = storage.new_key(owner_id, project_id, kind, ext)
     await storage.put_bytes(key, data, content_type)
     asset = Asset(id=uuid.uuid4(), owner_id=owner_id, project_id=project_id, kind=kind,

@@ -189,3 +189,34 @@ async def handle_event(db: AsyncSession, event: dict[str, Any]) -> str:
             outcome = "credits_clawed_back"
     metrics.webhook_events.labels(type_, outcome).inc()
     return outcome
+
+
+_LIVE_SUBSCRIPTION = ("active", "trialing", "past_due", "unpaid", "incomplete", "paused")
+
+
+async def cancel_all_subscriptions(*, customer_id: str | None, subscription_ids: list[str],
+                                   idempotency_prefix: str) -> int:  # fmt: skip
+    """Account deletion: cancel every live subscription of the customer immediately, with
+    no proration credit and no final invoice. Raises on any Stripe failure so the caller
+    keeps the identifiers and retries; cancelling an already-cancelled one is a no-op."""
+    client = _client()
+    ids = set(subscription_ids)
+    try:
+        if customer_id:
+            page = await client.v1.subscriptions.list_async(params={"customer": customer_id, "status": "all",
+                                                                    "limit": 100})  # fmt: skip
+            ids |= {sub.id for sub in page.data if sub.status in _LIVE_SUBSCRIPTION}
+        n = 0
+        for sub_id in sorted(ids):
+            try:
+                await client.v1.subscriptions.cancel_async(
+                    sub_id, params={"prorate": False, "invoice_now": False},
+                    options={"idempotency_key": f"{idempotency_prefix}:cancel:{sub_id}"})  # fmt: skip
+                n += 1
+            except stripe.InvalidRequestError as exc:
+                if "canceled" in str(exc).lower() or getattr(exc, "http_status", None) == 404:
+                    continue  # already cancelled or gone: the desired end state
+                raise
+    except stripe.StripeError as exc:
+        raise AppError(ErrorCode.PROVIDER_ERROR, "The payment service is unavailable.") from exc
+    return n

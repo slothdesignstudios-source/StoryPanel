@@ -204,6 +204,15 @@ def create_app(*, start_dispatcher: bool = True) -> FastAPI:
         resp.status_code = exc.status_code
         return resp
 
+    from sqlalchemy.exc import DBAPIError
+
+    @app.exception_handler(DBAPIError)
+    async def db_error(request: Request, exc: DBAPIError) -> JSONResponse:
+        if "account deleted" in str(exc.orig):  # forbid_writes_for_deleted_owner trigger
+            return _error_response(request, AppError(ErrorCode.UNAUTHENTICATED, "This account has been deleted.",
+                                                     retryable=False))  # fmt: skip
+        return await unhandled(request, exc)
+
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception) -> JSONResponse:
         # Full detail goes to logs and Sentry; the client gets a stable, generic contract.

@@ -8,12 +8,13 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button, Notice, Spinner } from "@/components/ui";
 import { api, describeError } from "@/lib/api";
+import { pk } from "@/lib/session";
 
 const PageCanvas = dynamic(() => import("@/components/project/page-canvas"), { ssr: false });
 
 export default function Reader() {
   const { id } = useParams<{ id: string }>();
-  const q = useQuery({ queryKey: ["project", id], queryFn: async () => (await api.GET("/v1/projects/{project_id}", { params: { path: { project_id: id } } })).data! });
+  const q = useQuery({ queryKey: pk("project", id), queryFn: async () => (await api.GET("/v1/projects/{project_id}", { params: { path: { project_id: id } } })).data! });
   const [index, setIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);

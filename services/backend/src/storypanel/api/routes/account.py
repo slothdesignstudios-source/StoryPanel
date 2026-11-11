@@ -12,14 +12,15 @@ from storypanel.api.deps import AuthUser, current_user, issue_dev_token, rate_li
 from storypanel.api.routes.projects import ERR
 from storypanel.catalog import styles
 from storypanel.config import get_settings
-from storypanel.db.models import CreditLedger, Project, User
+from storypanel.db.models import CreditLedger, User
 from storypanel.db.session import transaction
-from storypanel.domain.states import ACTIVE
 from storypanel.errors import AppError, ErrorCode, not_found
 from storypanel.obs import metrics
-from storypanel.services import billing, credits, events, maintenance, outbox, repo
+from storypanel.obs.logging import get_logger
+from storypanel.services import billing, credits, deletion, events
 
 router = APIRouter(tags=["account"])
+log = get_logger("account")
 
 
 def _prices() -> dict[str, int]:
@@ -53,17 +54,17 @@ async def me(user: AuthUser = Depends(current_user)) -> api.MeOut:
 
 @router.delete("/v1/me", status_code=204, responses=ERR)
 async def delete_account(request: Request, user: AuthUser = Depends(current_user)) -> None:
-    """Delete the account and all of its comics, images and exports."""
-    async with transaction() as db:
-        rows = (await db.execute(select(Project.workflow_id).where(
-            Project.owner_id == user.id, Project.status.in_([s.value for s in ACTIVE])))).scalars()  # fmt: skip
-        for wf in rows:
-            if wf:
-                await outbox.enqueue(db, "cancel", f"cancel:{wf}", {"workflow_id": wf})
-        await repo.audit(db, user_ref=user.ref, action="account.delete",
-                         request_id=request.state.request_id)  # fmt: skip
+    """Delete the account and all of its comics, images and exports.
+
+    The account is blocked immediately; cancellation, draining, verified content deletion,
+    subscription cancellation and identity deletion then run as a durable job (finished
+    by the maintenance loop if anything is still in progress)."""
+    await deletion.request_deletion(user.id, source="user", request_id=request.state.request_id)
+    try:
+        await deletion.advance(user.id)
+    except Exception:
+        log.warning("account_deletion_deferred", exc_info=True)  # the maintenance loop continues it
     request.app.state.outbox_wake.set()
-    await maintenance.purge_user(user.id)
 
 
 @router.get("/v1/credits", response_model=api.CreditsOut, responses=ERR)
@@ -124,8 +125,12 @@ async def clerk_webhook(request: Request) -> dict[str, str]:
             uid = (
                 await db.execute(select(User.id).where(User.auth_subject == data["id"]))
             ).scalar_one_or_none()
-        if uid:
-            await maintenance.purge_user(uid)
+        if uid:  # repeated deliveries find the existing job (or an anonymised row) and do nothing new
+            await deletion.request_deletion(uid, source="clerk_webhook")
+            try:
+                await deletion.advance(uid)
+            except Exception:
+                log.warning("account_deletion_deferred", exc_info=True)
     metrics.webhook_events.labels(f"clerk.{type_}", "ok").inc()
     return {"status": "ok"}
 

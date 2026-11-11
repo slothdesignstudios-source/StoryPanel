@@ -10,6 +10,7 @@ import { Badge, Button, Dialog, DialogClose, DialogContent, DialogTrigger, Notic
 import { ApiError, api, describeError } from "@/lib/api";
 import { useProjectEvents } from "@/lib/events";
 import { ACTIVE, STATUS_LABEL, WORKING, type Project } from "@/lib/types";
+import { pk } from "@/lib/session";
 
 function Stage({ project }: { project: Project }) {
   switch (project.status) {
@@ -28,7 +29,7 @@ export default function ProjectPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const q = useQuery({
-    queryKey: ["project", id],
+    queryKey: pk("project", id),
     queryFn: async () => (await api.GET("/v1/projects/{project_id}", { params: { path: { project_id: id } } })).data!,
     // Events drive updates; this slow poll is the safety net if the stream is blocked.
     refetchInterval: (query) => (query.state.data && WORKING.has(query.state.data.status) ? 8000 : false),
@@ -39,8 +40,8 @@ export default function ProjectPage() {
     if (type === "panel.updated" && data.result === "failed" && data.kind !== "generate") toast.error("That panel change didn't work. You weren't charged.");
     if (type === "export.updated" && data.status === "ready") toast.success("Your export is ready to download.");
   });
-  const cancel = useMutation({ mutationFn: async () => (await api.POST("/v1/projects/{project_id}/cancel", { params: { path: { project_id: id } } })).data, onSuccess: () => void qc.invalidateQueries({ queryKey: ["project", id] }), onError: (e) => toast.error(describeError(e)) });
-  const remove = useMutation({ mutationFn: async () => api.DELETE("/v1/projects/{project_id}", { params: { path: { project_id: id } } }), onSuccess: () => { void qc.invalidateQueries({ queryKey: ["projects"] }); router.push("/dashboard"); }, onError: (e) => toast.error(describeError(e)) });
+  const cancel = useMutation({ mutationFn: async () => (await api.POST("/v1/projects/{project_id}/cancel", { params: { path: { project_id: id } } })).data, onSuccess: () => void qc.invalidateQueries({ queryKey: pk("project", id) }), onError: (e) => toast.error(describeError(e)) });
+  const remove = useMutation({ mutationFn: async () => api.DELETE("/v1/projects/{project_id}", { params: { path: { project_id: id } } }), onSuccess: () => { void qc.invalidateQueries({ queryKey: pk("projects") }); router.push("/dashboard"); }, onError: (e) => toast.error(describeError(e)) });
 
   if (q.isPending) return <Spinner label="Loading your comic" />;
   if (q.isError) {

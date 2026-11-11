@@ -1,0 +1,13 @@
+  ✘  1 [desktop] › e2e/isolation.spec.ts:54:7 › account switch isolation › A then B: no previous-account data, and B's requests carry only B's identity (2.3s)
+  ✘  2 [desktop] › e2e/isolation.spec.ts:79:7 › account switch isolation › slow responses for A that land after the switch are dropped (6.5s)
+  ✘  3 [desktop] › e2e/isolation.spec.ts:99:7 › account switch isolation › offline: signing out clears A's data without network, then B signs in (20.5s)
+    Error: A's title "Noodles After Midnight" rendered for B
+    test-results/isolation-account-switch-i-7abb6-sts-carry-only-B-s-identity-desktop/test-failed-1.png
+    Error: A's title "Noodles After Midnight" rendered for B
+    test-results/isolation-account-switch-i-4faa0-fter-the-switch-are-dropped-desktop/test-failed-1.png
+    Error: expect(locator).toBeVisible() failed
+    Error: element(s) not found
+    test-results/isolation-account-switch-i-2d7c8-out-network-then-B-signs-in-desktop/test-failed-1.png
+  3 failed
+  ✓  1 [desktop] › e2e/isolation.spec.ts:99:7 › account switch isolation › offline: signing out clears A's data without network, then B signs in (3.3s)
+  1 passed (6.9s)

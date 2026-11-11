@@ -1,5 +1,6 @@
 import createClient, { type Middleware } from "openapi-fetch";
 import type { paths } from "@api-types";
+import { sessionGeneration } from "./session";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -26,8 +27,11 @@ export async function authHeader(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+const issuedUnder = new WeakMap<Request, number>();
+
 const middleware: Middleware = {
   async onRequest({ request }) {
+    issuedUnder.set(request, sessionGeneration());
     const token = await tokenSource();
     if (token) request.headers.set("Authorization", `Bearer ${token}`);
     // Every mutation carries a key so a retried request cannot create or charge twice.
@@ -41,7 +45,12 @@ const middleware: Middleware = {
     }
     return request;
   },
-  async onResponse({ response }) {
+  async onResponse({ request, response }) {
+    // A response to a request sent for a previous identity must never reach the next one.
+    const gen = issuedUnder.get(request);
+    if (gen !== undefined && gen !== sessionGeneration()) {
+      throw new ApiError("session_changed", "Your session changed. Please try again.", 0, false, null);
+    }
     if (response.ok) return response;
     let body: { error?: { code?: string; message?: string; retryable?: boolean; request_id?: string; fields?: { field: string; message: string }[] } } = {};
     try {

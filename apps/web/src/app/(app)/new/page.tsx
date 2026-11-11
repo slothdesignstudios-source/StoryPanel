@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button, Card, Field, Notice, Select, Textarea, cn } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
+import { pk } from "@/lib/session";
 
 const STARTERS = [
   { label: "Birthday comic", prompt: "A birthday comic for my friend who loves hiking and terrible puns. 2 pages, warm and funny." },
@@ -24,7 +25,7 @@ export default function NewComic() {
   const [audience, setAudience] = useState("");
   const meta = useQuery({ queryKey: ["meta"], staleTime: Infinity, queryFn: async () => (await api.GET("/v1/meta")).data! });
   const estimate = useQuery({
-    queryKey: ["estimate", length],
+    queryKey: pk("estimate", length),
     queryFn: async () => (await api.GET("/v1/estimate", { params: { query: length === "strip" ? { format: "strip" } : length ? { pages: Number(length) } : {} } })).data!,
   });
   const create = useMutation({
@@ -38,8 +39,8 @@ export default function NewComic() {
         },
       })).data!,
     onSuccess: (p) => {
-      void qc.invalidateQueries({ queryKey: ["projects"] });
-      void qc.invalidateQueries({ queryKey: ["me"] });
+      void qc.invalidateQueries({ queryKey: pk("projects") });
+      void qc.invalidateQueries({ queryKey: pk("me") });
       router.push(`/projects/${p.id}`);
     },
   });

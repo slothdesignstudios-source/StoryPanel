@@ -9,14 +9,15 @@ import { Badge, Button, Card, Dialog, DialogClose, DialogContent, DialogTrigger,
 import { ApiError, api, describeError } from "@/lib/api";
 import { wordCount } from "@/lib/text";
 import { STATUS_LABEL, type Character, type DialogueItem, type PanelSpec, type Project, type Script } from "@/lib/types";
+import { pk } from "@/lib/session";
 
 const path = (id: string) => ({ params: { path: { project_id: id } } });
 
 function useRefresh(id: string) {
   const qc = useQueryClient();
   return () => {
-    void qc.invalidateQueries({ queryKey: ["project", id] });
-    void qc.invalidateQueries({ queryKey: ["me"] });
+    void qc.invalidateQueries({ queryKey: pk("project", id) });
+    void qc.invalidateQueries({ queryKey: pk("me") });
   };
 }
 
@@ -297,10 +298,10 @@ export function ScriptReview({ project }: { project: Project }) {
   useEffect(() => { setDraft(script.content); setBase(script.version); }, [script.version]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only when the server version changes
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(script.content), [draft, script.content]);
   const meta = useQuery({ queryKey: ["meta"], staleTime: Infinity, queryFn: async () => (await api.GET("/v1/meta")).data! });
-  const estimate = useQuery({ queryKey: ["estimate", project.id, script.version], queryFn: async () => (await api.GET("/v1/projects/{project_id}/estimate", path(project.id))).data! });
+  const estimate = useQuery({ queryKey: pk("estimate", project.id, script.version), queryFn: async () => (await api.GET("/v1/projects/{project_id}/estimate", path(project.id))).data! });
   const save = useMutation({
     mutationFn: async () => (await api.PATCH("/v1/projects/{project_id}/script", { ...path(project.id), body: { base_version: base, script: draft } })).data!,
-    onSuccess: () => { refresh(); void qc.invalidateQueries({ queryKey: ["estimate", project.id] }); toast.success("Script saved as a new version"); },
+    onSuccess: () => { refresh(); void qc.invalidateQueries({ queryKey: pk("estimate", project.id) }); toast.success("Script saved as a new version"); },
   });
   const approve = useMutation({
     mutationFn: async () => (await api.POST("/v1/projects/{project_id}/script/approve", { ...path(project.id), body: { script_version: script.version } })).data,

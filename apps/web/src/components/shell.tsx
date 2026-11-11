@@ -8,10 +8,11 @@ import { useEffect, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button, Spinner, cn } from "./ui";
+import { pk } from "@/lib/session";
 
 export function useMe() {
   const { signedIn } = useAuth();
-  return useQuery({ queryKey: ["me"], enabled: signedIn, queryFn: async () => (await api.GET("/v1/me")).data! });
+  return useQuery({ queryKey: pk("me"), enabled: signedIn, queryFn: async () => (await api.GET("/v1/me")).data! });
 }
 
 export function AppShell({ children }: { children: ReactNode }) {

@@ -11,6 +11,7 @@ import { Badge, Button, Card, Dialog, DialogContent, DialogTrigger, Field, Notic
 import { ApiError, api, describeError } from "@/lib/api";
 import { wordCount } from "@/lib/text";
 import type { Balloon, ExportOut, Geometry, Page, Panel, Project } from "@/lib/types";
+import { onIdentityReset, pk } from "@/lib/session";
 
 const PageCanvas = dynamic(() => import("./page-canvas"), { ssr: false, loading: () => <div className="halftone aspect-[2/3] w-full" /> });
 
@@ -21,7 +22,10 @@ type EditorState = {
   set: (patch: Partial<EditorState>) => void;
 };
 /** Ephemeral editor state: selection, in-flight drafts and the visible save status. */
-const useEditor = create<EditorState>((set) => ({ pageIndex: 0, panelId: null, balloonId: null, drafts: {}, texts: {}, save: "saved", set: (patch) => set(patch) }));
+const EMPTY = { pageIndex: 0, panelId: null, balloonId: null, drafts: {}, texts: {}, save: "saved" as SaveState };
+const useEditor = create<EditorState>((set) => ({ ...EMPTY, set: (patch) => set(patch) }));
+// Unsaved drafts belong to the person who typed them: discard on any identity change.
+onIdentityReset(() => useEditor.setState(EMPTY));
 
 const SAVE_LABEL: Record<SaveState, string> = { saved: "All changes saved", dirty: "Unsaved changes…", saving: "Saving…", error: "Couldn't save. Retrying when you edit again.", conflict: "Changed elsewhere. Latest version loaded." };
 
@@ -40,7 +44,7 @@ function useWidth() {
 // ------------------------------------------------------------------ exports
 function Exports({ project }: { project: Project }) {
   const qc = useQueryClient();
-  const refresh = () => void qc.invalidateQueries({ queryKey: ["project", project.id] });
+  const refresh = () => void qc.invalidateQueries({ queryKey: pk("project", project.id) });
   const start = useMutation({
     mutationFn: async (format: "pdf" | "png" | "cbz") => (await api.POST("/v1/projects/{project_id}/exports", { params: { path: { project_id: project.id } }, body: { format } })).data!,
     onSuccess: refresh, onError: (e) => toast.error(describeError(e)),
@@ -75,7 +79,7 @@ function Exports({ project }: { project: Project }) {
 
 // ------------------------------------------------------------------ versions
 function Versions({ panel, onDone }: { panel: Panel; onDone: () => void }) {
-  const q = useQuery({ queryKey: ["versions", panel.id, panel.current_version_id], queryFn: async () => (await api.GET("/v1/panels/{panel_id}/versions", { params: { path: { panel_id: panel.id } } })).data!.versions });
+  const q = useQuery({ queryKey: pk("versions", panel.id, panel.current_version_id), queryFn: async () => (await api.GET("/v1/panels/{panel_id}/versions", { params: { path: { panel_id: panel.id } } })).data!.versions });
   const restore = useMutation({
     mutationFn: async (vid: string) => (await api.POST("/v1/panels/{panel_id}/versions/{version_id}/restore", { params: { path: { panel_id: panel.id, version_id: vid } } })).data,
     onSuccess: () => { onDone(); toast.success("Version restored"); }, onError: (e) => toast.error(describeError(e)),
@@ -108,7 +112,7 @@ function Versions({ panel, onDone }: { panel: Panel; onDone: () => void }) {
 // ------------------------------------------------------------------ side panels
 function PanelTools({ project, page, panel }: { project: Project; page: Page; panel: Panel }) {
   const qc = useQueryClient();
-  const refresh = () => { void qc.invalidateQueries({ queryKey: ["project", project.id] }); void qc.invalidateQueries({ queryKey: ["me"] }); };
+  const refresh = () => { void qc.invalidateQueries({ queryKey: pk("project", project.id) }); void qc.invalidateQueries({ queryKey: pk("me") }); };
   const [instruction, setInstruction] = useState("");
   const [addText, setAddText] = useState("");
   const regen = useMutation({ mutationFn: async () => (await api.POST("/v1/panels/{panel_id}/regenerate", { params: { path: { panel_id: panel.id } } })).data, onSuccess: refresh, onError: (e) => toast.error(describeError(e)) });
@@ -198,7 +202,7 @@ export function Editor({ project }: { project: Project }) {
   const page = project.pages[Math.min(pageIndex, project.pages.length - 1)]!;
   const panel = page.panels.find((p) => p.id === panelId) ?? null;
   const balloon = page.panels.flatMap((p) => p.balloons).find((b) => b.id === balloonId) ?? null;
-  const refresh = useCallback(() => void qc.invalidateQueries({ queryKey: ["project", project.id] }), [qc, project.id]);
+  const refresh = useCallback(() => void qc.invalidateQueries({ queryKey: pk("project", project.id) }), [qc, project.id]);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const versions = useRef<Record<string, number>>({});
   useEffect(() => {

@@ -100,11 +100,12 @@ resource "aws_iam_user" "app" {
 }
 data "aws_iam_policy_document" "app" {
   statement {
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    # DeleteObjectVersion: account deletion removes every version, not just the current one.
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"]
     resources = ["${aws_s3_bucket.assets.arn}/*"]
   }
   statement {
-    actions   = ["s3:ListBucket"]
+    actions   = ["s3:ListBucket", "s3:ListBucketVersions", "s3:GetBucketVersioning"]
     resources = [aws_s3_bucket.assets.arn]
   }
 }

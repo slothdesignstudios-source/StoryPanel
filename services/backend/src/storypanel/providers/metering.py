@@ -250,16 +250,21 @@ async def _begin_attempt(ctx: CallContext, *, key: str, provider: str, model: st
         return _snap(row)
 
 
-async def _mark(att: Attempt, **fields: Any) -> None:
+async def _mark(att: Attempt, *, only_if: tuple[str, ...] | None = None, **fields: Any) -> bool:
+    """Update an attempt. With `only_if`, skip (return False) when another process has
+    already moved it out of those states, e.g. it settled while being reconciled."""
     async with transaction() as db:
         row = (await db.execute(select(ProviderAttempt).where(ProviderAttempt.id == att.id)
                                 .with_for_update())).scalar_one()  # fmt: skip
+        if only_if is not None and row.status not in only_if:
+            return False
         for k, v in fields.items():
             setattr(row, k, v)
         if fields.get("status") == "submitting":
             row.submitted_at = datetime.now(UTC)
         await db.flush()
         await _sync_operation(db, row.operation_id)
+        return True
 
 
 def _failure_basis() -> tuple[str, bool]:
@@ -270,7 +275,7 @@ def _failure_basis() -> tuple[str, bool]:
 
 
 async def _close(att: Attempt, *, status: str, basis: str, calculated: Decimal | None = None,
-                 **fields: Any) -> Decimal:  # fmt: skip
+                 only_if: tuple[str, ...] | None = None, **fields: Any) -> Decimal:  # fmt: skip
     """Settle an attempt. Returns what it now counts against ceilings."""
     if basis == "calculated":
         assert calculated is not None
@@ -279,8 +284,10 @@ async def _close(att: Attempt, *, status: str, basis: str, calculated: Decimal |
         counted = att.estimate
     else:  # released / assumed_unbilled
         counted = Decimal(0)
-    await _mark(att, status=status, cost_basis=basis, cost_counted_usd=counted, cost_calculated_usd=calculated,
-                resolved_at=datetime.now(UTC) if basis != "unresolved" else None, **fields)  # fmt: skip
+    if not await _mark(att, only_if=only_if, status=status, cost_basis=basis, cost_counted_usd=counted,
+                       cost_calculated_usd=calculated,
+                       resolved_at=datetime.now(UTC) if basis != "unresolved" else None, **fields):  # fmt: skip
+        return Decimal(0)
     if counted:
         metrics.provider_cost.labels(att.provider, att.operation, basis).inc(float(counted))
     return counted
@@ -651,6 +658,27 @@ async def embed_images(images: list[bytes], ctx: CallContext) -> list[list[float
     return vectors
 
 
+async def stop_attempts(attempts: list[Attempt], *, reason: str) -> None:
+    """Stop open attempts now (account deletion): cancel at the provider through each
+    attempt's own endpoint; never-sent reservations are released, everything else stays
+    counted as an unresolved potential charge for reconciliation."""
+    providers = get_providers()
+    for att in attempts:
+        if att.status == "reserved":
+            await _close(
+                att, status="released", basis="released", error_code=reason[:40], only_if=("reserved",)
+            )
+            continue
+        if att.request_id is not None:
+            cancel = providers.upscale.cancel if att.operation == "upscale" else providers.image.cancel
+            try:
+                await cancel(att.model, att.request_id)
+            except Exception:
+                log.warning("provider_cancel_failed", model=att.model, provider_request_id=att.request_id)
+        await _close(att, status="cancelled" if att.request_id else "ambiguous", basis="unresolved",
+                     error_code=reason[:40], only_if=RESOLVABLE)  # fmt: skip
+
+
 # ------------------------------------------------------------------ reconciliation
 async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30)) -> dict[str, int]:
     """Durably resolve attempts whose worker went away or which were cancelled.
@@ -668,11 +696,13 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
     providers = get_providers()
     for att in rows:
         if att.status == "reserved":
-            await _close(att, status="released", basis="released", error_code="never_submitted")
+            await _close(
+                att, status="released", basis="released", error_code="never_submitted", only_if=("reserved",)
+            )
             outcome["released"] += 1
             continue
         if att.request_id is None:
-            await _close(att, status="ambiguous", basis="unresolved",
+            await _close(att, status="ambiguous", basis="unresolved", only_if=RESOLVABLE,
                          error_code=ErrorCode.PROVIDER_AMBIGUOUS_FINAL.value)  # fmt: skip
             outcome["ambiguous"] += 1
             continue
@@ -684,7 +714,8 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
             calculated = (pricing.image_cost(att.price, pixels=_pixels(result.data))
                           if att.price.unit != "per_image" else pricing.image_cost(att.price))  # fmt: skip
             # Produced (and presumably billed), but nobody stored the result.
-            await _close(att, status="succeeded_unused", basis="calculated", calculated=calculated, images=1)
+            await _close(att, status="succeeded_unused", basis="calculated", calculated=calculated, images=1,
+                         only_if=RESOLVABLE)  # fmt: skip
             outcome["succeeded_unused"] += 1
         except RequestPending:
             if att.status == "cancelled":
@@ -695,14 +726,16 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
                     await cancel(att.model, att.request_id)
                 except Exception:
                     pass
-            await _mark(att, error_code="still_pending")  # touches updated_at: re-checked next sweep
+            await _mark(
+                att, error_code="still_pending", only_if=RESOLVABLE
+            )  # touches updated_at: re-checked next sweep
             outcome["pending"] += 1
         except JobFailed as exc:
-            await _close(att, status="failed", basis=_failure_basis()[0],
+            await _close(att, status="failed", basis=_failure_basis()[0], only_if=RESOLVABLE,
                          error_code=(exc.error_type or "job_failed")[:40])  # fmt: skip
             outcome["failed"] += 1
         except RequestUnknown as exc:
-            await _close(att, status="lost", basis="unresolved", error_code=exc.reason)
+            await _close(att, status="lost", basis="unresolved", error_code=exc.reason, only_if=RESOLVABLE)
             outcome["lost"] += 1
         except (RetrievalFailed, AppError):
             outcome["retrieval_error"] += 1  # transient: next sweep

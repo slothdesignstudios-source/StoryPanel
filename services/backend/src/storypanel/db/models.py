@@ -410,6 +410,55 @@ class ProviderAttempt(Base):
     )
 
 
+class AccountDeletion(Base):
+    """Durable, idempotent account-deletion job and tombstone (see services/deletion.py).
+
+    The row outlives the account. While deletion runs it holds the identifiers that
+    external cleanup still needs (auth subject, Stripe customer/subscription); each is
+    cleared once its step succeeds. Afterwards only hashes and timestamps remain: the
+    subject hash blocks tokens issued before the deletion from reopening the account."""
+
+    __tablename__ = "account_deletions"
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    subject_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    source: Mapped[str] = mapped_column(String(20))  # user | clerk_webhook | operator
+    # requested -> cancelling -> draining -> purging -> billing -> identity -> completed
+    status: Mapped[str] = mapped_column(String(20), default="requested", index=True)
+    auth_subject: Mapped[str | None] = mapped_column(String(200))
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(100))
+    subscription_ids: Mapped[list[str] | None] = mapped_column(JSONB)
+    steps: Mapped[JSON] = mapped_column(JSONB, default=dict)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(200))
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SignupGrant(Base):
+    """Keyed hashes of identities (auth subject, normalised email) that already received
+    the welcome grant. Kept after account deletion so deleting and re-creating an account
+    does not grant again. Contains no recoverable personal data (HMAC, server-side key)."""
+
+    __tablename__ = "signup_grants"
+    identity_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PendingObjectDeletion(Base):
+    """A stored object whose deletion has not been confirmed. This row is the durable
+    reference to the object once its asset row is gone; maintenance retries it."""
+
+    __tablename__ = "pending_object_deletions"
+    storage_key: Mapped[str] = mapped_column(String(400), primary_key=True)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    reason: Mapped[str] = mapped_column(String(40))
+    last_error: Mapped[str | None] = mapped_column(String(60))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ProjectEvent(Base):
     __tablename__ = "project_events"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

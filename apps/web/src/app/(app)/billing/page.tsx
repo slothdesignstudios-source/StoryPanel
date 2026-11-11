@@ -3,11 +3,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, EmptyState, Notice, Spinner, cn } from "@/components/ui";
 import { api, describeError } from "@/lib/api";
+import { pk } from "@/lib/session";
 
 const PLAN_BLURB: Record<string, string> = { free: "Try it out. Exports carry a small StoryPanel mark.", creator: "All style presets, no watermark.", pro: "The most credits each month, no watermark." };
 
 export default function Billing() {
-  const q = useQuery({ queryKey: ["credits"], queryFn: async () => (await api.GET("/v1/credits")).data! });
+  const q = useQuery({ queryKey: pk("credits"), queryFn: async () => (await api.GET("/v1/credits")).data! });
   const checkout = useMutation({ mutationFn: async (product: "creator" | "pro" | "credit_pack") => (await api.POST("/v1/billing/checkout", { body: { product } })).data!, onSuccess: (r) => window.location.assign(r.url) });
   const portal = useMutation({ mutationFn: async () => (await api.POST("/v1/billing/portal")).data!, onSuccess: (r) => window.location.assign(r.url) });
   if (q.isPending) return <Spinner label="Loading credits" />;

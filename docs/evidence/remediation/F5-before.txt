@@ -1,0 +1,2 @@
+/home/user/storypanel/services/backend/tests/test_deletion.py:58: AssertionError: delete_keys must report per-key outcomes
+1 failed in 0.98s

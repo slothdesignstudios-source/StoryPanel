@@ -14,11 +14,9 @@ from storypanel.config import get_settings
 from storypanel.db.models import (
     Approval,
     Asset,
-    CreditLedger,
     Export,
     Panel,
     PanelVersion,
-    Project,
     ProviderUsage,
     User,
 )  # fmt: skip
@@ -27,7 +25,7 @@ from storypanel.errors import AppError, ErrorCode
 from storypanel.pipeline import stages_art
 from storypanel.providers import fake
 from storypanel.services import credits
-from tests.conftest import SPANS, auth, run_to_completion, wait_for
+from tests.conftest import SPANS, run_to_completion, wait_for
 
 pytestmark = pytest.mark.workflow
 STRIP = "A robot and a girl share noodles in the rain, as a 4 panel strip"
@@ -430,31 +428,6 @@ async def test_export_uses_an_immutable_snapshot(client: Any, headers: dict[str,
         assert (await db.execute(select(func.count()).select_from(Export))).scalar_one() == 1
     # resumable: re-running a page that is already rendered does no work
     assert (await stages_art.stage_export_page(export.id, 0)) == {"skipped": True}
-
-
-async def test_account_deletion_removes_content(client: Any, headers: dict[str, str], worker: Any) -> None:
-    from storypanel import storage
-
-    p = await run_to_completion(client, headers, STRIP)
-    async with transaction() as db:
-        keys = (await db.execute(select(Asset.storage_key))).scalars().all()
-    assert keys and await storage.get_bytes(keys[0])
-    other = auth("grace@example.com")
-    await client.get("/v1/me", headers=other)
-    assert (await client.delete("/v1/me", headers=headers)).status_code == 204
-    async with transaction() as db:
-        assert (await db.execute(select(func.count()).select_from(Project))).scalar_one() == 0
-        assert (await db.execute(select(func.count()).select_from(Asset))).scalar_one() == 0
-        users = (await db.execute(select(User.email, User.auth_subject).order_by(User.created_at))).all()
-        assert (
-            users[0][0] is None and users[0][1].startswith("deleted:") and users[1][0] == "grace@example.com"
-        )
-        assert (await db.execute(select(func.count()).select_from(CreditLedger))).scalar_one() > 0
-    with pytest.raises(AppError):
-        await storage.get_bytes(keys[0])
-    # the old identity is gone: signing in again is a brand-new, empty account
-    assert (await client.get(f"/v1/projects/{p['id']}", headers=headers)).status_code == 404
-    assert (await client.get("/v1/projects", headers=headers)).json()["projects"] == []
 
 
 async def test_trace_context_crosses_api_outbox_workflow_and_activity(client: Any, headers: dict[str, str],

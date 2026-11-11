@@ -10,7 +10,7 @@ import asyncio
 import hashlib
 import io
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
@@ -106,11 +106,100 @@ async def get_bytes(key: str) -> bytes:
     return await asyncio.to_thread(resp["Body"].read)
 
 
-async def delete_keys(keys: list[str]) -> None:
-    for i in range(0, len(keys), 1000):
-        chunk = [{"Key": k} for k in keys[i : i + 1000]]
-        await _call(_client().delete_objects, Bucket=get_settings().s3_bucket,
-                    Delete={"Objects": chunk, "Quiet": True})  # fmt: skip
+RECOVERABLE_DELETE_ERRORS = {"InternalError", "SlowDown", "ServiceUnavailable", "RequestTimeout",
+                             "OperationAborted", "request_failed"}  # fmt: skip
+
+
+@dataclass
+class DeleteResult:
+    """Per-key outcome of a deletion. `failed` maps key -> S3 error code. A key is only in
+    `deleted` once S3 confirmed it (and, for versioned buckets, every version of it)."""
+
+    deleted: list[str] = field(default_factory=list)
+    failed: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return not self.failed
+
+
+_versioned: dict[str, bool] = {}
+
+
+async def bucket_versioned() -> bool:
+    """Versioned buckets keep old versions after a plain delete (it only adds a delete
+    marker), so user-data deletion must remove each version explicitly."""
+    bucket = get_settings().s3_bucket
+    if bucket not in _versioned:
+        resp = await _call(_client().get_bucket_versioning, Bucket=bucket)
+        _versioned[bucket] = resp.get("Status") in ("Enabled", "Suspended")
+    return _versioned[bucket]
+
+
+async def _versions(key: str) -> list[dict[str, str]]:
+    bucket = get_settings().s3_bucket
+    out: list[dict[str, str]] = []
+    kw: dict[str, Any] = {"Bucket": bucket, "Prefix": key}
+    while True:
+        resp = await _call(_client().list_object_versions, **kw)
+        for v in resp.get("Versions", []) + resp.get("DeleteMarkers", []):
+            if v["Key"] == key:
+                out.append({"Key": key, "VersionId": v["VersionId"]})
+        if not resp.get("IsTruncated"):
+            return out
+        kw.update(KeyMarker=resp["NextKeyMarker"], VersionIdMarker=resp["NextVersionIdMarker"])
+
+
+async def delete_keys(keys: list[str], *, retries: int = 3) -> DeleteResult:
+    """Delete objects permanently and report each key's outcome. Per-key errors returned in
+    a successful batch response are inspected (S3 reports AccessDenied etc. that way);
+    recoverable ones are retried with backoff. Callers must keep a durable record of
+    `failed` keys rather than dropping the only reference to them."""
+    result = DeleteResult()
+    if not keys:
+        return result
+    bucket = get_settings().s3_bucket
+    pending = list(dict.fromkeys(keys))
+    for attempt in range(retries + 1):
+        retry: list[str] = []
+        try:
+            versioned = await bucket_versioned()
+        except AppError:
+            versioned = None
+        for i in range(0, len(pending), 1000):
+            chunk = pending[i : i + 1000]
+            if versioned is None:
+                result.failed.update({k: "request_failed" for k in chunk})
+                retry.extend(chunk)
+                continue
+            try:
+                if versioned:
+                    objects = [v for k in chunk for v in await _versions(k)]
+                else:
+                    objects = [{"Key": k} for k in chunk]
+                errors: dict[str, str] = {}
+                for j in range(0, len(objects), 1000):
+                    if not objects[j : j + 1000]:
+                        continue
+                    resp = await _call(_client().delete_objects, Bucket=bucket,
+                                       Delete={"Objects": objects[j : j + 1000], "Quiet": True})  # fmt: skip
+                    for err in resp.get("Errors") or []:
+                        errors.setdefault(err["Key"], err.get("Code") or "Unknown")
+            except AppError:
+                errors = {k: "request_failed" for k in chunk}
+            for k in chunk:
+                if k in errors:
+                    result.failed[k] = errors[k]
+                    if errors[k] in RECOVERABLE_DELETE_ERRORS:
+                        retry.append(k)
+                else:
+                    result.failed.pop(k, None)
+                    result.deleted.append(k)
+        if not retry or attempt == retries:
+            break
+        pending = retry
+        await asyncio.sleep(min(2.0, 0.2 * 2**attempt))
+    return result
 
 
 def signed_url(key: str, *, filename: str | None = None, ttl: int | None = None) -> str:

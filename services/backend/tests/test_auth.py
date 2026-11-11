@@ -50,7 +50,7 @@ class _Server:
                 self.end_headers()
                 self.wfile.write(data)
 
-            do_GET = do_POST = _serve  # noqa: N815
+            do_GET = do_POST = do_DELETE = _serve  # noqa: N815
 
             def log_message(self, *a: Any) -> None:
                 pass
@@ -235,3 +235,41 @@ async def test_stripe_checkout_and_portal_requests(client: Any, headers: dict[st
     assert "sk_test" not in down.text and "no route" not in down.text
     other = await client.post("/v1/billing/portal", headers=auth("nobody@example.com"))
     assert other.status_code == 409  # no billing account yet
+
+
+async def test_stripe_subscription_cancellation_requests(
+    server: _Server, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Account deletion cancels every live subscription of the customer, immediately, once."""
+    import stripe
+
+    from storypanel.services import billing
+
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", SecretStr("sk_test_local_stub"))
+    monkeypatch.setattr(billing, "_client", lambda: stripe.StripeClient(
+        "sk_test_local_stub", base_addresses={"api": server.url}, max_network_retries=0))  # fmt: skip
+    server.routes.update({
+        "/v1/subscriptions": {"object": "list", "url": "/v1/subscriptions", "has_more": False, "data": [
+            {"id": "sub_live", "object": "subscription", "status": "active"},
+            {"id": "sub_old", "object": "subscription", "status": "canceled"},
+            {"id": "sub_late", "object": "subscription", "status": "past_due"}]},
+        "/v1/subscriptions/sub_live": {"id": "sub_live", "object": "subscription", "status": "canceled"},
+        "/v1/subscriptions/sub_late": {"id": "sub_late", "object": "subscription", "status": "canceled"},
+        "/v1/subscriptions/sub_extra": {"id": "sub_extra", "object": "subscription", "status": "canceled"},
+    })  # fmt: skip
+    n = await billing.cancel_all_subscriptions(customer_id="cus_x", subscription_ids=["sub_extra"],
+                                               idempotency_prefix="deletion:u1")  # fmt: skip
+    assert n == 3
+    listing = next(r for r in server.requests if r[0] == "GET")
+    assert (
+        listing[1].startswith("/v1/subscriptions?")
+        and "customer=cus_x" in listing[1]
+        and "status=all" in listing[1]
+    )
+    from urllib.parse import parse_qs as qs
+    from urllib.parse import urlsplit
+
+    deletes = sorted((urlsplit(r[1]).path, qs(urlsplit(r[1]).query), r[3].get("Idempotency-Key"))
+                     for r in server.requests if r[0] == "DELETE")  # fmt: skip
+    assert deletes == [(f"/v1/subscriptions/{s}", {"prorate": ["false"], "invoice_now": ["false"]},
+                        f"deletion:u1:cancel:{s}") for s in ("sub_extra", "sub_late", "sub_live")]  # fmt: skip

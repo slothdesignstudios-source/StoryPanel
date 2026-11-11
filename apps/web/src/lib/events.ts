@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { API_URL, authHeader } from "./api";
+import { pk } from "@/lib/session";
 
 export type StreamState = "connecting" | "live" | "reconnecting";
 
@@ -25,7 +26,7 @@ export function useProjectEvents(projectId: string, enabled: boolean, onEvent?: 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const refresh = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => void qc.invalidateQueries({ queryKey: ["project", projectId] }), 120);
+      timer = setTimeout(() => void qc.invalidateQueries({ queryKey: pk("project", projectId) }), 120);
     };
 
     async function run() {
