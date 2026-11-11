@@ -80,8 +80,25 @@ def _client() -> Any:
     )
 
 
+@lru_cache
+def _signing_client() -> Any:
+    """Presigns for the browser-facing endpoint. Purely local computation."""
+    s = get_settings()
+    if not s.s3_public_endpoint_url or s.s3_public_endpoint_url == s.s3_endpoint_url:
+        return _client()
+    return boto3.client(
+        "s3",
+        endpoint_url=s.s3_public_endpoint_url,
+        region_name=s.s3_region,
+        aws_access_key_id=s.s3_access_key_id.get_secret_value() if s.s3_access_key_id else None,
+        aws_secret_access_key=(s.s3_secret_access_key.get_secret_value() if s.s3_secret_access_key else None),
+        config=Config(signature_version="s3v4"),  # same addressing as the main client
+    )
+
+
 def reset_client() -> None:
     _client.cache_clear()
+    _signing_client.cache_clear()
 
 
 def new_key(owner_id: object, project_id: object | None, kind: str, ext: str) -> str:
@@ -209,7 +226,7 @@ def signed_url(key: str, *, filename: str | None = None, ttl: int | None = None)
         safe = "".join(c for c in filename if c.isalnum() or c in "-_. ")[:80] or "download"
         params["ResponseContentDisposition"] = f'attachment; filename="{safe}"'
     return str(
-        _client().generate_presigned_url(
+        _signing_client().generate_presigned_url(
             "get_object", Params=params, ExpiresIn=ttl or get_settings().signed_url_ttl_seconds
         )
     )

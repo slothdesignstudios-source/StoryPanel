@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://storypanel@127.0.0.1:5432/storypanel"
     redis_url: str = "redis://127.0.0.1:6379/0"
     s3_endpoint_url: str | None = None
+    # Endpoint browsers use for signed GET URLs, when it differs from the one the services
+    # use (e.g. http://localhost:9000 vs http://minio:9000 under Compose). SigV4 signs the
+    # Host, so URLs must be signed for the host the browser will request.
+    s3_public_endpoint_url: str | None = None
     s3_region: str = "us-east-1"
     s3_bucket: str = "storypanel-assets"
     s3_access_key_id: SecretStr | None = None
@@ -198,6 +202,12 @@ class Settings(BaseSettings):
             problems += [f"SP_{n.upper()} must be set for live providers" for n in required
                          if getattr(self, n) is None]  # fmt: skip
             problems += _live_model_problems(self)
+        from storypanel.db.models import EMBEDDING_DIM
+
+        if self.embedding_dimensions != EMBEDDING_DIM:
+            # character_refs.embedding is vector(1024) with an HNSW index; another size needs
+            # a migration of the column and index, and re-embedding every stored reference.
+            problems.append(f"SP_EMBEDDING_DIMENSIONS must be {EMBEDDING_DIM} (the database column's size)")
         if problems:
             raise ValueError("invalid configuration: " + "; ".join(problems))
         return self
@@ -218,8 +228,6 @@ def _live_model_problems(s: Settings) -> list[str]:
         problems.append(
             f"SP_EMBEDDING_MODEL={s.embedding_model} is not a Voyage model known to accept images"
         )
-    if s.embedding_dimensions not in (256, 512, 1024, 2048):
-        problems.append("SP_EMBEDDING_DIMENSIONS must be 256, 512, 1024 or 2048")
     return problems + pricing.startup_problems(s)
 
 

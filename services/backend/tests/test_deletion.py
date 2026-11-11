@@ -371,3 +371,44 @@ async def test_clerk_identity_is_deleted_and_webhook_is_idempotent(client: Any, 
     # repeated deliveries / requests do nothing new
     assert await deletion.request_deletion(uid, source="clerk_webhook") == "completed"
     assert await deletion.advance(uid) == "completed" and len(seen) == 2
+
+
+# ------------------------------------------------------------------ browser-reachable signed URLs
+def test_signed_urls_are_valid_for_the_host_the_browser_requests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Compose: services reach S3 as http://minio:9000, browsers as http://localhost:9000.
+    SigV4 covers the Host header, so a URL signed for minio:9000 cannot be fixed by rewriting
+    the host; it must be signed for the public endpoint. Verified with botocore's reference
+    signer recomputing the signature for the URL as requested (moto does not check presigned
+    signatures; MinIO under Compose is the end-to-end check, B6)."""
+    from urllib.parse import parse_qsl, urlsplit, urlunsplit
+
+    from botocore.auth import S3SigV4QueryAuth
+    from botocore.awsrequest import AWSRequest
+    from botocore.credentials import Credentials
+
+    s = get_settings()
+    monkeypatch.setattr(s, "s3_endpoint_url", "http://minio:9000")
+    monkeypatch.setattr(s, "s3_public_endpoint_url", "http://localhost:9000")
+    storage.reset_client()
+    try:
+        url = storage.signed_url("users/u/projects/p/panel/x.png", ttl=300)
+    finally:
+        monkeypatch.undo()
+        storage.reset_client()
+    parts = urlsplit(url)
+    assert parts.netloc == "localhost:9000"
+
+    def valid_when_requested_at(netloc: str) -> bool:
+        q = dict(parse_qsl(parts.query))
+        sig = q.pop("X-Amz-Signature")
+        unsigned = urlunsplit((parts.scheme, netloc, parts.path, "", ""))
+        req = AWSRequest(method="GET", url=unsigned)
+        req.context["timestamp"] = q["X-Amz-Date"]
+        auth = S3SigV4QueryAuth(
+            Credentials("test", "test"), "s3", s.s3_region, expires=int(q["X-Amz-Expires"])
+        )
+        auth.add_auth(req)
+        return dict(parse_qsl(urlsplit(req.url).query))["X-Amz-Signature"] == sig
+
+    assert valid_when_requested_at("localhost:9000")
+    assert not valid_when_requested_at("minio:9000")  # what the old configuration produced for browsers

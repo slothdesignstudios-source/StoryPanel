@@ -8,6 +8,8 @@ x-backend-env: &backend-env
   SP_DATABASE_URL: postgresql+asyncpg://storypanel:storypanel@postgres:5432/storypanel
   SP_REDIS_URL: redis://redis:6379/0
   SP_S3_ENDPOINT_URL: http://minio:9000
+  # browsers fetch signed URLs from the host's published port, so sign for that host
+  SP_S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
   SP_S3_ACCESS_KEY_ID: storypanel
   SP_S3_SECRET_ACCESS_KEY: storypanel-local-secret
   SP_S3_BUCKET: storypanel-assets
@@ -77,7 +79,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000
         NEXT_PUBLIC_AUTH_MODE: ${SP_AUTH_MODE:-dev}
-        NEXT_PUBLIC_ASSET_ORIGINS: http://localhost:9000 http://minio:9000
+        NEXT_PUBLIC_ASSET_ORIGINS: http://localhost:9000
         NEXT_PUBLIC_ENV: local
     ports: ["127.0.0.1:3000:3000"]
     depends_on: [api]

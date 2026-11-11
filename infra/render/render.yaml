@@ -21,6 +21,13 @@ envVarGroups:
       - { key: SP_IMAGE_MODEL_GENERATE, sync: false }
       - { key: SP_IMAGE_MODEL_EDIT, sync: false }
       - { key: SP_UPSCALE_MODEL, sync: false }
+      # Optional models: leave unset to disable that path (no fallback / no region repair).
+      - { key: SP_IMAGE_MODEL_FALLBACK, sync: false }
+      - { key: SP_IMAGE_MODEL_FALLBACK_GENERATE, sync: false }
+      - { key: SP_INPAINT_MODEL, sync: false }
+      # Verified provider price table (JSON, see packages/pricing/pricing.example.json).
+      # Live startup refuses missing, zero, malformed or stale (>60 days) prices.
+      - { key: SP_PRICING_JSON, sync: false }
       - { key: SP_EMBEDDING_MODEL, sync: false }
       - { key: SP_TEMPORAL_ADDRESS, sync: false }
       - { key: SP_TEMPORAL_NAMESPACE, sync: false }
@@ -33,6 +40,8 @@ envVarGroups:
       - { key: SP_CLERK_JWKS_URL, sync: false }
       - { key: SP_CLERK_AUTHORIZED_PARTIES, sync: false }
       - { key: SP_CLERK_WEBHOOK_SECRET, sync: false }
+      - { key: SP_CLERK_SECRET_KEY, sync: false }   # account deletion removes the Clerk user
+      - { key: SP_STRIPE_API_VERSION, value: "2026-10-28.endive" }  # must match the webhook endpoint's version
       - { key: SP_STRIPE_SECRET_KEY, sync: false }
       - { key: SP_STRIPE_WEBHOOK_SECRET, sync: false }
       - { key: SP_STRIPE_PRICE_CREATOR, sync: false }

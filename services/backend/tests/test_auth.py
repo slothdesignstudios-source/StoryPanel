@@ -335,3 +335,68 @@ async def test_checkout_is_idempotent_and_refuses_a_second_subscription(
     r = await client.post("/v1/billing/checkout", headers={**headers, "Idempotency-Key": "click-3"},
                           json={"product": "credit_pack"})  # fmt: skip
     assert r.status_code in (200, 409)  # 409 only if no pack price is configured
+
+
+def test_render_blueprint_supplies_a_complete_deployed_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every variable the deployed-config validation requires is declared in the Render
+    blueprint (values entered in the dashboard are simulated with placeholders here), and
+    dropping any of the critical ones is refused at startup."""
+    import json
+    from datetime import date
+    from pathlib import Path
+
+    import yaml
+
+    from storypanel.providers import pricing
+
+    root = Path(__file__).resolve().parents[3]
+    bp = yaml.safe_load((root / "infra/render/render.yaml").read_text())
+    declared: dict[str, str | None] = {}
+    for item in bp["envVarGroups"][0]["envVars"]:
+        declared[item["key"]] = item.get("value")
+    api = next(svc for svc in bp["services"] if svc.get("name") == "storypanel-api")
+    for item in api["envVars"]:
+        if "key" in item:
+            declared[item["key"]] = item.get("value")
+    table = json.loads((root / "packages/pricing/pricing.example.json").read_text())
+    for e in table["entries"]:  # the operator re-verifies every price before deploying (B5)
+        e["verified_at"] = date.today().isoformat()
+    placeholders = {
+        "SP_ENV": "staging", "SP_PSEUDONYM_SALT": "x" * 32, "SP_TEXT_MODEL_STORY": "claude-sonnet-5-5",
+        "SP_TEXT_MODEL_LIGHT": "claude-haiku-5-5", "SP_VISION_MODEL": "claude-haiku-5-5",
+        "SP_IMAGE_MODEL_GENERATE": "fal-ai/nano-banana-2", "SP_IMAGE_MODEL_EDIT": "fal-ai/nano-banana-2/edit",
+        "SP_IMAGE_MODEL_FALLBACK": "fal-ai/bytedance/seedream/v5/lite/edit",
+        "SP_IMAGE_MODEL_FALLBACK_GENERATE": "fal-ai/bytedance/seedream/v5/lite/text-to-image",
+        "SP_INPAINT_MODEL": "fal-ai/flux-pro/v1/fill", "SP_UPSCALE_MODEL": "fal-ai/esrgan",
+        "SP_EMBEDDING_MODEL": "voyage-multimodal-3.5", "SP_PRICING_JSON": json.dumps(table),
+        "SP_CLERK_ISSUER": "https://clerk.example.com", "SP_CLERK_JWKS_URL": "https://clerk.example.com/.well-known/jwks.json",
+        "SP_CLERK_AUTHORIZED_PARTIES": '["https://app.example.com"]', "SP_CORS_ORIGINS": '["https://app.example.com"]',
+        "SP_DATABASE_URL": "postgresql+asyncpg://u:p@db/x", "SP_REDIS_URL": "redis://r:6379/0",
+    }  # fmt: skip
+    for key in [k for k in __import__("os").environ if k.startswith("SP_")]:
+        monkeypatch.delenv(key)
+
+    def env(drop: str | None = None) -> None:
+        for key, value in declared.items():
+            if key == drop:
+                monkeypatch.delenv(key, raising=False)
+                continue
+            monkeypatch.setenv(key, value or placeholders.get(key, "placeholder-" + key.lower()))
+
+    pricing.reset_cache()
+    try:
+        env()
+        Settings(_env_file=None)  # type: ignore[call-arg]  # complete: no problems
+        for critical in ("SP_PRICING_JSON", "SP_CLERK_SECRET_KEY", "SP_STRIPE_SECRET_KEY", "SP_FAL_KEY",
+                         "SP_CLERK_JWKS_URL", "SP_IMAGE_MODEL_EDIT", "SP_PSEUDONYM_SALT"):  # fmt: skip
+            assert critical in declared, f"{critical} missing from the blueprint"
+            env(drop=critical)
+            pricing.reset_cache()
+            with pytest.raises(ValueError):
+                Settings(_env_file=None)  # type: ignore[call-arg]
+        env()
+        monkeypatch.setenv("SP_EMBEDDING_DIMENSIONS", "2048")
+        with pytest.raises(ValueError, match="must be 1024"):
+            Settings(_env_file=None)  # type: ignore[call-arg]
+    finally:
+        pricing.reset_cache()
