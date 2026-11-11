@@ -36,17 +36,21 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20 }
+  # S3-compatible object storage that verifies SigV4 signatures, like S3. (The minio/minio
+  # image is no longer published on Docker Hub.) Local-only credentials.
   minio:
-    image: minio/minio:latest
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment: { MINIO_ROOT_USER: storypanel, MINIO_ROOT_PASSWORD: storypanel-local-secret }
-    volumes: [miniodata:/data]
-    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
-    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 5s, timeout: 3s, retries: 20 }
+    image: chrislusf/seaweedfs:4.53
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-s3", "-s3.port=9000",
+              "-s3.config=/etc/seaweedfs/s3.json", "-master.volumeSizeLimitMB=1024"]
+    volumes: [miniodata:/data, ./infra/docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro]
+    ports: ["127.0.0.1:9000:9000"]
+    healthcheck: { test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status"], interval: 5s, timeout: 3s, retries: 30 }
   temporal:
-    image: temporalio/temporal:latest
-    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
-    volumes: [temporaldata:/data]
+    image: temporalio/temporal:1.10.0
+    # The image runs as uid 1000 and has no /data: keep the SQLite file in its (existing,
+    # temporal-owned) home directory, whose ownership a new named volume inherits.
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/home/temporal/temporal.db"]
+    volumes: [temporaldata:/home/temporal]
     ports: ["127.0.0.1:8233:8233"]
   migrate:
     <<: *backend

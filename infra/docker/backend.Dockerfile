@@ -1,13 +1,23 @@
 # syntax=docker/dockerfile:1
 # One image, two commands: the API (default) and the Temporal worker.
 FROM python:3.13-slim AS build
-COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
+# uv from PyPI (pinned; matches the version that wrote uv.lock) rather than the ghcr.io
+# image, so builds need only PyPI and Docker Hub.
+# Optional build secret `build_ca`: an extra CA bundle for TLS-intercepting proxies. Used
+# only by the install steps; never copied into an image layer.
+RUN --mount=type=secret,id=build_ca,required=false \
+    if [ -s /run/secrets/build_ca ]; then export PIP_CERT=/run/secrets/build_ca; fi; \
+    pip install --no-cache-dir uv==0.11.32
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 COPY services/backend/pyproject.toml services/backend/uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv --mount=type=secret,id=build_ca,required=false \
+    if [ -s /run/secrets/build_ca ]; then export UV_NATIVE_TLS=1 SSL_CERT_FILE=/run/secrets/build_ca; fi; \
+    uv sync --frozen --no-dev --no-install-project
 COPY services/backend/src ./src
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv --mount=type=secret,id=build_ca,required=false \
+    if [ -s /run/secrets/build_ca ]; then export UV_NATIVE_TLS=1 SSL_CERT_FILE=/run/secrets/build_ca; fi; \
+    uv sync --frozen --no-dev
 
 FROM python:3.13-slim AS runtime
 RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --no-create-home app

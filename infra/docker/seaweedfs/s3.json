@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "storypanel-local",
+      "credentials": [{ "accessKey": "storypanel", "secretKey": "storypanel-local-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}
