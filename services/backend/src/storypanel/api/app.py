@@ -164,8 +164,10 @@ def create_app(*, start_dispatcher: bool = True) -> FastAPI:
         if s.is_deployed:
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
         if path not in ("/healthz", "/readyz", "/metrics"):
-            log.info("http_request", method=request.method, route=path,
-                     status=response.status_code, duration_ms=int(elapsed * 1000))  # fmt: skip
+            # The auth dependency runs in its own context, so the pseudonymous user id is read
+            # from request.state rather than from bound log context.
+            log.info("http_request", method=request.method, route=path, status=response.status_code,
+                     duration_ms=int(elapsed * 1000), user=getattr(request.state, "user_ref", None))  # fmt: skip
         return response
 
     app.add_middleware(BodyLimit, limit=s.max_request_bytes)

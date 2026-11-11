@@ -1,7 +1,8 @@
 """Create a demo account with credits (local/test only). Safe to run repeatedly.
 
-    cd services/backend && uv run python ../../scripts/seed-demo.py demo@example.com
+cd services/backend && uv run python ../../scripts/seed-demo.py demo@example.com
 """
+
 import asyncio
 import sys
 import uuid
@@ -24,8 +25,9 @@ async def main(email: str) -> None:
             user = User(id=uuid.uuid4(), auth_subject=subject, email=email.lower())
             db.add(user)
             await db.flush()
-        granted = await credits.grant(db, user.id, 200, kind="grant", reason="Demo credits",
-                                      dedupe_key=f"demo:{user.id}")
+        granted = await credits.grant(
+            db, user.id, 200, kind="grant", reason="Demo credits", dedupe_key=f"demo:{user.id}"
+        )
     print(f"{email}: {'granted 200 demo credits' if granted else 'already seeded'}. Sign in with this email.")
     await dispose_engine()
 

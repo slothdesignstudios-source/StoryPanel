@@ -157,6 +157,21 @@ def record_generation(obs: Any, *, usage: dict[str, int] | None = None, cost_usd
         metrics.telemetry_failures.labels("langfuse").inc()
 
 
+def report_exception(exc: BaseException, **tags: Any) -> None:
+    """Send an unexpected error to Sentry with low-cardinality tags. Never raises."""
+    if not get_settings().sentry_dsn:
+        return
+    try:
+        import sentry_sdk
+
+        with sentry_sdk.new_scope() as scope:
+            for key, value in tags.items():
+                scope.set_tag(key, str(value))
+            sentry_sdk.capture_exception(exc)
+    except Exception:
+        metrics.telemetry_failures.labels("sentry").inc()
+
+
 def tracer() -> trace.Tracer:
     return trace.get_tracer("storypanel")
 

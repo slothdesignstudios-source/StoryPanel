@@ -1,0 +1,53 @@
+{
+ "prometheus": {
+  "alerts": 18,
+  "dashboard_queries": 34
+ },
+ "terraform": {
+  "resources": [
+   "aws_iam_user.app",
+   "aws_iam_user_policy.app",
+   "aws_s3_bucket.assets",
+   "aws_s3_bucket_cors_configuration.assets",
+   "aws_s3_bucket_lifecycle_configuration.assets",
+   "aws_s3_bucket_ownership_controls.assets",
+   "aws_s3_bucket_policy.assets",
+   "aws_s3_bucket_public_access_block.assets",
+   "aws_s3_bucket_server_side_encryption_configuration.assets",
+   "aws_s3_bucket_versioning.assets"
+  ]
+ },
+ "render": {
+  "services": [
+   "storypanel-redis",
+   "storypanel-api",
+   "storypanel-worker",
+   "storypanel-web"
+  ],
+  "env_keys_checked": 46
+ },
+ "compose": {
+  "services": [
+   "api",
+   "grafana",
+   "migrate",
+   "minio",
+   "otel-collector",
+   "postgres",
+   "prometheus",
+   "redis",
+   "tempo",
+   "temporal",
+   "web",
+   "worker"
+  ]
+ },
+ "ci_jobs": [
+  "backend",
+  "e2e",
+  "images",
+  "infra",
+  "web"
+ ],
+ "problems": []
+}

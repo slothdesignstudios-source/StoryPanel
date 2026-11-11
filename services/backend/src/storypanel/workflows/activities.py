@@ -18,6 +18,7 @@ from storypanel.db.session import transaction
 from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
 from storypanel.obs.logging import bind_context, clear_context, get_logger
+from storypanel.obs.tracing import report_exception
 from storypanel.pipeline import stages_art as art
 from storypanel.pipeline import stages_plan as plan
 from storypanel.services import credits
@@ -75,6 +76,7 @@ def stage_activity(name: str) -> Callable[[Body], Body]:
                 outcome = "internal_error"
                 metrics.errors.labels("internal_error", "worker").inc()
                 log.error("activity_crashed", error_code="internal_error", exc_info=True)
+                report_exception(exc, stage=name, workflow_id=info.workflow_id, attempt=info.attempt)
                 # Unknown failures are retried (bounded by the retry policy); the user only
                 # ever sees the generic message.
                 raise ApplicationError(

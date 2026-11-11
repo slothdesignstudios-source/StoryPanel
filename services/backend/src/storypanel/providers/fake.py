@@ -49,13 +49,20 @@ class FakeControl:
     models_used: list[str] = field(default_factory=list)
     cancelled: list[str] = field(default_factory=list)
     hang_fetches: int = 0
+    crashes: dict[str, int] = field(default_factory=dict)  # op -> times to raise an unexpected error
     calls: list[tuple[str, str]] = field(default_factory=list)
     malformed_text: int = 0
 
     def reset(self) -> None:
         self.__init__()  # type: ignore[misc]
 
+    def crash_if_configured(self, op: str) -> None:
+        if self.crashes.get(op, 0) > 0:
+            self.crashes[op] -= 1
+            raise RuntimeError(f"simulated unexpected failure in {op}")
+
     def raise_if_queued(self, op: str) -> None:
+        self.crash_if_configured(op)
         queue = self.errors.get(op)
         if queue:
             raise queue.pop(0)

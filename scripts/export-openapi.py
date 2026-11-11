@@ -1,4 +1,5 @@
 """Write the API's OpenAPI document. Frontend types are generated from this file."""
+
 import json
 import os
 import sys

@@ -1,0 +1,182 @@
+{
+ "at": "2026-11-10T23:32:04Z",
+ "checks": {
+  "correlated_trace": {
+   "pass": true,
+   "trace_id": "b9868ed4f0b24cbf8fea61657898321f",
+   "stages": {
+    "http": true,
+    "workflow_start": true,
+    "workflow_run": true,
+    "activity": true,
+    "provider_call": true
+   },
+   "span_count": 35,
+   "services": [
+    "storypanel-api",
+    "storypanel-worker"
+   ],
+   "release_on_spans": [
+    "obs-demo-1.2.3"
+   ],
+   "sample_span_names": [
+    "POST /v1/projects",
+    "POST /v1/projects http receive",
+    "POST /v1/projects http send",
+    "RunActivity:bible",
+    "RunActivity:cast_ready",
+    "RunActivity:character_sheet",
+    "RunActivity:intake",
+    "RunActivity:location_ref",
+    "RunWorkflow:ComicWorkflow",
+    "StartActivity:bible",
+    "StartActivity:cast_ready",
+    "StartActivity:character_sheet",
+    "StartActivity:intake",
+    "StartActivity:location_ref"
+   ]
+  },
+  "langfuse": {
+   "pass": true,
+   "observations": 13,
+   "generation_names": [
+    "bible.BibleAndCast",
+    "image_safety.SafetyVerdict",
+    "intake.IntakeResult",
+    "moderation.bible.ModerationVerdict",
+    "moderation.prompt.ModerationVerdict"
+   ],
+   "prompt_text_present": false,
+   "has_prompt_version": true,
+   "has_usage": true
+  },
+  "sentry": {
+   "pass": true,
+   "events": 1,
+   "release": "obs-demo-1.2.3",
+   "environment": "local",
+   "exception": "simulated unexpected failure in text:bible",
+   "tags": {
+    "stage": "bible",
+    "workflow_id": "comic-8c60e15a-8683-422b-857c-47f2086e43a8",
+    "attempt": "1"
+   },
+   "has_user_block": false,
+   "local_variables_sent": false,
+   "prompt_text_present": false
+  },
+  "logs": {
+   "pass": true,
+   "json_lines": 40,
+   "all_have_base_fields": true,
+   "request_lines_with_trace_and_user": 8,
+   "activity_fields": [
+    "attempt",
+    "duration_ms",
+    "outcome",
+    "project_id",
+    "span_id",
+    "stage",
+    "trace_id",
+    "workflow_id",
+    "workflow_run_id"
+   ],
+   "provider_call_fields": [
+    "attempt",
+    "cost_basis",
+    "cost_usd",
+    "duration_ms",
+    "input_tokens",
+    "model",
+    "operation",
+    "output_tokens",
+    "project_id",
+    "prompt_version",
+    "provider",
+    "provider_request_id",
+    "span_id",
+    "stage",
+    "status",
+    "trace_id",
+    "workflow_id",
+    "workflow_run_id"
+   ],
+   "pseudonymous_user": false,
+   "secret_canaries_found": {
+    "SP_PSEUDONYM_SALT": false,
+    "SP_DEV_AUTH_SECRET": false,
+    "SP_STRIPE_WEBHOOK_SECRET": false,
+    "SP_STRIPE_SECRET_KEY": false,
+    "SP_S3_SECRET_ACCESS_KEY": false,
+    "SP_LANGFUSE_SECRET_KEY": false
+   },
+   "sensitive_patterns_found": {
+    "jwt": false,
+    "signed_url": false,
+    "email": false,
+    "prompt": false
+   },
+   "crash_logged_with_error_code": true
+  },
+  "metrics": {
+   "pass": true,
+   "sp_metric_families_emitted": 59,
+   "referenced_by_alerts_and_dashboards": 31,
+   "referenced_but_not_yet_emitted": [
+    "sp_exports_total",
+    "sp_lettering_flags_total",
+    "sp_manual_regenerations_total",
+    "sp_panel_outcomes_total",
+    "sp_spend_limit_hits_total",
+    "sp_telemetry_failures_total",
+    "sp_webhook_events_total",
+    "sp_workflows_finished_total"
+   ],
+   "note": "Counters with labels appear only after their first increment, so 'not yet emitted' lists metrics this short scenario never touched (e.g. exports, webhooks).",
+   "labels_with_identifier_values": [],
+   "max_series_per_metric": 90,
+   "http_route_label_examples": [
+    "/readyz",
+    "/v1/dev/login",
+    "/v1/projects",
+    "/v1/projects/{project_id}"
+   ],
+   "cost_by_basis": {
+    "fake/text_light/actual": 0.0004,
+    "fake/text_story/actual": 0.0029,
+    "fake/image_generate/actual": 0.16,
+    "fake/text_vision/actual": 0.0009,
+    "fake/image_edit/actual": 0.32,
+    "fake/embed/actual": 0.0009
+   },
+   "qa_and_queue_present": {
+    "sp_activity_schedule_to_start_seconds_bucket": true,
+    "sp_provider_seconds_bucket": true,
+    "sp_http_request_seconds_bucket": true
+   }
+  },
+  "alert_condition_dependency_down": {
+   "pass": true,
+   "metric_before_during_after": [
+    1.0,
+    0.0,
+    1.0
+   ],
+   "readyz_during": 503,
+   "readyz_after": 200,
+   "limitation": "The alert *expression* (sp_dependency_up == 0 for 2m) was shown to become true and false again. Prometheus/Alertmanager were not run, so rule evaluation and notification delivery are not demonstrated."
+  },
+  "telemetry_outage": {
+   "pass": true,
+   "comic_reached_cast_gate_seconds": 1.0,
+   "project": true,
+   "sinks_down": [
+    "OTLP traces",
+    "Sentry",
+    "Langfuse"
+   ]
+  }
+ },
+ "project": "created",
+ "passed": true
+}
