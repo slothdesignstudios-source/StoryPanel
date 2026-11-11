@@ -16,8 +16,12 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    context.configure(url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata,
-                      literal_binds=True, compare_type=True)
+    context.configure(
+        url=config.get_main_option("sqlalchemy.url"),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        compare_type=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -29,8 +33,9 @@ def _run(connection) -> None:  # type: ignore[no-untyped-def]
 
 
 async def run_migrations_online() -> None:
-    engine = async_engine_from_config(config.get_section(config.config_ini_section, {}),
-                                      prefix="sqlalchemy.", poolclass=pool.NullPool)
+    engine = async_engine_from_config(
+        config.get_section(config.config_ini_section, {}), prefix="sqlalchemy.", poolclass=pool.NullPool
+    )
     async with engine.connect() as connection:
         await connection.run_sync(_run)
     await engine.dispose()

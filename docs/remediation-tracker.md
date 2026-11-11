@@ -152,3 +152,18 @@ asserts one attempt, one submission, and provider submissions = recorded attempt
   for B; every API request after the switch carries B's identity or none; delayed A responses dropped).
 - **Status:** Fixed, locally verified (dev auth). The Clerk session-switch path is implemented the same
   way but unverified without a Clerk instance (B4).
+
+## P1 — Export retry correctness
+
+### F7. The second failed-export retry could stay queued forever
+- **Reproduction:** `tests/test_export_retry.py::test_failed_export_can_be_retried_more_than_once`
+  against the unchanged code (`F7-before.txt`): export fails → retry 1 runs workflow `…-r1` and fails →
+  retry 2 is marked queued but `stage_export_failed` had replaced `error.attempt`, so it reused
+  `start:export:<id>:r1`, the outbox deduplicated it, and no workflow ever started ("timed out").
+- **Root cause:** the attempt counter lived in the error-details JSON that failure handling overwrites.
+- **Fix:** `exports.attempt` (migration 0005, backfilled from old error details), incremented under the
+  row lock; workflow id and outbox key `export-<id>-a<attempt>` (new prefix, so no collision with old `r<n>` keys).
+- **Regression tests:** initial failure → retry failure → second retry succeeds, asserting 3 distinct
+  outbox start rows, all *delivered*, a ready export with a download URL, and `attempt == 3`;
+  5 concurrent duplicate retries → exactly one 202, four 409, exactly one additional workflow start.
+- **Status:** Fixed, locally verified (real Temporal dev server and outbox dispatcher).

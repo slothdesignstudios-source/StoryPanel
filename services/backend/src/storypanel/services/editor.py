@@ -344,11 +344,11 @@ async def retry_export(db: AsyncSession, export_id: uuid.UUID, owner_id: uuid.UU
         raise not_found("Export")
     if export.status != "failed":
         raise invalid_state("Only a failed export can be retried.")
-    attempt = int((export.error or {}).get("attempt", 0)) + 1
-    export.status, export.error = "queued", {"attempt": attempt}
-    await outbox.enqueue(db, "start_workflow", f"start:export:{export.id}:r{attempt}", {
-        "workflow": "ExportWorkflow", "workflow_id": f"export-{export.id}-r{attempt}",
-        "timeout_days": 1, "input": {"export_id": str(export.id)}})  # fmt: skip
+    export.attempt += 1  # under the row lock: concurrent retries serialise, then see "queued"
+    export.status, export.error = "queued", None
+    await outbox.enqueue(db, "start_workflow", f"start:export:{export.id}:a{export.attempt}", {
+        "workflow": "ExportWorkflow", "workflow_id": f"export-{export.id}-a{export.attempt}",
+        "timeout_days": 1, "input": {"export_id": str(export.id), "attempt": export.attempt}})  # fmt: skip
     await events.emit(db, export.project_id, "export.updated", {"export_id": str(export.id),
                                                                 "status": "queued"})  # fmt: skip
     return export

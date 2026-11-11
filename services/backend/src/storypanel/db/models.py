@@ -484,6 +484,9 @@ class Export(Base, Timestamps):
     pages_done: Mapped[JSON] = mapped_column(JSONB, default=dict)
     asset_id: Mapped[uuid.UUID | None] = fk("assets.id", nullable=True, ondelete="SET NULL")
     error: Mapped[JSON | None] = mapped_column(JSONB)
+    # Monotonic run counter, separate from error details: each retry gets its own workflow
+    # id and outbox key (export-<id>-a<attempt>), so no retry can collide with an earlier one.
+    attempt: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
