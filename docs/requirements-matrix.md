@@ -1,143 +1,162 @@
 # Requirements matrix
 
-Status vocabulary, used strictly:
-- **Implemented**: code exists; not exercised here.
-- **Locally verified**: exercised in this repository by the named automated test or command, with real
-  Postgres, Redis and Temporal dev server, S3 emulation, and **fake providers**.
-- **Integration verified**: exercised against the real third-party service. *Nothing in this project has reached this level.*
-- **Production validated**: observed under real traffic. *Nothing has reached this level.*
+Audited 2026-11-11 against the code at the commit this file ships with.
 
-Tests: `F` = `tests/test_flow.py`, `R` = `tests/test_resilience.py`, `A` = `tests/test_api.py`,
-`U` = `tests/test_unit.py`, `E2E` = `apps/web/e2e/journey.spec.ts`, `EVAL` = simulated eval harness.
+## Status vocabulary
+| Status | Meaning |
+|---|---|
+| **Implemented** | Code exists. No test or run exercises it. |
+| **Locally verified** | Exercised here by the named test or script against real PostgreSQL, Redis and a Temporal dev server, with **simulated providers** and local stand-ins for third parties. |
+| **Live integration verified** | Exercised against the real third-party service. **Nothing has this status.** |
+| **Staging verified** | Observed in a deployed staging environment. **Nothing has this status.** |
+| **Blocked** | Cannot be done without a credential, access or decision listed in [`blockers.md`](blockers.md). |
+| **Deferred** | Documented later release, or explicitly decided not to build for the MVP. |
 
-## MVP: product journey (spec §3)
-| Requirement | Implementation | Evidence | Status |
-|---|---|---|---|
-| Prompt → story with ≤3 skippable clarifying questions | `pipeline/story.py:run_intake`, `stages_plan.stage_intake`, `Questions` screen | F `test_strip_with_clarifying_question` | Locally verified |
-| Sensible defaults (4 pages, max 8, default style) | `config.py`, `story.normalise_brief` | U config test, F | Locally verified |
-| Formats: Western page, 3–4 panel strip | `packages/layouts/templates.json` (12 page + 4 strip templates), `art.choose_template` | U layout test, F, R | Locally verified |
-| Four style presets, tokens verbatim and versioned | `packages/styles/presets.json`, `catalog.styles` | U prompt compiler test | Locally verified |
-| Character cards, reference sheets (portrait, turnaround, expressions), crops, embeddings | `stages_plan.stage_character_sheet` | F reload test, E2E | Locally verified (placeholder art) |
-| Revise a character by instruction | `projects.revise_character`, workflow `revise_character` signal | R approvals test, E2E | Locally verified |
-| Recurring location references | `stages_plan.stage_location_ref` | F, R | Locally verified |
-| Editable Story Bible | `PATCH /v1/projects/{id}/bible`, `BibleEditor` | F `test_story_bible_edit_invalidates_cast_approval_target`, E2E | Locally verified |
-| Beat sheet + script, editable inline | `story.write_script`, `PATCH …/script`, `ScriptReview` | R approvals test, E2E | Locally verified |
-| Cast and script approval gates before spending | workflow `_gate`, `approvals` table, credit holds at each gate | R approvals, R insufficient-credits | Locally verified |
-| Progressive page/panel generation | workflow fan-out, `page.ready` events, `PagePreviews` | F, E2E | Locally verified |
-| Regenerate, edit by instruction | `PanelWorkWorkflow`, `editor.request_panel_work` | F, E2E | Locally verified |
-| Version comparison and restore | `GET …/versions`, `POST …/restore`, `Versions` dialog | F, R late-result, E2E | Locally verified |
-| Balloon move / resize / retype | `PATCH /v1/balloons/{id}`, Konva editor + keyboard/button alternative | F, A, E2E | Locally verified |
-| Layout change, panel reorder | `editor.change_layout`, `editor.reorder_panels` | A editor test, E2E (layout) | Locally verified |
-| Reader preview | `/projects/[id]/read` | E2E | Locally verified |
-| Export PDF, PNG, CBZ | `ExportWorkflow`, `pipeline/render.py` | F (validity, order, 2000×3000 px), E2E (PDF) | Locally verified |
-| Credit balance, usage history, billing screens | `GET /v1/credits`, `/billing` | A, E2E | Locally verified (purchases not exercisable without Stripe) |
-| Authentication and account settings | Clerk verification + dev mode; `/settings`, account deletion | A, R deletion, E2E (dev mode) | Dev mode locally verified; **Clerk: Implemented only** |
-| Project dashboard with empty states | `/dashboard` | E2E | Locally verified |
-| Recovery for failed / interrupted / partial work | `projects.resume`, `Stopped`, "Retry missing panels" | R outage, R partial, R expired | Locally verified |
-| Save status, conflict handling, reload restores state | editor save state machine; optimistic versions | F, A, E2E (reload ×2) | Locally verified |
-| Accessibility basics | labels, focus ring, skip link, live regions, keyboard balloon controls, canvas transcript in reader | `e2e/responsive.spec.ts` (skip link, no overflow) | Implemented; **no screen-reader or contrast audit** |
+A configuration file on its own is never counted as verified. "Schema-verified" below means a request or
+response was checked against the provider's published machine-readable schema, offline; it is weaker than a live call.
 
-## MVP: pipeline (spec §7)
-| # | Requirement | Implementation | Evidence | Status |
-|---|---|---|---|---|
-| 1 | Intake validation and moderation | `moderation.py` (rules + classifier), API pre-check | U, A, R moderation | Locally verified (classifier is a fake) |
-| 2 | Structured ComicBrief, versioned Story Bible | `domain/schemas.py`, `story_bibles.version` | F | Locally verified |
-| 3 | Character specs, sheets, crops, locations | see above | F | Locally verified |
-| 4 | Human cast approval | gate | R | Locally verified |
-| 5 | Beat sheet and structured script | `ScriptDraft` | F, EVAL | Locally verified |
-| 6 | Script validation + ≤2 repairs + human approval | `domain/validation.py`, `write_script` loop | U (12 rule cases), EVAL (`script_valid_after_repair`), R | Locally verified |
-| 7 | Deterministic layout and prompt compilation | `pipeline/art.py` | U (byte-identical prompts, fixed order, no dialogue) | Locally verified |
-| 8 | Reference-conditioned generation, view matching, continuity chains | `art.compile_panel`, `stage_plan_pages` chains, `stage_generate_panel` | U, F | Locally verified with fake images; **real conditioning unverified** |
-| 9 | Safety, identity, adherence, defect, stray-text checks | `pipeline/qa.py` | R QA tests | Logic locally verified; **judgement quality unverified** |
-| 10 | Bounded repair (≤2 automatic retries) | `definitions.run_panel` | R (exactly 3 versions) | Locally verified |
-| 11 | Vector lettering and composition | `pipeline/lettering.py`, `render.py` | U (order, overlap, overflow escalation, determinism) | Locally verified |
-| 12 | Finalise, upscale, export | `stage_export_page` (cached upscale), assemble | F | Locally verified with fake upscaler |
-| – | ≤4 characters, ≤3 per panel, 4–6 panels, 25 words, 3 balloons, valid refs | `validation.py`, `story.py`, `editor._check_text` | U, A | Locally verified |
-| – | Text never in pixels | constraint line in every image prompt; dialogue excluded from prompts; stray-text QA | U | Locally verified (prompt side) |
-| – | Safety failures never become visible | quarantine flag; never signed/listed/restorable | R safety test | Locally verified |
+Evidence keys: `U` test_unit · `A` test_api · `F` test_flow · `R` test_resilience · `P` test_providers ·
+`AU` test_auth (all under `services/backend/tests`, 209 tests) · `E2E` apps/web/e2e (7 tests) ·
+`OBS` docs/evidence/observability.json · `REL` docs/evidence/release-verification.json ·
+`INFRA` docs/evidence/infra-static-validation.json · `EVAL` simulated eval, 63 prompts.
 
-## Durability and data integrity
-| Requirement | Implementation | Evidence | Status |
-|---|---|---|---|
-| Explicit state transitions | `domain/states.py` | U | Locally verified |
-| Deterministic workflows, I/O in activities | `workflows/definitions.py` (no imports with I/O) | runs under Temporal's sandbox in every workflow test | Locally verified |
-| Timeouts, bounded retries, backoff with jitter | activity options + `_backoff` | R throttling/malformed | Locally verified |
-| Provider concurrency limits | Redis lease semaphore | used in every run | Implemented (no contention test) |
-| Cancellation | workflow cleanup, credit release | R cancellation | Locally verified |
-| Worker restart recovery | Temporal + idempotent stages | R restart (between activities) | Locally verified; **mid-activity kill not tested** |
-| Expired approvals | gate timeout → `expired` → resume | R expired | Locally verified |
-| Resumable exports | per-page `pages_done` | R export test | Locally verified |
-| Idempotent approvals, generation requests, webhooks | version-scoped approvals; idempotency keys; event-id dedupe | A create, R duplicate approvals, A webhooks (5 concurrent) | Locally verified |
-| Transactional outbox | `services/outbox.py` | A (row in same tx), R restart (delivery while no worker) | Locally verified |
-| SSE with sequence ids, replay, retention | `project_events`, `/events` | A SSE test over real HTTP | Locally verified |
-| Approvals scoped to content versions; edits invalidate | `approvals`, `cast_version`/`script_version` | R approvals | Locally verified |
-| Late results cannot overwrite newer edits | `panels.intent_seq` | R late-result | Locally verified |
-| Immutable export revision | `exports.revision` + sha256 | R export | Locally verified |
-| Provider request ids, reconcile ambiguous timeouts | `providers/metering._paid_request` | R ambiguous (8 submits, not 9) | Locally verified with fake; **fal behaviour unverified** |
-| Schema: entities, FKs, indexes, uniqueness, optimistic concurrency | `db/models.py`, `migrations/0001` | `alembic check`, all tests | Locally verified |
-
-## Credits and billing
-| Requirement | Implementation | Evidence | Status |
-|---|---|---|---|
-| Append-only ledger | DB trigger | A append-only | Locally verified |
-| Atomic reserve / settle / release / reconcile | `services/credits.py` | A (20 concurrent → 6 succeed), A idempotency, every R test ends reconciled | Locally verified |
-| Credits separate from provider cost | `credit_ledger` vs `provider_usage` | – | Locally verified |
-| Policy for retries, regenerations, cancel, partial failure, refunds | `docs/billing-policy.md` | R QA, R safety, R partial, R cancel, A refunds | Locally verified |
-| Webhook signatures, duplicates, replay, ordering | `services/billing.py` | A webhook test (hand-signed payloads) | Locally verified; **Stripe: Implemented only** |
-| Checkout and portal | `billing.create_checkout/portal` | none | Implemented |
-| Configurable entitlements and prices | `config.py` | – | Implemented |
-| Per-user / per-project / global spend limits | `metering.check_spend_limits` | A `test_spend_limits_refuse_new_paid_work` | Locally verified (limit check); end-to-end enforcement with real prices unverified |
-| Estimate before expensive generation | `GET …/estimate`, wizard and approve dialog | A, R, E2E | Locally verified |
-
-## Errors and security
-| Requirement | Evidence | Status |
+## 1. Product journey (spec §3)
+| Requirement | Status | Evidence |
 |---|---|---|
-| Typed error contract (code, message, request id, retryable, fields) | U, A | Locally verified |
-| No stack traces, secrets, prompts or provider responses to users | A | Locally verified |
-| Frontend error boundaries and recovery controls | `app/error.tsx`, `Notice` + retry everywhere | Implemented |
-| Permanent failures not auto-retried | U (non-retryable list), R outage | Locally verified |
-| Ownership checks everywhere | A (20 routes as another user → 404) , E2E | Locally verified |
-| CSRF, CORS allowlist, headers, rate limits, size limits | A | Locally verified |
-| Image validation, SSRF defence, SVG/XML escaping | U | Locally verified |
-| Startup config validation | U | Locally verified |
-| Content restrictions | U, A, R | Locally verified (rules); classifier quality unverified |
-| Data deletion | R account deletion; A `test_deleted_projects_are_purged_with_their_files` | Locally verified |
+| Prompt → story, ≤3 skippable questions, defaults (4 pages, max 8) | Locally verified | F strip+question test; U config |
+| Western page and 3–4 panel strip; 4 style presets, tokens verbatim | Locally verified | U layout and compiler tests; F; EVAL |
+| Character cards, reference sheets, crops, embeddings, revision | Locally verified (placeholder art) | F; R approvals; E2E journey |
+| Editable Story Bible, beat sheet, script | Locally verified | F bible test; R approvals; E2E |
+| Cast and script approval gates before spending | Locally verified | R approvals; R insufficient-credits; P spend tests |
+| Progressive generation with live progress | Locally verified | F; E2E; A SSE test |
+| Regenerate, fix by instruction, versions, restore | Locally verified | F; R late-result; E2E |
+| Balloon move/resize/retype, layout change, panel reorder | Locally verified | F; A editor test; E2E journey and keyboard test |
+| Reader, PDF/PNG/CBZ export | Locally verified | F (validity, order, 2000×3000 px); R provenance; E2E |
+| Editor and export lettering agree | Locally verified | E2E lettering: per-balloon ink overlap ≥ 0.997 vs ≤ 0.57 for mismatched pairs |
+| Credits, history, billing screens | Locally verified; purchases Blocked | A; AU Stripe request shapes; E2E. Real Checkout needs Stripe test keys |
+| Sign-in and account settings | Dev mode locally verified; Clerk validation locally verified; real Clerk Blocked | AU (9 rejection cases, alg confusion, refresh, isolation); E2E |
+| Recovery for failed/interrupted/partial work | Locally verified | R outage, partial, expired; REL worker kill |
+| Reload restores project and active jobs; save status; conflicts | Locally verified | F; A; E2E (two reloads, 409 path) |
+| Accessibility | Locally verified (automated only) | E2E a11y: axe WCAG 2.1 A/AA clean on 9 screens; keyboard-only create and edit. Manual screen-reader audit not done |
 
-## Observability and operations
-| Requirement | Evidence | Status |
+## 2. Pipeline (spec §7)
+| # | Requirement | Status | Evidence |
+|---|---|---|---|
+| 1 | Intake validation and moderation | Locally verified; classifier quality Blocked | U; A; R moderation. Rules are real; the LLM classifier is simulated |
+| 2–3 | ComicBrief, versioned Bible, specs, sheets, locations | Locally verified | F; EVAL |
+| 4, 6 | Human cast and script approval, version-scoped | Locally verified | R approvals (stale 409, duplicates, edits invalidate) |
+| 5–6 | Beat sheet, script, validation, ≤2 repairs | Locally verified | U (12 rule cases); EVAL `script_valid_after_repair` = 1.0 |
+| 7 | Deterministic layout and prompt compilation | Locally verified | U (byte-identical prompts, fixed order, no dialogue) |
+| 8 | Reference-conditioned generation, view matching, continuity | Schema-verified + locally verified with fake images; real conditioning Blocked | P contract tests (108 cases vs fal's published schema); U; F |
+| 9 | Safety, identity, adherence, defect, stray-text checks | Logic locally verified; judgement quality Blocked | R QA tests; P Anthropic refusal handling |
+| 10 | Bounded repair: ≤2 automatic retries | Locally verified | R (exactly 3 versions) |
+| 10 | **Targeted repair (inpainting)** of a local defect | Locally verified with fake inpainter; schema-verified for `fal-ai/flux-pro/v1/fill` | R repair test: pixels outside the mask are identical; P contract |
+| 11 | Vector lettering, reading order, tails, overflow handling | Locally verified | U; E2E lettering |
+| 12 | Finalise, upscale, export | Locally verified with fake upscaler; schema-verified for `fal-ai/esrgan` | F; P |
+| – | Limits: 4 characters, 3 per panel, 4–6 panels, 25 words, 3 balloons | Locally verified | U; A |
+| – | Safety failures never visible | Locally verified | R safety test + URL audit across project JSON, dashboard, version history, exports |
+| – | Primary and fallback image models | Locally verified (routing); fallback contract schema-verified; real failover Blocked | P breaker test; P Seedream contract |
+| – | Provenance labelling | Locally verified (IPTC `trainedAlgorithmicMedia` in PNG XMP, PDF, CBZ) | R provenance test. Signed C2PA manifests: Deferred, see decisions.md D-PROV |
+
+## 3. Provider correctness and cost enforcement
+| Requirement | Status | Evidence |
 |---|---|---|
-| Structured logs with ids, redaction | U redaction | Locally verified |
-| Trace propagation API → outbox → workflow → activity | R trace test | Locally verified |
-| Metrics (requests, workflows, providers, quality, credits, health) | names cross-checked against dashboards/alerts by script | Implemented; **not viewed in Grafana** |
-| Langfuse, Sentry with the same privacy controls | none | Implemented |
-| Dashboards, alert rules, runbooks | `infra/observability`, `docs/runbooks` | Implemented; **not loaded into Prometheus/Grafana** |
-| Liveness, readiness, graceful shutdown | `/readyz` checked by the local stack | Locally verified (readiness) |
-| Local setup, Compose, observability profile | native scripts used for every run here | Native path locally verified; **Compose not run (no Docker here)** |
-| Multi-stage non-root images | `infra/docker` | Implemented; **never built** |
-| `.env.example`, migrations, demo seed | – | Migrations locally verified |
-| CI | `.github/workflows` | Implemented; **never run** |
-| IaC, staging/production separation | `infra/render`, `infra/terraform` | Implemented; **not validated or applied** |
-| Smoke tests, rollback, migration strategy, backup/restore, retention | `scripts/smoke.sh`, `docs/operations.md`, runbooks | Implemented; **restore drill not performed** |
-| Eval harness, golden set, rubrics, reporting | `evals/`, `storypanel/evals/harness.py` | Simulated run locally verified; **no live evidence** |
+| fal request/response contracts from the official schema, not guesses | Schema-verified | `providers/fal_profiles.py`; P: 108 request cases + 6 response cases against `tests/fixtures/fal_schema_fields.json` (extracted from `@fal-ai/client` 1.10.1) |
+| Unverified endpoints cannot be configured | Locally verified | P: live config rejects an unknown model id |
+| Embedding model accepts images | Locally verified (allow-list); live Blocked | P: config rejects non-multimodal Voyage models; SDK routes images only to multimodal models |
+| Async polling, queued failure, unknown id, timeout classification | Locally verified against the SDK's status classes | P `test_queue_outcomes…` |
+| Cancellation reaches the provider | Locally verified | P cancellation test |
+| Missing, zero, malformed or stale pricing refuses billable work | Locally verified | P: 8 bad-entry cases; live config refusals; pre-dispatch refusal with zero provider calls |
+| Explicitly free operations are separately marked | Locally verified | P (`"free": true`) |
+| Estimated cost reserved against ceilings before dispatch; settled to actual | Locally verified | P: 20 concurrent calls, exactly 10 admitted at the ceiling; text call reserves full output budget |
+| Unknown costs stay visible and conservatively counted | Locally verified | P ambiguous, cancelled and lost-result tests; `sp_provider_unreconciled_usd` |
+| No resubmission after an ambiguous submission | Locally verified | P: 3 attempts, 1 submission |
+| Timeout after submission resumes the same request | Locally verified | P; REL worker kill |
+| A paid result lost in a crash is re-fetched, not re-bought | Locally verified | P refetch test; found by REL |
+| Customer credits separate from provider cost | Locally verified | separate tables; REL load run reconciles both |
+| Real prices, real billing behaviour of each provider | Blocked | no price in the example table is verified; see blockers B1, B5 |
 
-## Roadmap items deliberately not built
-| Item | Release | Extension point left in place |
+## 4. Durability and data integrity
+| Requirement | Status | Evidence |
 |---|---|---|
-| Upload own character art / style reference | v2 | `validate_image` is upload-ready; `character_refs` accepts any asset |
-| Webtoon, right-to-left manga | v2 | `ComicFormat` enum, layout catalog, `reading_key` is the one place order is defined |
-| 10+ presets, custom style adapters | v2 / v3 | presets are data; `characters.lora_id` column |
-| Full balloon editor | v2 | geometry/style JSON already stores rotation and tail |
-| Character library / series | v2 | `characters.library_id` column |
-| Translation, multilingual lettering | v2 | text is a separate vector layer; Latin fonts only today |
-| Share links, public reader, gallery | v2 / v3 | none |
-| Motion comics, public business API | v3 | none |
-| Inpainting, two-pass multi-character compositing, C2PA credentials | unscheduled | `ImageRequest.mode`; export metadata hook in `render.py` |
+| Explicit state machine | Locally verified | U |
+| Deterministic workflows, I/O only in activities | Locally verified | every workflow test runs under Temporal's sandbox |
+| Timeouts, bounded retries, backoff with jitter, concurrency caps | Locally verified (caps not load-tested to contention) | R throttling; REL load |
+| Cancellation releases credits | Locally verified | R |
+| Worker restart at a gate | Locally verified | R restart test |
+| **Worker SIGKILL during an in-flight provider request** | Locally verified | REL: recovered in 74 s (60 s heartbeat timeout), no duplicate rows, sheets complete |
+| Expired approvals, resumable exports | Locally verified | R |
+| Idempotent creation, approvals, webhooks | Locally verified | A; R; A webhooks (5 concurrent deliveries) |
+| Transactional outbox | Locally verified | A; R restart |
+| SSE sequence ids, replay, retention reset | Locally verified | A, over real HTTP |
+| Late results cannot overwrite newer edits; immutable export revision | Locally verified | R |
+| Schema, constraints, migrations | Locally verified | `alembic check`; upgrade on populated DB; REL restore keeps head and triggers |
+| Backup restore and integrity after restore | Locally verified (logical dump, small data); managed PITR Blocked | REL: 25 tables, 3,318 rows identical, ledger digest identical, restored API serves a comic |
 
-## Release gates not met
-1. No live provider call has ever been made: model ids, request shapes, cost and latency are unverified.
-2. No quality metric from §8.3 has been measured (the simulated eval cannot measure them).
-3. Clerk and Stripe have not been exercised against real accounts.
-4. Container images have not been built; CI has not run; nothing has been deployed.
-5. No accessibility audit, load test, security review or restore drill.
-6. Legal review of terms, IP/likeness policy, output ownership and data-protection obligations is outstanding.
-7. Golden set has 55 prompts (the document asks for 60–100).
+## 5. Credits and billing
+| Requirement | Status | Evidence |
+|---|---|---|
+| Append-only ledger; atomic reserve/settle/release; reconciliation | Locally verified | A (20 concurrent → 6 succeed); REL load: zero drift across 21 accounts |
+| Billing policy for retries, regenerations, cancel, partial failure, refunds | Locally verified | R; A refunds |
+| Webhook signature, duplicates, replay, out-of-order | Locally verified with Stripe's own verifier on hand-signed payloads; real delivery Blocked | A |
+| Checkout and portal request shapes; customer idempotency | Locally verified against a local stub of the Stripe API | AU |
+| Real Checkout, subscription lifecycle, cancellation | Blocked | B3 |
+| Estimates before spending; configurable prices and entitlements | Locally verified | A; R; E2E |
+
+## 6. Security
+| Requirement | Status | Evidence |
+|---|---|---|
+| Typed error contract; nothing internal leaks | Locally verified | U; A; AU |
+| Ownership on every project/panel/page/balloon/export/stream | Locally verified | A (20 routes as another user → 404); AU with Clerk-mode tokens; E2E |
+| CSRF posture, CORS allowlist, headers, rate limits, size limits | Locally verified | A |
+| Image validation, SSRF defence, markup escaping | Locally verified | U |
+| Local auth and fake providers impossible in staging/production | Locally verified | AU: 8 refusal cases per environment, including via environment variables |
+| No secrets in browser bundle | Locally verified | `scripts/check-bundle-secrets.sh` with 10 canary secrets: none in 41 client files |
+| No secrets, tokens, emails or prompt text in logs, traces, error reports | Locally verified | OBS: 6 canaries + JWT/signed-URL/email/prompt patterns absent from logs, Sentry envelope and Langfuse payload |
+| Content restrictions; data deletion | Locally verified | U; A; R account deletion; A purge job |
+| Penetration test, legal review of policy | Blocked | B8 |
+
+## 7. Observability
+| Requirement | Status | Evidence |
+|---|---|---|
+| Correlated trace: request → workflow → activity → provider call | Locally verified over real OTLP/HTTP | OBS: one trace id, 35 spans, services api + worker, release on spans |
+| Structured, redacted logs with identifiers | Locally verified | OBS: all lines carry base fields; activity and provider lines carry ids, model, tokens, cost, basis |
+| Metrics emitted with bounded labels | Locally verified | OBS: 59 `sp_` families scraped; no identifier-like label values; max 90 series per metric; routes are templates |
+| Sentry capture with release, no PII | Locally verified against a local envelope receiver | OBS: 1 event, release and environment set, no user block, no local variables |
+| Langfuse tracing with privacy controls | Locally verified against a local OTLP receiver | OBS: 13 observations with model, usage, prompt version; no prompt text |
+| Application keeps working when telemetry is down | Locally verified | OBS: comic reaches the cast gate with all three sinks refused |
+| Alert rules and dashboard queries are valid PromQL and reference existing runbooks | Locally verified (syntax) | INFRA: 18 alerts, 36 queries parse |
+| An alert fires and recovers | Condition locally verified; rule evaluation Blocked | OBS: `sp_dependency_up` 1 → 0 → 1 with `/readyz` 200 → 503 → 200. Prometheus was not run (B6) |
+| Dashboards render; collector, Tempo, Grafana work | Blocked | B6 (no container runtime here) |
+
+## 8. Infrastructure and operations
+| Requirement | Status | Evidence |
+|---|---|---|
+| Local run without Docker | Locally verified | every run above used `scripts/native-*.sh` |
+| Docker images build, run non-root; Compose stack | Blocked | B6. Dockerfiles statically checked (multi-stage, uid 10001, COPY sources exist) |
+| CI workflow | Implemented; every command in it was run locally except Docker, Terraform, promtool and Trivy steps | this file's evidence |
+| Terraform | Syntax parsed, expected resources present (INFRA); `terraform validate`/`plan` Blocked | B6, B7 |
+| Render blueprint | YAML parsed; every `SP_` key is a real setting (INFRA); Render plan Blocked | B7 |
+| Smoke test, rollback, migration strategy, runbooks | Implemented | docs; smoke script not run against a deployment |
+| Load under a documented workload | Locally verified (application plane only) | REL: 20 concurrent users, 1,321 requests, p95 149 ms, 0 errors |
+| Quality, cost and latency targets (spec §8.3) | Blocked | B1, B2: need live providers and an approved budget |
+
+## 9. Deferred (documented later releases, unchanged)
+Upload of own art and style references; webtoon and right-to-left manga; 10+ presets and custom adapters; full
+balloon editor; character library; translation; share links and gallery; motion comics; public API (v2/v3).
+Also deferred by decision: signed C2PA manifests (D-PROV), two-pass multi-character compositing, a second text
+provider, browser-side trace spans.
+
+## Release gates
+| Gate | State |
+|---|---|
+| G1 All MVP requirements implemented and locally verified | **Met**, with the Blocked items above excepted |
+| G2 Each provider exercised live with the configured models | Not met (B1) |
+| G3 §8.3 quality, cost and latency measured on the golden set | Not met (B1, B2) |
+| G4 Clerk and Stripe exercised in test mode | Not met (B3, B4) |
+| G5 Images built, CI green on the hosting platform, staging deployed and smoke-tested | Not met (B6, B7) |
+| G6 Observability stack running with a fired and resolved alert | Not met (B6) |
+| G7 Manual accessibility audit, security review, restore drill on managed infrastructure | Not met (B8) |
+| G8 Legal review: terms, IP/likeness policy, provenance obligations, data protection | Not met (B8) |
+
+**The application is not production-ready.** G1 is the only gate with evidence.

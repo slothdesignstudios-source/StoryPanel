@@ -14,9 +14,11 @@ as "finished with gaps". Credits for undelivered work are released automatically
    `SP_PROVIDER_CONCURRENCY_IMAGE` / `_TEXT` / `_VISION` (takes effect on worker restart).
 
 ## Mitigation
-- **Image model down:** set `SP_IMAGE_MODEL_GENERATE` / `SP_IMAGE_MODEL_EDIT` to the fallback model
-  chosen in the last bake-off and restart workers. Check its `ModelProfile` first (docs/providers.md).
-  Failover is a deliberate operator action, not automatic: a different model changes the look of a comic mid-run.
+- **Image model down:** after five provider errors in a minute the circuit breaker routes *new* requests to
+  `SP_IMAGE_MODEL_FALLBACK` / `SP_IMAGE_MODEL_FALLBACK_GENERATE` for two minutes at a time (log line
+  `provider_fallback_used`). If no fallback is configured, panels fail individually and users can retry.
+  To force the fallback for longer, swap the primary and fallback settings and restart workers. Both must have a
+  verified contract and a current price or the worker will refuse to start.
 - **Text/vision provider down:** there is no second text provider configured. Pause intake by setting
   `SP_SPEND_LIMIT_GLOBAL_DAILY_USD=0` (new paid work is refused with a clear message; nothing is lost).
 - Do not raise retry counts during an outage: retries are bounded on purpose.
@@ -26,6 +28,8 @@ Users resume from the project page. To find affected comics:
 `select id, status, failure->>'code', resume_from from projects where status='failed' and updated_at > now() - interval '2 hours';`
 
 ## Ambiguous outcomes
-Requests that timed out after submission keep their provider request id and are resumed, not resubmitted.
-Rows stuck in `started`/`ambiguous` for 30+ minutes are logged as `provider_requests_unreconciled`:
-compare `provider_usage.provider_request_id` with the provider's dashboard before issuing any goodwill credit.
+Requests that timed out after submission keep their provider request id and are resumed or re-fetched, never
+resubmitted. A request whose *submission* timed out is marked `ambiguous`, keeps its estimated cost and fails that
+unit of work permanently (the user can retry it, which is a new, separately counted request). The maintenance job
+asks the provider about every request left open for 30 minutes (`provider_requests_reconciled` log line).
+Before issuing goodwill credit, compare `provider_usage.provider_request_id` with the provider's dashboard.

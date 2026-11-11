@@ -900,6 +900,8 @@ export interface components {
             font_size: number;
             /** H */
             h: number;
+            /** Lines */
+            lines?: string[] | null;
             /**
              * Rotation
              * @default 0
@@ -909,6 +911,10 @@ export interface components {
             tail?: {
                 [key: string]: number;
             } | null;
+            /** Text Size */
+            text_size?: number | null;
+            /** Typeset */
+            typeset?: number | null;
             /** W */
             w: number;
             /** X */

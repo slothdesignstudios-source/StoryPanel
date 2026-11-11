@@ -27,7 +27,9 @@ anything after a cancellation; work a provider outage prevented.
 - A balance cannot be overspent by concurrent requests: each hold is one guarded `UPDATE`.
 - The ledger is append-only at the database level and reconciled against balances every minute.
 - Payment webhooks are signature-checked, deduplicated by event id, and order-safe for subscriptions.
-- We do **not** guarantee that a provider bills us exactly once per image. See decisions.md C5.
+- We do **not** guarantee that a provider bills us exactly once per image. See decisions.md C5 and D-COST.
+- Provider spend (USD) is reserved before each call and capped per comic, per user per day and globally per day.
+  This is separate from credits: hitting a spend ceiling stops generation without charging credits for undelivered work.
 
 Indicative plan sizes and prices in the product document are unvalidated. Review the terms a "commercial-use
 licence" would need with counsel before offering one; the product does not currently grant or advertise one.

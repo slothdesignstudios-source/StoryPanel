@@ -971,6 +971,21 @@
       "title": "H",
       "type": "number"
      },
+     "lines": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 40,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lines"
+     },
      "rotation": {
       "default": 0,
       "maximum": 45.0,
@@ -997,6 +1012,28 @@
        }
       ],
       "title": "Tail"
+     },
+     "text_size": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Text Size"
+     },
+     "typeset": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Typeset"
      },
      "w": {
       "exclusiveMinimum": 10.0,

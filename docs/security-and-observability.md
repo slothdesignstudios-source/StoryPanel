@@ -52,6 +52,11 @@ Dashboard: `infra/observability/grafana/dashboards/storypanel-overview.json`. Al
 **Health.** `/healthz` (liveness), `/readyz` (database, Redis, storage, Temporal; fails during shutdown).
 Telemetry is best effort everywhere: an exporter failure increments `sp_telemetry_failures_total` and nothing else.
 
+**Verified how.** `scripts/verify-observability.py` runs the API and a worker against local receivers that speak
+OTLP/HTTP, the Sentry envelope protocol and Langfuse's OTLP ingestion, and records what arrived in
+`docs/evidence/observability.json`. `scripts/validate-infra.py` parses every alert and dashboard query as PromQL.
+
 **Not built.** Browser-side spans: the web app starts the trace (`traceparent` on every API call) but exports no spans of its own; browser errors go to Sentry if a DSN is set.
-Log shipping (Loki or similar) is left to the platform. Dashboards and alert rules have not been loaded into a
-running Grafana/Prometheus; metric names were checked against the code by script.
+Log shipping (Loki or similar) is left to the platform. Prometheus, Alertmanager, Grafana, Tempo and the
+OTel Collector have not been run (no container runtime in the build environment), so rule evaluation, notification
+routing and dashboard rendering are unverified.

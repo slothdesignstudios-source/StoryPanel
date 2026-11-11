@@ -4,8 +4,10 @@ Turn one sentence into a finished comic: StoryPanel proposes a cast and a script
 every panel with the same characters, letters it with editable vector balloons, and exports PDF, PNG or CBZ.
 
 **Status: MVP implemented and verified locally with simulated providers. Not production-ready.**
-No real model provider, Clerk or Stripe has been exercised, and nothing has been deployed.
-Read [`docs/requirements-matrix.md`](docs/requirements-matrix.md) for what is and is not proven.
+No real model provider, Clerk or Stripe has been exercised, no container image has been built, and nothing has been
+deployed. Start with [`docs/requirements-matrix.md`](docs/requirements-matrix.md) (what is proven, with evidence),
+[`docs/verification-report.md`](docs/verification-report.md) (what was run) and
+[`docs/blockers.md`](docs/blockers.md) (what is needed from outside).
 
 ## Layout
 ```
@@ -75,6 +77,20 @@ cd apps/web && pnpm e2e -- --trace off
 Backend tests need Postgres (database `storypanel_test`) and Redis; they start S3 emulation and a Temporal
 dev server themselves. The e2e suite needs the stack running. The eval needs Postgres, Redis and an S3 endpoint.
 
+Release verification (each writes a report under `docs/evidence/`):
+```bash
+cd services/backend && uv run python ../../scripts/verify-release.py
+```
+```bash
+cd services/backend && uv run python ../../scripts/verify-observability.py
+```
+```bash
+cd services/backend && uv run python ../../scripts/validate-infra.py
+```
+```bash
+scripts/check-bundle-secrets.sh
+```
+
 After changing an API contract:
 ```bash
 (cd services/backend && uv run python ../../scripts/export-openapi.py) && (cd apps/web && pnpm gen:api)
@@ -82,12 +98,13 @@ After changing an API contract:
 CI fails if the generated files are stale.
 
 ## Going live
-Follow [`docs/providers.md`](docs/providers.md) → "Before the first live run", then
-[`docs/operations.md`](docs/operations.md). Every setting is listed in [`.env.example`](.env.example).
+Follow [`docs/blockers.md`](docs/blockers.md), [`docs/providers.md`](docs/providers.md) → "Before the first live run",
+then [`docs/staging-plan.md`](docs/staging-plan.md). Every setting is listed in [`.env.example`](.env.example).
 External accounts needed: Anthropic, fal, Voyage, Clerk, Stripe, Temporal Cloud, an S3-compatible bucket, and a host (Render blueprint provided).
 
 ## Documentation
-- [Requirements matrix and unmet release gates](docs/requirements-matrix.md)
+- [Requirements matrix and release gates](docs/requirements-matrix.md)
+- [Verification report](docs/verification-report.md) · [Blockers](docs/blockers.md) · [Staging deployment plan](docs/staging-plan.md)
 - [Decisions and recorded conflicts in the spec](docs/decisions.md)
 - [Credits and billing policy](docs/billing-policy.md)
 - [Providers: verified vs unverified](docs/providers.md)

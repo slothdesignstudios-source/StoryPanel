@@ -20,3 +20,4 @@ test-results/
 playwright-report/
 evals/reports/*.json
 !evals/reports/.gitkeep
+*.tsbuildinfo

@@ -57,5 +57,10 @@ CI applies all migrations to an empty database, checks they match the models (`a
 Account deletion is available in Settings and via the Clerk `user.deleted` webhook.
 Whether keeping ledger rows after deletion satisfies each launch market's law needs legal review.
 
+## Prices
+The pricing table (`SP_PRICING_FILE` or `SP_PRICING_JSON`) must be re-verified at least every
+`SP_PRICING_MAX_AGE_DAYS` (default 60): update each `verified_at` after checking the provider's page and redeploy.
+If it goes stale, workers refuse billable calls with `pricing_unavailable` rather than spend against unknown rates.
+
 ## Local operation
 See the README. `scripts/native-services.sh` and `scripts/native-stack.sh` run everything without Docker.
