@@ -359,6 +359,57 @@ class ProviderUsage(Base):
     )
 
 
+class ProviderAttempt(Base):
+    """One provider submission (or synchronous call) beneath a logical operation
+    (`provider_usage`). Attempts are never deleted or reopened: a retry after a failure is
+    a new attempt, so every potentially billed request stays counted. A database trigger
+    keeps identity, request id and settled costs immutable (migration 0003).
+
+    cost_basis says what `cost_counted_usd` is:
+      reserved      estimate held before the outcome is known
+      unresolved    outcome unknown (ambiguous, cancelled, lost): estimate kept as a potential charge
+      calculated    usage x operator price table; NOT a provider-confirmed charge
+      provider_confirmed  a charge the provider reported (billing export / API)
+      released      definitively never billed (rejected before queueing, never sent)
+      assumed_unbilled    failed at the provider and the operator chose not to count failures
+    """
+
+    __tablename__ = "provider_attempts"
+    __table_args__ = (UniqueConstraint("operation_id", "attempt_no"),)
+    id: Mapped[uuid.UUID] = pk()
+    operation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("provider_usage.id"), index=True)
+    attempt_no: Mapped[int] = mapped_column(Integer)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
+    stage: Mapped[str] = mapped_column(String(40))
+    provider: Mapped[str] = mapped_column(String(40))
+    model: Mapped[str] = mapped_column(String(120))
+    operation: Mapped[str] = mapped_column(String(30))
+    provider_request_id: Mapped[str | None] = mapped_column(String(200), index=True)
+    # reserved|submitting|started|succeeded|succeeded_unused|failed|released|ambiguous|cancelled|lost
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    price_ref: Mapped[JSON] = mapped_column(JSONB)
+    cost_estimate_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    cost_counted_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    cost_basis: Mapped[str] = mapped_column(String(24), default="reserved")
+    cost_calculated_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    cost_confirmed_usd: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    confirmed_source: Mapped[str | None] = mapped_column(String(120))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    images: Mapped[int] = mapped_column(Integer, default=0)
+    error_code: Mapped[str | None] = mapped_column(String(40))
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ProjectEvent(Base):
     __tablename__ = "project_events"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

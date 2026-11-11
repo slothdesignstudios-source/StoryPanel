@@ -81,8 +81,38 @@ class RequestPending(Exception):
 
 
 class RequestUnknown(Exception):
-    """The provider has no record of this request id: it was never accepted, so nothing
-    was produced or billed and a new submission is safe."""
+    """The provider cannot produce this request's result any more: the id is unknown to the
+    endpoint (never accepted, or past retention) or the result file has expired.
+
+    This is NOT proof that nothing was produced or billed. Callers keep the attempt's
+    estimated cost counted as an unresolved potential charge."""
+
+    def __init__(self, request_id: str, reason: str = "unknown_request") -> None:
+        super().__init__(request_id)
+        self.request_id = request_id
+        self.reason = reason
+
+
+class RetrievalFailed(Exception):
+    """A transient failure while asking about, or downloading, an accepted request (5xx,
+    429, connection reset, timeout). The request id stays valid: retry retrieval, never
+    generation."""
+
+    def __init__(self, request_id: str, reason: str) -> None:
+        super().__init__(f"{request_id}: {reason}")
+        self.request_id = request_id
+        self.reason = reason
+
+
+class JobFailed(Exception):
+    """The provider definitively reported that this accepted request failed and produced
+    no output. A new attempt is permitted; whether the failure was billed is policy."""
+
+    def __init__(self, request_id: str, error_type: str | None = None, *, moderation: bool = False) -> None:
+        super().__init__(f"{request_id}: {error_type or 'failed'}")
+        self.request_id = request_id
+        self.error_type = error_type
+        self.moderation = moderation
 
 
 class TextProvider(Protocol):
@@ -124,11 +154,11 @@ class UpscaleProvider(Protocol):
     name: str
     model: str
 
-    async def submit(self, image: bytes, factor: int, ctx: CallContext) -> str: ...
+    async def submit(self, image: bytes, factor: int, ctx: CallContext, *, model: str) -> str: ...
 
-    async def fetch(self, request_id: str, *, wait_seconds: float) -> ImageResult: ...
+    async def fetch(self, model: str, request_id: str, *, wait_seconds: float) -> ImageResult: ...
 
-    async def cancel(self, request_id: str) -> None: ...
+    async def cancel(self, model: str, request_id: str) -> None: ...
 
 
 ASPECTS: dict[str, float] = {

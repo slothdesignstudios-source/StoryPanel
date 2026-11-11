@@ -115,14 +115,21 @@ class _Http(Exception):
     pass
 
 
-async def test_queue_outcomes_are_classified_from_sdk_status() -> None:
-    """The fal SDK reports a failed queued request as Completed(error=...); a 404 on status
-    means the id is unknown. Neither may be mistaken for success or for 'still running'."""
+async def test_queue_outcomes_are_classified_from_sdk_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only Completed(error=...) is a definitive failure. Transport trouble on status, result
+    or download of an accepted request is RetrievalFailed (the id stays valid); a 404 on
+    status, or an expired result file, is RequestUnknown (not proof of no charge)."""
+    import httpx
     from fal_client.client import FalClientHTTPError
 
+    from storypanel.providers.base import JobFailed, RetrievalFailed
+
+    def http_error(code: int) -> FalClientHTTPError:
+        return FalClientHTTPError("x", code, {}, response=SimpleNamespace(status_code=code))  # type: ignore[arg-type]
+
     class Client:
-        def __init__(self, status: Any) -> None:
-            self._status = status
+        def __init__(self, status: Any, result: Any = None) -> None:
+            self._status, self._result = status, result
 
         async def status(self, app: str, rid: str) -> Any:
             if isinstance(self._status, Exception):
@@ -130,30 +137,60 @@ async def test_queue_outcomes_are_classified_from_sdk_status() -> None:
             return self._status
 
         async def result(self, app: str, rid: str) -> Any:
-            return {"images": [{"url": "https://cdn/x.png"}]}
+            if isinstance(self._result, Exception):
+                raise self._result
+            return {"images": [{"url": "https://cdn.example/x.png"}]}
 
-    def provider(status: Any) -> fal_image.FalImageProvider:
+    def provider(status: Any, result: Any = None) -> fal_image.FalImageProvider:
         p = fal_image.FalImageProvider.__new__(fal_image.FalImageProvider)
-        p._client = Client(status)  # type: ignore[assignment]
+        p._client = Client(status, result)  # type: ignore[assignment]
         return p
 
-    with pytest.raises(AppError) as e:
-        await provider(Completed(logs=None, metrics={}, error="CUDA OOM", error_type="internal")).fetch(
-            "fal-ai/nano-banana-2/edit", "r1", wait_seconds=0
-        )
-    assert e.value.code is ErrorCode.PROVIDER_ERROR and e.value.retryable
-    with pytest.raises(AppError) as e:
-        await provider(
-            Completed(logs=None, metrics={}, error="blocked", error_type="content_policy_violation")
-        ).fetch("fal-ai/nano-banana-2/edit", "r1", wait_seconds=0)
-    assert e.value.code is ErrorCode.MODERATION_BLOCKED and not e.value.retryable
+    async def fetch(status: Any, result: Any = None) -> Any:
+        return await provider(status, result).fetch("fal-ai/nano-banana-2/edit", "r1", wait_seconds=0)
+
+    done = Completed(logs=None, metrics={})
+    with pytest.raises(JobFailed) as jf:
+        await fetch(Completed(logs=None, metrics={}, error="CUDA OOM", error_type="internal"))
+    assert not jf.value.moderation
+    with pytest.raises(JobFailed) as jf:
+        await fetch(Completed(logs=None, metrics={}, error="blocked", error_type="content_policy_violation"))
+    assert jf.value.moderation
     with pytest.raises(RequestPending):
-        await provider(InProgress(logs=None)).fetch("fal-ai/nano-banana-2/edit", "r1", wait_seconds=0)
-    resp = SimpleNamespace(status_code=404)
-    with pytest.raises(RequestUnknown):
-        await provider(FalClientHTTPError("not found", 404, {}, response=resp)).fetch(  # type: ignore[arg-type]
-            "fal-ai/nano-banana-2/edit", "r1", wait_seconds=0
-        )
+        await fetch(InProgress(logs=None))
+    with pytest.raises(RequestUnknown) as unk:
+        await fetch(http_error(404))
+    assert unk.value.reason == "unknown_request"
+    for transient in (http_error(503), http_error(429), httpx.ConnectError("reset"),
+                      httpx.ReadTimeout("slow"), TimeoutError()):  # fmt: skip
+        with pytest.raises(RetrievalFailed):
+            await fetch(transient)
+    with pytest.raises(RetrievalFailed):
+        await fetch(done, result=http_error(502))
+
+    # result download: 503 and resets are transient, 403/404/410 mean the file expired
+    monkeypatch.setattr(fal_image, "assert_public_https_url", lambda url: None)
+    real_client = httpx.AsyncClient
+    mode: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if mode["kind"] == "reset":
+            raise httpx.RemoteProtocolError("peer closed connection")
+        return httpx.Response(mode["kind"], content=png())
+
+    monkeypatch.setattr(fal_image.httpx, "AsyncClient",
+                        lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))  # fmt: skip
+    for kind in (503, "reset"):
+        mode["kind"] = kind
+        with pytest.raises(RetrievalFailed):
+            await fetch(done)
+    for kind in (403, 404, 410):
+        mode["kind"] = kind
+        with pytest.raises(RequestUnknown) as unk:
+            await fetch(done)
+        assert unk.value.reason == "result_expired"
+    mode["kind"] = 200
+    assert (await fetch(done)).data == png()
 
 
 # ------------------------------------------------------------------ anthropic
@@ -323,8 +360,8 @@ async def test_text_calls_reserve_the_full_output_budget_then_settle_actual(
         row = (
             await db.execute(select(ProviderUsage).where(ProviderUsage.project_id == uuid.UUID(pid)))
         ).scalar_one()
-    assert row.status == "succeeded" and row.cost_basis == "actual"
-    assert row.cost_counted_usd < row.cost_estimate_usd  # settled at actual, below the reservation
+    assert row.status == "succeeded" and row.cost_basis == "calculated"
+    assert row.cost_counted_usd < row.cost_estimate_usd  # settled at the calculation, below the reservation
 
 
 async def test_pricing_missing_refuses_before_any_provider_call(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -365,9 +402,9 @@ async def test_worker_death_mid_submission_is_treated_as_ambiguous() -> None:
     key = f"crash:{pid}"
     price = pricing.require("fake", "fake-image")
     ctx = CallContext("panel_generate", uid, pid)
-    await metering._reserve(ctx, key=key, provider="fake", model="fake-image", operation="image_generate",
-                            estimate=Decimal("0.04"), price=price)  # fmt: skip
-    await metering._update(key, status="submitting")  # ...and the worker died here
+    att = await metering._begin_attempt(ctx, key=key, provider="fake", model="fake-image",
+                                        operation="image_generate", estimate=Decimal("0.04"), price=price, after=0)  # fmt: skip
+    await metering._mark(att, status="submitting")  # ...and the worker died here
     with pytest.raises(AppError) as e:
         await metering.generate_image(ImageRequest("p", "4:3"), ctx, key=key)
     assert e.value.code is ErrorCode.PROVIDER_AMBIGUOUS_FINAL
@@ -388,9 +425,11 @@ async def test_timeout_after_submission_resumes_the_same_request() -> None:
 
 
 async def test_definitive_failure_allows_a_fresh_submission() -> None:
+    from storypanel.providers.base import JobFailed
+
     uid, pid = await _owner()
     ctx = CallContext("panel_generate", uid, pid)
-    fake.control.errors["image:fetch"] = [AppError(ErrorCode.PROVIDER_ERROR, "failed at provider")]
+    fake.control.errors["image:fetch"] = [JobFailed("r", "internal")]
     key = f"fail:{pid}"
     with pytest.raises(AppError):
         await metering.generate_image(ImageRequest("p", "4:3"), ctx, key=key)
@@ -460,20 +499,24 @@ async def test_reconciliation_resolves_abandoned_requests() -> None:
     done = await provider.submit(ImageRequest("p", "4:3"), ctx, model="fake-image")
     states = {"never-sent": None, "lost-id": "nope", "finished": done}
     for name, rid in states.items():
-        await metering._reserve(ctx, key=f"rc:{name}:{pid}", provider="fake", model="fake-image",
-                                operation="image_generate", estimate=Decimal("0.04"), price=price)  # fmt: skip
+        att = await metering._begin_attempt(ctx, key=f"rc:{name}:{pid}", provider="fake", model="fake-image",
+                                            operation="image_generate", estimate=Decimal("0.04"), price=price,
+                                            after=0)  # fmt: skip
         if rid:
-            await metering._update(f"rc:{name}:{pid}", status="started", provider_request_id=rid)
+            await metering._mark(att, status="started", provider_request_id=rid)
     async with transaction() as db:
-        await db.execute(text("update provider_usage set updated_at = now() - interval '2 hours' where project_id = :p"),
-                         {"p": pid})  # fmt: skip
+        await db.execute(text("update provider_attempts set updated_at = now() - interval '2 hours' "
+                              "where project_id = :p"), {"p": pid})  # fmt: skip
     out = await metering.reconcile_open_requests()
-    assert out["released"] == 2 and out["succeeded_unused"] == 1
+    assert out["released"] == 1 and out["lost"] == 1 and out["succeeded_unused"] == 1
     async with transaction() as db:
-        rows = dict((await db.execute(select(ProviderUsage.idempotency_key, ProviderUsage.cost_counted_usd).where(
-            ProviderUsage.project_id == uuid.UUID(pid)))).all())  # fmt: skip
-    assert rows[f"rc:never-sent:{pid}"] == 0 and rows[f"rc:lost-id:{pid}"] == 0
-    assert rows[f"rc:finished:{pid}"] == Decimal("0.04")  # produced: counted even though unused
+        rows = {k: (c, b) for k, c, b in (await db.execute(select(
+            ProviderUsage.idempotency_key, ProviderUsage.cost_counted_usd, ProviderUsage.cost_basis).where(
+            ProviderUsage.project_id == uuid.UUID(pid)))).all()}  # fmt: skip
+    assert rows[f"rc:never-sent:{pid}"] == (0, "released")
+    # an id the provider no longer knows is not proof that nothing was billed
+    assert rows[f"rc:lost-id:{pid}"] == (Decimal("0.04"), "unresolved")
+    assert rows[f"rc:finished:{pid}"] == (Decimal("0.04"), "calculated")  # produced: counted though unused
     registry.set_providers(None)
 
 
@@ -505,7 +548,10 @@ async def test_succeeded_request_is_refetched_not_repaid_after_a_crash() -> None
     assert e.value.code is ErrorCode.PROVIDER_ERROR and e.value.retryable
     await metering.generate_image(ImageRequest("p", "4:3"), ctx, key=key)
     assert len(fake.control.models_used) == 2
+    from storypanel.db.models import ProviderAttempt
+
     async with transaction() as db:
-        rows = (await db.execute(select(ProviderUsage.status, ProviderUsage.cost_counted_usd).where(
-            ProviderUsage.project_id == uuid.UUID(pid)).order_by(ProviderUsage.created_at))).all()  # fmt: skip
-    assert sorted(rows) == [("succeeded", Decimal("0.04")), ("succeeded_unused", Decimal("0.04"))]
+        rows = (await db.execute(select(ProviderAttempt.attempt_no, ProviderAttempt.status,
+                                        ProviderAttempt.cost_counted_usd).where(
+            ProviderAttempt.project_id == uuid.UUID(pid)).order_by(ProviderAttempt.attempt_no))).all()  # fmt: skip
+    assert rows == [(1, "succeeded_unused", Decimal("0.04")), (2, "succeeded", Decimal("0.04"))]

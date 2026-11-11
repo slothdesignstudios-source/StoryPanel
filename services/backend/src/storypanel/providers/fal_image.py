@@ -5,11 +5,19 @@ the official `fal-client` queue API: `submit` returns a request id at once, whic
 caller persists before waiting. Afterwards the request can be resumed (`status`/`result`)
 or cancelled (`cancel`) by that id.
 
-Outcome classification, from the SDK's own status model:
-- `Queued` / `InProgress` past our wait budget  -> RequestPending (resume later by id)
-- `Completed` with `error`                       -> definitive failure (no image)
-- HTTP 404 on status                             -> RequestUnknown (never accepted)
-- transport timeout                              -> ambiguous (id kept, resume)
+Outcome classification for an *accepted* request (we hold its id), from the SDK's own
+status model. Only a `Completed` status carrying an error is a definitive failure; every
+transport problem keeps the id so that the caller retries retrieval, never generation.
+
+- `Queued` / `InProgress` past our wait budget     -> RequestPending (resume later by id)
+- `Completed` with `error`                          -> JobFailed (definitive; moderation flagged)
+- status/result HTTP 404                            -> RequestUnknown("unknown_request")
+- result file 403/404/410                           -> RequestUnknown("result_expired")
+- 5xx / 429 / connection error / timeout on status,
+  result or download                                -> RetrievalFailed (id kept)
+- unusable output (nsfw flag, oversized, bad link)  -> AppError (produced, so billed)
+
+Neither RequestUnknown nor any other answer proves that nothing was billed.
 """
 
 from __future__ import annotations
@@ -28,7 +36,15 @@ from fal_client.client import Completed, FalClientHTTPError, FalClientTimeoutErr
 
 from storypanel.config import Settings
 from storypanel.errors import AppError, ErrorCode
-from storypanel.providers.base import CallContext, ImageRequest, ImageResult, RequestPending, RequestUnknown
+from storypanel.providers.base import (
+    CallContext,
+    ImageRequest,
+    ImageResult,
+    JobFailed,
+    RequestPending,
+    RequestUnknown,
+    RetrievalFailed,
+)  # fmt: skip
 from storypanel.providers.fal_profiles import FalProfile, profile_for
 
 MAX_DOWNLOAD_BYTES = 30 * 1024 * 1024
@@ -71,20 +87,30 @@ def assert_public_https_url(url: str) -> None:
                            "Provider returned an unusable image link.", retryable=False)  # fmt: skip
 
 
-async def download_image(url: str) -> bytes:
-    await asyncio.to_thread(assert_public_https_url, url)
-    async with httpx.AsyncClient(follow_redirects=False, timeout=60.0) as http:
-        async with http.stream("GET", url) as resp:
-            if resp.status_code != 200:
-                raise AppError(ErrorCode.PROVIDER_ERROR, "Could not download the generated image.")
-            chunks: list[bytes] = []
-            size = 0
-            async for chunk in resp.aiter_bytes():
-                size += len(chunk)
-                if size > MAX_DOWNLOAD_BYTES:
-                    raise AppError(ErrorCode.PROVIDER_BAD_OUTPUT, "Generated image is too large.",
-                                   retryable=False)  # fmt: skip
-                chunks.append(chunk)
+async def download_image(url: str, request_id: str = "") -> bytes:
+    try:
+        await asyncio.to_thread(assert_public_https_url, url)
+    except AppError as exc:
+        if exc.code is ErrorCode.PROVIDER_ERROR:  # DNS failure: transient
+            raise RetrievalFailed(request_id, "result_host_unresolved") from exc
+        raise
+    try:
+        async with httpx.AsyncClient(follow_redirects=False, timeout=60.0) as http:
+            async with http.stream("GET", url) as resp:
+                if resp.status_code in (403, 404, 410):
+                    raise RequestUnknown(request_id, "result_expired")
+                if resp.status_code != 200:
+                    raise RetrievalFailed(request_id, f"download_http_{resp.status_code}")
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in resp.aiter_bytes():
+                    size += len(chunk)
+                    if size > MAX_DOWNLOAD_BYTES:
+                        raise AppError(ErrorCode.PROVIDER_BAD_OUTPUT, "Generated image is too large.",
+                                       retryable=False)  # fmt: skip
+                    chunks.append(chunk)
+    except httpx.HTTPError as exc:  # reset, timeout, protocol error mid-download
+        raise RetrievalFailed(request_id, f"download_{type(exc).__name__}") from exc
     return b"".join(chunks)
 
 
@@ -160,24 +186,20 @@ class _FalBase:
                 if isinstance(status, Completed):
                     if status.error:
                         text = f"{status.error_type or ''} {status.error}".lower()
-                        if any(w in text for w in _SAFETY_WORDS):
-                            raise AppError(ErrorCode.MODERATION_BLOCKED,
-                                           "The illustration service refused this content.")  # fmt: skip
-                        # Definitive failure: nothing was produced, a new request is safe.
-                        raise AppError(ErrorCode.PROVIDER_ERROR, "The illustration failed at the provider.",
-                                       meta={"error_type": status.error_type})  # fmt: skip
+                        raise JobFailed(request_id, status.error_type,
+                                        moderation=any(w in text for w in _SAFETY_WORDS))  # fmt: skip
                     return await self._client.result(app, request_id)
                 if time.monotonic() >= deadline:
                     raise RequestPending(request_id)
                 await asyncio.sleep(1.0)
-        except (RequestPending, AppError):
+        except (RequestPending, JobFailed):
             raise
         except FalClientHTTPError as exc:
             if exc.status_code == 404:
-                raise RequestUnknown(request_id) from exc
-            raise _map_error(exc, "illustration") from exc
-        except Exception as exc:
-            raise _map_error(exc, "illustration") from exc
+                raise RequestUnknown(request_id, "unknown_request") from exc
+            raise RetrievalFailed(request_id, f"status_http_{exc.status_code}") from exc
+        except Exception as exc:  # timeouts, resets, protocol errors: the id is still valid
+            raise RetrievalFailed(request_id, type(exc).__name__) from exc
 
     async def _cancel(self, app: str, request_id: str) -> None:
         try:
@@ -228,7 +250,7 @@ class FalImageProvider(_FalBase):
         profile = next(p for role in ("generate", "edit", "inpaint")
                        if (p := profile_for(model, role)) is not None)  # type: ignore[arg-type]  # fmt: skip
         result = await self._wait(model, request_id, wait_seconds)
-        data = await download_image(extract_result_url(profile, result))
+        data = await download_image(extract_result_url(profile, result), request_id)
         seed = result.get("seed") if isinstance(result, dict) else None
         return ImageResult(data=data, provider=self.name, model=model, request_id=request_id,
                            seed=seed if isinstance(seed, int) else None)  # fmt: skip
@@ -249,19 +271,28 @@ class FalUpscaleProvider(_FalBase):
             )
         self.profile = p
 
-    async def submit(self, image: bytes, factor: int, ctx: CallContext) -> str:
+    def _profile_for(self, model: str) -> FalProfile:
+        p = profile_for(model, "upscale")
+        if p is None:
+            raise AppError(
+                ErrorCode.VALIDATION, f"No verified contract for upscaler {model}.", retryable=False
+            )
+        return p
+
+    async def submit(self, image: bytes, factor: int, ctx: CallContext, *, model: str) -> str:
+        profile = self._profile_for(model)
         try:
             url = await self._upload(image, "image/png")
-            args = {**self.profile.fixed, "image_url": url, "scale": factor}
-            handle = await self._client.submit(self.model, args)
+            args = {**profile.fixed, "image_url": url, "scale": factor}
+            handle = await self._client.submit(model, args)
         except Exception as exc:
             raise _map_error(exc, "upscaling") from exc
         return str(handle.request_id)
 
-    async def fetch(self, request_id: str, *, wait_seconds: float) -> ImageResult:
-        result = await self._wait(self.model, request_id, wait_seconds)
-        data = await download_image(extract_result_url(self.profile, result))
-        return ImageResult(data=data, provider=self.name, model=self.model, request_id=request_id)
+    async def fetch(self, model: str, request_id: str, *, wait_seconds: float) -> ImageResult:
+        result = await self._wait(model, request_id, wait_seconds)
+        data = await download_image(extract_result_url(self._profile_for(model), result), request_id)
+        return ImageResult(data=data, provider=self.name, model=model, request_id=request_id)
 
-    async def cancel(self, request_id: str) -> None:
-        await self._cancel(self.model, request_id)
+    async def cancel(self, model: str, request_id: str) -> None:
+        await self._cancel(model, request_id)

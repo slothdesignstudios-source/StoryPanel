@@ -46,6 +46,13 @@ class Price:
         return {"unit": self.unit, "usd": str(self.usd), "output_usd": str(self.output_usd),
                 "free": self.free, "source": self.source, "verified_at": self.verified_at.isoformat()}  # fmt: skip
 
+    @classmethod
+    def from_ref(cls, provider: str, model: str, ref: dict[str, Any]) -> Price:
+        """The price an attempt was reserved under. Settlement uses this, not today's table,
+        so a resumed request is priced by the model and price that accepted it."""
+        return cls(provider, model, ref["unit"], Decimal(ref["usd"]), Decimal(ref.get("output_usd", "0")),
+                   bool(ref.get("free")), str(ref.get("source", "")), date.fromisoformat(ref["verified_at"]))  # fmt: skip
+
 
 class PricingError(ValueError):
     pass

@@ -1,0 +1,3 @@
+/home/user/storypanel/services/backend/tests/test_paid_recovery.py:108: AssertionError: assert 2 == 1
+/home/user/storypanel/services/backend/tests/test_paid_recovery.py:123: AssertionError: assert Decimal('0.040000') == Decimal('0.08')
+2 failed, 3 deselected in 0.70s

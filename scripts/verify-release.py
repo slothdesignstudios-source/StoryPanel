@@ -123,7 +123,10 @@ class User:
 
 async def kill_test(procs: dict[str, subprocess.Popen[bytes]]) -> dict[str, Any]:
     """SIGKILL the only worker while an image request is in flight at the provider."""
-    procs["worker"] = worker(SP_FAKE_SCENARIO=json.dumps({"hang_fetches": 1}))
+    # The durable fake queue outlives the worker the way a provider queue does, and counts
+    # submissions at the "provider" across processes.
+    sh("redis-cli", "-n", "4", "del", "sp:fake:submissions")
+    procs["worker"] = worker(SP_FAKE_SCENARIO=json.dumps({"hang_fetches": 1}), SP_FAKE_DURABLE_QUEUE="1")
     wait(f"http://127.0.0.1:{P['metrics']}/metrics")
     async with httpx.AsyncClient(timeout=30) as http:
         u = User(http, f"kill-{uuid.uuid4().hex[:6]}@example.com")
@@ -137,22 +140,32 @@ async def kill_test(procs: dict[str, subprocess.Popen[bytes]]) -> dict[str, Any]
         procs["worker"].wait()
         await asyncio.sleep(2)
         still = psql(DB, f"select status from provider_usage where idempotency_key='{in_flight}'")
-        procs["worker"] = worker()
+        procs["worker"] = worker(SP_FAKE_DURABLE_QUEUE="1")
         p = await task  # heartbeat timeout (60 s) hands the activity to the new worker
         recovered = time.time() - t_kill
         row = psql(DB, f"select status, submissions, cost_basis from provider_usage where idempotency_key='{in_flight}'")
+        attempts = psql(DB, "select count(*) from provider_attempts a join provider_usage u on u.id = a.operation_id "
+                            f"where u.idempotency_key='{in_flight}'")
+        total_attempts = psql(DB, "select count(*) from provider_attempts where operation like 'image_%'")
+        provider_submissions = sh("redis-cli", "-n", "4", "get", "sp:fake:submissions").strip()
         dup = psql(DB, "select count(*) from (select idempotency_key from provider_usage group by 1 having count(*) > 1) x")
         refs = psql(DB, "select count(*), count(distinct (character_id, view)) from character_refs")
         chars = psql(DB, f"select count(*) from characters where project_id='{p['id']}' and sheet_status='ready'")
-    return {"pass": p["status"] == "awaiting_cast_approval" and still == "started" and row.startswith("succeeded|2")
+    procs["worker"].terminate()
+    procs["worker"].wait()
+    procs["worker"] = worker()
+    return {"pass": p["status"] == "awaiting_cast_approval" and still == "started"
+            and row == "succeeded|1|calculated" and attempts == "1"
+            and provider_submissions == total_attempts  # every provider submission is a recorded attempt
             and dup == "0" and refs.split("|")[0] == refs.split("|")[1],
             "killed_while_request_in_flight": in_flight, "row_after_kill_before_restart": still,
-            "row_after_recovery(status|submissions|basis)": row, "seconds_from_kill_to_cast_gate": round(recovered, 1),
+            "row_after_recovery(status|submissions|basis)": row, "attempts_for_in_flight_operation": attempts,
+            "provider_side_submissions_total": provider_submissions, "recorded_image_attempts_total": total_attempts,
+            "seconds_from_kill_to_cast_gate": round(recovered, 1),
             "characters_ready": chars, "duplicate_usage_rows": dup, "character_refs(total|distinct)": refs,
-            "explanation": "The in-flight request was resumed by id on the new worker. The fake provider keeps "
-                           "requests in process memory, so the id was unknown after the kill (as with a provider "
-                           "that lost the request) and exactly one new submission was made. With a real provider "
-                           "the same code path fetches the finished result instead of resubmitting."}  # fmt: skip
+            "explanation": "The in-flight request was resumed by id on the new worker and its result fetched: "
+                           "one provider submission for the operation, counted once at the calculated price. "
+                           "The provider here is the simulated durable queue, not a live provider."}  # fmt: skip
 
 
 async def load_test() -> dict[str, Any]:

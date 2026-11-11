@@ -43,11 +43,13 @@ class FakeControl:
     unsafe_targets: set[str] = field(default_factory=set)  # image safety blocks these
     unsafe_attempts: int = 0  # every image is unsafe on its first N attempts
     stray_text_targets: set[str] = field(default_factory=set)
-    errors: dict[str, list[AppError]] = field(default_factory=dict)  # op -> queue of raises
+    errors: dict[str, list[Exception]] = field(default_factory=dict)  # op -> queue of raises
     pending_fetches: int = 0  # next N image fetches report "still running"
     submits: list[str] = field(default_factory=list)
     models_used: list[str] = field(default_factory=list)
     cancelled: list[str] = field(default_factory=list)
+    fetches: list[tuple[str, str]] = field(default_factory=list)  # (model, request id) per fetch
+    cancels: list[tuple[str, str]] = field(default_factory=list)  # (model, request id) per cancel
     hang_fetches: int = 0
     crashes: dict[str, int] = field(default_factory=dict)  # op -> times to raise an unexpected error
     calls: list[tuple[str, str]] = field(default_factory=list)
@@ -348,11 +350,41 @@ def render_fake_repair(req: ImageRequest) -> bytes:
     return out.getvalue()
 
 
+class _DurableQueue:
+    """Optional Redis-backed job store (SP_FAKE_DURABLE_QUEUE=1). It outlives worker
+    processes the way a real provider queue does, so crash drills can prove that a resumed
+    request is fetched rather than resubmitted. It also counts submissions across
+    processes (`sp:fake:submissions`), which is the provider-side figure drills assert on."""
+
+    @staticmethod
+    def enabled() -> bool:
+        return os.environ.get("SP_FAKE_DURABLE_QUEUE") == "1"
+
+    @staticmethod
+    async def put(request_id: str, model: str, req: ImageRequest) -> None:
+        import pickle
+
+        from storypanel.services.events import redis_client
+
+        r = redis_client()
+        await r.set(f"sp:fake:job:{request_id}", pickle.dumps((model, req)), ex=86400)
+        await r.incr("sp:fake:submissions")
+
+    @staticmethod
+    async def get(request_id: str) -> tuple[str, ImageRequest] | None:
+        import pickle
+
+        from storypanel.services.events import redis_client
+
+        raw = await redis_client().get(f"sp:fake:job:{request_id}")
+        return pickle.loads(raw) if raw else None  # noqa: S301 - local test fixture data only
+
+
 class FakeImageProvider:
     name = "fake"
 
     def __init__(self) -> None:
-        self._jobs: dict[str, ImageRequest] = {}
+        self._jobs: dict[str, tuple[str, ImageRequest]] = {}  # request id -> (endpoint, request)
         self.cancelled: list[str] = []
 
     def model_for(self, req: ImageRequest) -> str:
@@ -364,6 +396,8 @@ class FakeImageProvider:
         return "fake-fallback" if req.role in ("generate", "edit") else None
 
     async def cancel(self, model: str, request_id: str) -> None:
+        control.cancels.append((model, request_id))
+        control.raise_if_queued("image:cancel")
         self.cancelled.append(request_id)
         control.cancelled.append(request_id)
 
@@ -371,12 +405,17 @@ class FakeImageProvider:
         control.models_used.append(model)
         if model != "fake-fallback":
             control.raise_if_queued("image:submit")
-        request_id = f"fake-{_h(req.prompt, req.seed, len(control.submits)):x}"
+        request_id = (
+            f"fake-{_h(req.prompt, req.seed, len(control.submits), os.getpid(), os.urandom(4).hex()):x}"
+        )
         control.submits.append(ctx.target_id or "")
-        self._jobs[request_id] = req
+        self._jobs[request_id] = (model, req)
+        if _DurableQueue.enabled():
+            await _DurableQueue.put(request_id, model, req)
         return request_id
 
     async def fetch(self, model: str, request_id: str, *, wait_seconds: float) -> ImageResult:
+        control.fetches.append((model, request_id))
         control.raise_if_queued("image:fetch")
         if control.pending_fetches > 0:
             control.pending_fetches -= 1
@@ -384,9 +423,13 @@ class FakeImageProvider:
         if control.hang_fetches > 0:
             control.hang_fetches -= 1
             await asyncio.sleep(3600)  # until cancelled
-        req = self._jobs.get(request_id)
-        if req is None:
+        job = self._jobs.get(request_id)
+        if job is None and _DurableQueue.enabled():
+            job = await _DurableQueue.get(request_id)
+        # Like a real queue, a request id is only known to the endpoint that accepted it.
+        if job is None or job[0] != model:
             raise RequestUnknown(request_id)
+        req = job[1]
         if req.mode == "inpaint" and req.image is not None:
             return ImageResult(data=render_fake_repair(req), provider=self.name, model=model,
                                request_id=request_id, seed=req.seed)  # fmt: skip
@@ -415,22 +458,29 @@ class FakeUpscaleProvider:
     name = "fake"
     model = "fake-upscale"
 
-    async def cancel(self, request_id: str) -> None:
+    async def cancel(self, model: str, request_id: str) -> None:
+        control.cancels.append((model, request_id))
         control.cancelled.append(request_id)
 
     def __init__(self) -> None:
-        self._jobs: dict[str, tuple[bytes, int]] = {}
+        self._jobs: dict[str, tuple[str, bytes, int]] = {}  # request id -> (endpoint, image, factor)
 
-    async def submit(self, image: bytes, factor: int, ctx: CallContext) -> str:
+    async def submit(self, image: bytes, factor: int, ctx: CallContext, *, model: str) -> str:
+        control.models_used.append(model)
         control.raise_if_queued("upscale")
-        request_id = f"fake-up-{_h(hashlib.sha256(image).hexdigest(), factor):x}"
-        self._jobs[request_id] = (image, factor)
+        request_id = f"fake-up-{_h(hashlib.sha256(image).hexdigest(), factor, len(control.models_used)):x}"
+        self._jobs[request_id] = (model, image, factor)
         return request_id
 
-    async def fetch(self, request_id: str, *, wait_seconds: float) -> ImageResult:
-        image, factor = self._jobs[request_id]
+    async def fetch(self, model: str, request_id: str, *, wait_seconds: float) -> ImageResult:
+        control.fetches.append((model, request_id))
+        control.raise_if_queued("upscale:fetch")
+        job = self._jobs.get(request_id)
+        if job is None or job[0] != model:
+            raise RequestUnknown(request_id)
+        _, image, factor = job
         src = Image.open(io.BytesIO(image))
         big = src.resize((src.width * factor, src.height * factor), Image.Resampling.LANCZOS)
         out = io.BytesIO()
         big.save(out, format="PNG")
-        return ImageResult(out.getvalue(), self.name, self.model, request_id)
+        return ImageResult(out.getvalue(), self.name, model, request_id)
