@@ -173,6 +173,22 @@ async def _reserve(ctx: CallContext, *, key: str, provider: str, model: str, ope
         ).scalar_one()
 
 
+async def _archive_lost_result(key: str) -> None:
+    async with transaction() as db:
+        row = (
+            await db.execute(select(ProviderUsage).where(ProviderUsage.idempotency_key == key))
+        ).scalar_one()
+        await db.execute(insert(ProviderUsage).values(
+            id=uuid.uuid4(), idempotency_key=f"{key}:lost:{uuid.uuid4().hex[:8]}", user_id=row.user_id,
+            project_id=row.project_id, stage=row.stage, target_id=row.target_id, provider=row.provider,
+            model=row.model, operation=row.operation, status="succeeded_unused", images=row.images,
+            provider_request_id=row.provider_request_id, cost_usd=row.cost_usd,
+            cost_estimate_usd=row.cost_estimate_usd, cost_counted_usd=row.cost_counted_usd,
+            cost_basis=row.cost_basis, price_ref=row.price_ref, submissions=row.submissions,
+            error_code="result_lost_before_storage"))  # fmt: skip
+    log.warning("provider_result_lost", operation=row.operation, provider_request_id=row.provider_request_id)
+
+
 async def _update(key: str, **fields: Any) -> tuple[str, str]:
     async with transaction() as db:
         row = (await db.execute(select(ProviderUsage).where(ProviderUsage.idempotency_key == key)
@@ -290,8 +306,10 @@ async def _paid_request(
     started = time.monotonic()
     row = await _reserve(ctx, key=key, provider=provider_name, model=model, operation=operation,
                          estimate=estimate, price=price)  # fmt: skip
-    if row.status == "succeeded":
-        raise AppError(ErrorCode.CONFLICT, "This request already completed.", retryable=False)
+    # A request that already succeeded can be asked for again: the caller may have died
+    # after the provider finished but before it stored the image. Re-fetching by request id
+    # costs nothing; only if the provider no longer has it is a new submission made.
+    refetch = row.status in ("succeeded", "succeeded_unused") and bool(row.provider_request_id)
     if row.status == "ambiguous" or (row.status == "submitting" and not row.provider_request_id):
         # A previous attempt may have reached the provider without us learning its id.
         if row.status == "submitting":
@@ -336,6 +354,10 @@ async def _paid_request(
             # Still running at the provider: keep the id; the activity retry resumes it.
             raise AppError(ErrorCode.TIMEOUT, "Illustration is taking longer than usual.") from exc
         except RequestUnknown as exc:
+            if refetch:
+                # The first result was paid for and is gone. Keep that cost on record under a
+                # separate key so the retry's new submission does not erase it.
+                await _archive_lost_result(key)
             await _settle(key, status="released", actual=None, estimate=estimate,
                           error_code="provider_request_unknown")  # fmt: skip
             await _update(key, status="failed")

@@ -1,0 +1,71 @@
+{
+ "at": "2026-11-11T13:01:34Z",
+ "providers": "fake",
+ "machine": {
+  "cpus": 4
+ },
+ "checks": {
+  "worker_sigkill_mid_generation": {
+   "pass": true,
+   "killed_while_request_in_flight": "sheet:0b2197ea-8724-4433-95f2-0a9cffea34fc:v1:portrait",
+   "row_after_kill_before_restart": "started",
+   "row_after_recovery(status|submissions|basis)": "succeeded|2|actual",
+   "seconds_from_kill_to_cast_gate": 73.3,
+   "characters_ready": "2",
+   "duplicate_usage_rows": "0",
+   "character_refs(total|distinct)": "22|22",
+   "explanation": "The in-flight request was resumed by id on the new worker. The fake provider keeps requests in process memory, so the id was unknown after the kill (as with a provider that lost the request) and exactly one new submission was made. With a real provider the same code path fetches the finished result instead of resubmitting."
+  },
+  "load": {
+   "pass": true,
+   "users": 20,
+   "comics_completed": 20,
+   "errors": [],
+   "wall_seconds": 33.6,
+   "api_requests": 1362,
+   "status_codes": {
+    "201": 20,
+    "200": 1342
+   },
+   "api_latency_s": {
+    "p50": 0.051,
+    "p95": 0.18,
+    "p99": 0.707,
+    "max": 0.845
+   },
+   "prompt_to_finished_s": {
+    "p50": 31.6,
+    "max": 33.5
+   },
+   "script_approval_to_finished_s": {
+    "p50": 13.9,
+    "max": 16.0
+   },
+   "panels_drawn": 80,
+   "provider_calls": 830,
+   "accounts_with_ledger_or_hold_drift": "0",
+   "credits_still_held_by_finished_load_users": "0",
+   "provider_rows_left_open": "0"
+  },
+  "backup_restore": {
+   "pass": true,
+   "tables": 25,
+   "rows_before": 3319,
+   "rows_after": 3319,
+   "tables_with_different_counts": [],
+   "ledger_digest_identical": true,
+   "ledger_drift_accounts": "0",
+   "migration_head": "0002",
+   "schema_matches_models": true,
+   "append_only_trigger_restored": true,
+   "orphaned_panel_versions": "0",
+   "restored_api_serves_comic": "completed",
+   "image_fetch_status": 200,
+   "dump_seconds": 0.17,
+   "restore_seconds": 0.35,
+   "dump_bytes": 355763,
+   "limitation": "Logical dump/restore on one machine with a small dataset. Managed point-in-time recovery, object-storage version restore and a restore under production data volume were not exercised."
+  }
+ },
+ "passed": true
+}

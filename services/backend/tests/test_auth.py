@@ -8,6 +8,7 @@ The Stripe tests point the official SDK at a local stub to check the requests we
 
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 import time
@@ -137,7 +138,7 @@ async def test_clerk_session_refresh_and_account_isolation(client: Any, clerk: A
     created = await client.post("/v1/projects", json={"prompt": PROMPT}, headers=first)
     assert created.status_code == 201
     pid = created.json()["id"]
-    time.sleep(8)  # past expiry plus the 5 s clock-skew leeway
+    await asyncio.sleep(8)  # past expiry plus the 5 s clock-skew leeway
     assert (await client.get(f"/v1/projects/{pid}", headers=first)).status_code == 401
     # Clerk's client refreshes the short-lived token; a fresh one for the same user works
     refreshed = clerk()

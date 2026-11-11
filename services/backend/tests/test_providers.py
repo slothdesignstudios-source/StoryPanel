@@ -475,3 +475,37 @@ async def test_reconciliation_resolves_abandoned_requests() -> None:
     assert rows[f"rc:never-sent:{pid}"] == 0 and rows[f"rc:lost-id:{pid}"] == 0
     assert rows[f"rc:finished:{pid}"] == Decimal("0.04")  # produced: counted even though unused
     registry.set_providers(None)
+
+
+async def test_succeeded_request_is_refetched_not_repaid_after_a_crash() -> None:
+    """Worker died after the provider finished but before the image was stored: the retry
+    fetches the same result again instead of failing or paying twice."""
+    uid, pid = await _owner()
+    ctx = CallContext("character_sheet", uid, pid)
+    key = f"refetch:{pid}"
+    first, _ = await metering.generate_image(ImageRequest("p", "4:3"), ctx, key=key)
+    again, _ = await metering.generate_image(ImageRequest("p", "4:3"), ctx, key=key)  # the retry
+    assert again.request_id == first.request_id and again.data == first.data
+    assert len(fake.control.models_used) == 1
+    async with transaction() as db:
+        rows = (
+            (await db.execute(select(ProviderUsage).where(ProviderUsage.project_id == uuid.UUID(pid))))
+            .scalars()
+            .all()
+        )
+    assert len(rows) == 1 and rows[0].status == "succeeded" and rows[0].cost_counted_usd == Decimal("0.04")
+
+    # ...and if the provider no longer has that result, the loss stays on the books and
+    # exactly one new request is made.
+    from storypanel.providers import registry
+
+    registry.get_providers().image._jobs.clear()  # type: ignore[attr-defined]
+    with pytest.raises(AppError) as e:
+        await metering.generate_image(ImageRequest("p", "4:3"), ctx, key=key)
+    assert e.value.code is ErrorCode.PROVIDER_ERROR and e.value.retryable
+    await metering.generate_image(ImageRequest("p", "4:3"), ctx, key=key)
+    assert len(fake.control.models_used) == 2
+    async with transaction() as db:
+        rows = (await db.execute(select(ProviderUsage.status, ProviderUsage.cost_counted_usd).where(
+            ProviderUsage.project_id == uuid.UUID(pid)).order_by(ProviderUsage.created_at))).all()  # fmt: skip
+    assert sorted(rows) == [("succeeded", Decimal("0.04")), ("succeeded_unused", Decimal("0.04"))]
