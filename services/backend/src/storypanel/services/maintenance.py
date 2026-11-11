@@ -152,6 +152,13 @@ async def run_once() -> dict[str, int]:
     except Exception:
         log.error("provider_reconciliation_failed", exc_info=True)
     try:
+        from storypanel.services import billing
+
+        if await events.redis_client().set("sp:maintenance:subs", "1", nx=True, ex=3600):  # hourly
+            result["subscriptions_reconciled"] = await billing.reconcile_subscriptions()
+    except Exception:
+        log.error("subscription_reconciliation_failed", exc_info=True)
+    try:
         from storypanel.services import deletion
 
         result["account_deletions_advanced"] = len(await deletion.process_due())

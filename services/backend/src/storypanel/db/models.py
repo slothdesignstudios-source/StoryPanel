@@ -459,6 +459,61 @@ class PendingObjectDeletion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class BillingSubscription(Base):
+    """Local mirror of one Stripe subscription, refreshed from Stripe's API (authoritative)
+    on every subscription event and by periodic reconciliation. A user may have several."""
+
+    __tablename__ = "billing_subscriptions"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)  # sub_...
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    customer_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    status: Mapped[str] = mapped_column(String(30))
+    plan: Mapped[str | None] = mapped_column(String(20))
+    price_id: Mapped[str | None] = mapped_column(String(100))
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False)
+    source: Mapped[str] = mapped_column(String(20))  # api | event
+    event_created: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SubscriptionEntitlement(Base):
+    """Credits granted for one subscription billing period. Grants are keyed by
+    (subscription, period start), never by invoice, so several invoices touching one
+    period cannot grant twice; an upgrade tops the period up to the higher allowance."""
+
+    __tablename__ = "subscription_entitlements"
+    __table_args__ = (UniqueConstraint("subscription_id", "period_start"),)
+    id: Mapped[uuid.UUID] = pk()
+    subscription_id: Mapped[str] = mapped_column(String(100), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    plan: Mapped[str] = mapped_column(String(20))
+    credits_granted: Mapped[int] = mapped_column(Integer)
+    invoices: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CreditPurchase(Base):
+    """A one-off credit-pack purchase. Refunds are matched to it by payment intent; a
+    refund that matches no purchase (e.g. a subscription refund) is never clawed back
+    automatically."""
+
+    __tablename__ = "credit_purchases"
+    checkout_session_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    payment_intent_id: Mapped[str | None] = mapped_column(String(100), unique=True)
+    credits: Mapped[int] = mapped_column(Integer)
+    amount_total: Mapped[int | None] = mapped_column(Integer)
+    currency: Mapped[str | None] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ProjectEvent(Base):
     __tablename__ = "project_events"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

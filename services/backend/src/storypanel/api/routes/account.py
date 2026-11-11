@@ -87,9 +87,16 @@ async def get_credits(user: AuthUser = Depends(current_user)) -> api.CreditsOut:
 
 
 @router.post("/v1/billing/checkout", response_model=api.UrlOut, responses=ERR)
-async def checkout(body: api.Checkout, user: AuthUser = Depends(current_user)) -> api.UrlOut:
+async def checkout(
+    body: api.Checkout, request: Request, user: AuthUser = Depends(current_user)
+) -> api.UrlOut:
+    """Start Checkout. A repeated request with the same Idempotency-Key returns the same
+    session; a subscription is refused while one is already live (use the portal)."""
+    key = request.headers.get("idempotency-key")
     async with transaction() as db:
-        return api.UrlOut(url=await billing.create_checkout(db, user.id, body.product))
+        return api.UrlOut(
+            url=await billing.create_checkout(db, user.id, body.product, (key or "")[:100] or None)
+        )
 
 
 @router.post("/v1/billing/portal", response_model=api.UrlOut, responses=ERR)

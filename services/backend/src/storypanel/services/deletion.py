@@ -38,6 +38,7 @@ from storypanel.config import get_settings
 from storypanel.db.models import (
     AccountDeletion,
     Asset,
+    BillingSubscription,
     Export,
     IdempotencyKey,
     PendingObjectDeletion,
@@ -85,10 +86,14 @@ async def request_deletion(user_id: uuid.UUID, *, source: str, request_id: str |
         if existing is not None:
             return existing
         user.deleted_at = func.now()
+        mirrored = set((await db.execute(select(BillingSubscription.id).where(
+            BillingSubscription.user_id == user_id))).scalars())  # fmt: skip
+        if user.subscription_id:
+            mirrored.add(user.subscription_id)
         db.add(AccountDeletion(
             user_id=user_id, subject_hash=identity_hash("sub", user.auth_subject), source=source,
             status="requested", auth_subject=user.auth_subject, stripe_customer_id=user.stripe_customer_id,
-            subscription_ids=[user.subscription_id] if user.subscription_id else [], steps={}, attempts=0))  # fmt: skip
+            subscription_ids=sorted(mirrored), steps={}, attempts=0))  # fmt: skip
         await repo.audit(db, user_ref=str(user_id), action=f"account.delete.{source}", request_id=request_id)
     metrics.account_deletions.labels("requested").inc()
     log.info("account_deletion_requested", source=source)

@@ -311,33 +311,7 @@ async def test_webhook_signature_duplicates_and_ordering(client: Any, headers: d
     async with transaction() as db:
         assert (await db.execute(select(User.plan))).scalar_one() == "pro"
 
-    invoice = {"id": "evt_inv", "type": "invoice.paid", "created": 210, "data": {"object": {
-        "id": "in_1", "customer": "cus_1", "metadata": {"user_id": uid},
-        "lines": {"data": [{"price": {"id": "price_pro"}}]}}}}  # fmt: skip
-    assert (await _hook(client, invoice)).json() == {"status": "credits_granted"}
-    again = {**invoice, "id": "evt_inv_redelivered_under_new_id"}
-    await _hook(client, again)  # a second event about the same invoice grants nothing more
-    pack = {"id": "evt_pack", "type": "checkout.session.completed", "created": 220, "data": {"object": {
-        "id": "cs_1", "mode": "payment", "payment_status": "paid", "customer": "cus_1",
-        "client_reference_id": uid, "metadata": {"user_id": uid, "product": "credit_pack"}}}}  # fmt: skip
-    results = await asyncio.gather(*[_hook(client, pack) for _ in range(5)])  # concurrent delivery
-    assert sorted(r.json()["status"] for r in results) == ["credits_granted"] + ["duplicate"] * 4
-    refund = lambda eid, refunded: {
-        "id": eid,
-        "type": "charge.refunded",
-        "created": 230,
-        "data": {  # noqa: E731
-            "object": {"id": "ch_1", "customer": "cus_1", "amount": 1000, "amount_refunded": refunded}
-        },
-    }
-    await _hook(client, refund("evt_r1", 500))
-    await _hook(client, refund("evt_r2", 1000))
-    async with transaction() as db:
-        user = (await db.execute(select(User))).scalar_one()
-        assert user.credit_balance == 200 + 240 + 40 - 20 - 20
-        assert await credits.reconcile(db) == []
-    out = (await client.get("/v1/credits", headers=headers)).json()
-    assert out["plan"] == "pro" and [h["kind"] for h in out["history"][:2]] == ["refund", "refund"]
+    # Grants, purchases and refunds in the pinned API version's shapes: tests/test_billing.py
 
 
 # ------------------------------------------------------------------ SSE over real HTTP

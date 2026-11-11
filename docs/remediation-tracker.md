@@ -167,3 +167,37 @@ asserts one attempt, one submission, and provider submissions = recorded attempt
   outbox start rows, all *delivered*, a ready export with a download URL, and `attempt == 3`;
   5 concurrent duplicate retries → exactly one 202, four 409, exactly one additional workflow start.
 - **Status:** Fixed, locally verified (real Temporal dev server and outbox dispatcher).
+
+## P1 — Subscription entitlements
+
+### F8. Plan credits keyed by invoice, not entitlement period (plus two schema defects found while verifying)
+- **Reproduction (`F8-before.txt`):**
+  1. Review claim, in the payload shape the old code read: two distinct paid invoices in one period
+     granted 480 instead of 240.
+  2. *New:* in the pinned API version (`2026-10-28.endive`, the installed SDK's version) invoice lines have
+     no `price` (it is `pricing.price_details.price`): a real `invoice.paid` granted **0** credits.
+  3. *New:* `Charge` has no `invoice` field in that version, so the old "not a subscription" test
+     (`not obj.get("invoice")`) treated every refund — including subscription refunds — as a credit-pack
+     refund and clawed back 40 credits.
+  Also: Checkout had no idempotency and no existing-subscription guard; ordering accepted equal timestamps;
+  no reconciliation with Stripe.
+- **Fix:** `services/billing.py` + migration 0006 (`billing_subscriptions`, `subscription_entitlements`,
+  `credit_purchases`). Entitlement per (subscription, period start), with upgrade top-ups, no mid-period
+  clawback on downgrade, nothing for zero-value/trial/failed invoices or prorations alone. Subscription
+  events fetch authoritative state from Stripe (order-independent) + hourly reconciliation; payload-ordering
+  fallback only without API access (local). Pack purchases recorded with payment intent; refunds claw back
+  only matched packs, others go to `needs_review`. Checkout forwards the client Idempotency-Key, refuses a
+  second live subscription (409), and tags subscriptions with the user id. Client pinned to
+  `SP_STRIPE_API_VERSION`; webhooks in another version are refused (500, retried). Account deletion now cancels
+  every mirrored subscription. Policy: `docs/billing-policy.md`.
+- **Regression tests:** `tests/test_billing.py` (9): one allowance per period across invoices/redeliveries;
+  purchase → renewal → immediate-proration upgrade (+160) → downgrade (no clawback) → lower renewal; deferred
+  prorations on the next invoice; trial/zero-value/failed then paid later; ordering and equal timestamps without
+  API; pack refunds partial/redelivered/full vs. unknown refund → review; duplicate events and API-version
+  mismatch (refused, then processed); `test_payload_paths_exist_in_pinned_sdk_types` (every field path read
+  exists in the SDK's generated types; the old paths do not). `tests/test_auth.py`: authoritative sync against the
+  local Stripe stub (stale "active" event after Stripe says canceled → canceled; `Stripe-Version` header sent);
+  Checkout idempotency key forwarded, second subscription refused, packs still allowed.
+- **Status:** Fixed, locally verified against generated SDK types and a local stub. **Not** verified against real
+  Stripe test-mode payloads, Checkout, the portal, proration or dunning (B3). The entitlement policy itself needs
+  product/finance sign-off (B8).

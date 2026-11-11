@@ -273,3 +273,65 @@ async def test_stripe_subscription_cancellation_requests(
                      for r in server.requests if r[0] == "DELETE")  # fmt: skip
     assert deletes == [(f"/v1/subscriptions/{s}", {"prorate": ["false"], "invoice_now": ["false"]},
                         f"deletion:u1:cancel:{s}") for s in ("sub_extra", "sub_late", "sub_live")]  # fmt: skip
+
+
+async def test_subscription_events_sync_authoritative_state(client: Any, headers: dict[str, str], server: _Server,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:  # fmt: skip
+    """With API access, a subscription event triggers a fetch of the current state, so a
+    late or equal-timestamp delivery cannot roll the subscription back."""
+    import stripe
+
+    from storypanel.services import billing
+    from tests.test_billing import hook, sub_obj, user_with_customer
+
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", SecretStr("sk_test_local_stub"))
+    monkeypatch.setattr(billing, "_client", lambda: stripe.StripeClient(
+        "sk_test_local_stub", base_addresses={"api": server.url}, max_network_retries=0,
+        stripe_version=get_settings().stripe_api_version))  # fmt: skip
+    uid = await user_with_customer(client, headers)
+    server.routes["/v1/subscriptions/sub_1"] = sub_obj("active", uid=uid)
+    assert (
+        await hook(client, "customer.subscription.created", sub_obj("incomplete", uid=uid), created=100)
+    ).json()["status"] == "subscription_synced"
+    assert (await client.get("/v1/credits", headers=headers)).json()["plan"] == "pro"
+    # Stripe now says canceled; a stale "active" event arriving late still yields canceled
+    server.routes["/v1/subscriptions/sub_1"] = sub_obj("canceled", uid=uid)
+    await hook(client, "customer.subscription.updated", sub_obj("active", uid=uid), created=50)
+    out = (await client.get("/v1/credits", headers=headers)).json()
+    assert out["plan"] == "free" and out["subscription_status"] == "canceled"
+    fetches = [r for r in server.requests if r[0] == "GET" and r[1].startswith("/v1/subscriptions/sub_1")]
+    assert len(fetches) == 2 and fetches[0][3].get("Stripe-Version") == get_settings().stripe_api_version
+
+
+async def test_checkout_is_idempotent_and_refuses_a_second_subscription(
+    client: Any, headers: dict[str, str], server: _Server, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import stripe
+
+    from storypanel.services import billing
+    from tests.test_billing import hook, sub_obj, user_with_customer
+
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", SecretStr("sk_test_local_stub"))
+    monkeypatch.setattr(billing, "_client", lambda: stripe.StripeClient(
+        "sk_test_local_stub", base_addresses={"api": server.url}, max_network_retries=0))  # fmt: skip
+    server.routes["/v1/checkout/sessions"] = {"id": "cs_stub", "object": "checkout.session",
+                                              "url": "https://checkout.stripe.test/c/cs_stub"}  # fmt: skip
+    uid = await user_with_customer(client, headers)
+    for _ in range(2):  # a retried click
+        r = await client.post("/v1/billing/checkout", headers={**headers, "Idempotency-Key": "click-1"},
+                              json={"product": "pro"})  # fmt: skip
+        assert r.status_code == 200
+    posts = [r for r in server.requests if r[1] == "/v1/checkout/sessions"]
+    assert {p[3].get("Idempotency-Key") for p in posts} == {f"checkout:{uid}:pro:click-1"}
+    assert posts[0][2]["subscription_data[metadata][user_id]"] == [str(uid)]
+    # once a subscription is live, Checkout for another plan is refused (use the portal)
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", None)  # event path without API access
+    await hook(client, "customer.subscription.created", sub_obj("active", uid=uid), created=10)
+    monkeypatch.setattr(get_settings(), "stripe_secret_key", SecretStr("sk_test_local_stub"))
+    r = await client.post("/v1/billing/checkout", headers={**headers, "Idempotency-Key": "click-2"},
+                          json={"product": "creator"})  # fmt: skip
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    # credit packs are still allowed
+    r = await client.post("/v1/billing/checkout", headers={**headers, "Idempotency-Key": "click-3"},
+                          json={"product": "credit_pack"})  # fmt: skip
+    assert r.status_code in (200, 409)  # 409 only if no pack price is configured

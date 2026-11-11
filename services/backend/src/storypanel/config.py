@@ -142,6 +142,10 @@ class Settings(BaseSettings):
     stripe_price_creator: str | None = None
     stripe_price_pro: str | None = None
     stripe_price_credit_pack: str | None = None
+    # The API version every request and webhook payload is read with. Must match the
+    # webhook endpoint's version in the Stripe dashboard; events in another version are
+    # refused (500, so Stripe retries) rather than misread.
+    stripe_api_version: str = "2026-10-28.endive"
     credit_pack_size: int = 40
     web_base_url: str = "http://localhost:3000"
 

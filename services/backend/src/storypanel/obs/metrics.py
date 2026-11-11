@@ -38,6 +38,7 @@ provider_unreconciled_usd = Gauge(
     "sp_provider_unreconciled_usd",
     "Provider cost counted at estimate because the outcome is still open or unknown",
 )
+billing_anomalies = Counter("sp_billing_anomalies_total", "Billing situations needing attention", ["kind"])
 account_deletions = Counter("sp_account_deletions_total", "Account deletion progress", ["outcome"])
 account_deletions_overdue = Gauge(
     "sp_account_deletions_overdue", "Account deletions requested over a day ago and not completed"
