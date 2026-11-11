@@ -43,6 +43,7 @@ class FakeControl:
     unsafe_targets: set[str] = field(default_factory=set)  # image safety blocks these
     unsafe_attempts: int = 0  # every image is unsafe on its first N attempts
     stray_text_targets: set[str] = field(default_factory=set)
+    unlocalised_attempts: int = 0  # the judge omits every box on the first N attempts
     errors: dict[str, list[Exception]] = field(default_factory=dict)  # op -> queue of raises
     pending_fetches: int = 0  # next N image fetches report "still running"
     submits: list[str] = field(default_factory=list)
@@ -272,10 +273,11 @@ class FakeTextProvider:
         fail = ctx.attempt < control.qa_fail_attempts or target in control.qa_fail_targets
         text = target in control.stray_text_targets
         xs = {"left": 0.08, "center": 0.38, "right": 0.68}
+        boxes = ctx.attempt >= control.unlocalised_attempts
         observations = [
             {"id": c["id"], "present": True,
-             "head_box": {"x": xs[c["position"]] + 0.04, "y": 0.34, "w": 0.16, "h": 0.2},
-             "body_box": {"x": xs[c["position"]], "y": 0.34, "w": 0.24, "h": 0.6},
+             "head_box": {"x": xs[c["position"]] + 0.04, "y": 0.34, "w": 0.16, "h": 0.2} if boxes else None,
+             "body_box": {"x": xs[c["position"]], "y": 0.34, "w": 0.24, "h": 0.6} if boxes else None,
              "missing_features": [c["signature_features"][0]] if fail and n == 0 else [],
              "identity_rating": 2 if fail and n == 0 else 5}
             for n, c in enumerate(chars)

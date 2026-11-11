@@ -79,6 +79,12 @@ def rule_check(text: str) -> ModerationVerdict | None:
     return None
 
 
+def text_sha(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 async def moderate_text(
     text: str, *, audience: AgeRating, surface: str, ctx: CallContext, use_llm: bool = True
 ) -> ModerationVerdict:

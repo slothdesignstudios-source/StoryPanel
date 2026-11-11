@@ -32,6 +32,7 @@ from storypanel.errors import AppError, ErrorCode, invalid_state, not_found, ver
 from storypanel.obs import metrics
 from storypanel.pipeline import lettering, moderation
 from storypanel.pipeline.stages_art import panel_rect, revision_sha, snapshot_revision
+from storypanel.providers.base import CallContext
 from storypanel.services import credits, events, outbox, repo
 from storypanel.services.projects import balloon_out
 
@@ -309,6 +310,31 @@ async def reorder_panels(db: AsyncSession, page_id: uuid.UUID, owner_id: uuid.UU
 
 
 # ------------------------------------------------------------------ exports
+async def moderate_edited_dialogue(db: AsyncSession, project: Project) -> None:
+    """Run the full moderation classifier (not just seed-word rules) over every balloon whose
+    text changed since it was last moderated, before anything can be exported. The project
+    row is locked by the caller, so balloon edits cannot slip in between check and snapshot."""
+    pending = list((await db.execute(select(Balloon).where(Balloon.project_id == project.id)
+                                     .order_by(Balloon.panel_id, Balloon.order_index))).scalars())  # fmt: skip
+    pending = [b for b in pending if b.moderated_sha != moderation.text_sha(b.text)]
+    if not pending:
+        return
+    bible = await repo.latest_bible(db, project.id)
+    from storypanel.domain.schemas import AgeRating
+
+    audience = bible.audience if bible else AgeRating.ALL_AGES
+    verdict = await moderation.moderate_text(
+        "\n".join(b.text for b in pending), audience=audience, surface="balloon_edit",
+        ctx=CallContext("balloon_moderation", str(project.owner_id), str(project.id)))  # fmt: skip
+    if not verdict.allowed:
+        raise AppError(ErrorCode.MODERATION_BLOCKED,
+                       "Some edited dialogue isn't allowed, so this comic can't be exported. "
+                       + (verdict.user_message or "Please change the edited lines."),
+                       meta={"balloons": len(pending)})  # fmt: skip
+    for b in pending:
+        b.moderated_sha = moderation.text_sha(b.text)
+
+
 async def create_export(db: AsyncSession, project: Project, fmt: str, key: str) -> Export:
     _require_editable(project)
     existing = (await db.execute(select(Export).where(
@@ -319,6 +345,7 @@ async def create_export(db: AsyncSession, project: Project, fmt: str, key: str) 
         Export.project_id == project.id, Export.status.in_(("queued", "running"))))).scalar_one()  # fmt: skip
     if running >= 3:
         raise AppError(ErrorCode.QUOTA_EXCEEDED, "Wait for the current exports to finish first.")
+    await moderate_edited_dialogue(db, project)
     await db.refresh(project)
     revision = await snapshot_revision(db, project)
     if not any(p["version_id"] for page in revision["pages"] for p in page["panels"]):

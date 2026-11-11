@@ -78,6 +78,23 @@ async def test_retry_recovers_after_one_failed_attempt(
         assert sorted(set(rows)) == [(0, "fail"), (1, "pass")]
 
 
+async def test_missing_localisation_is_insufficient_identity_evidence(
+    client: Any, headers: dict[str, str], worker: Any
+) -> None:
+    """If the judge gives no box for a present character, there is nothing to embed: the
+    identity check must fail (and retry), not pass by default."""
+    fake.control.unlocalised_attempts = 1
+    p = await run_to_completion(client, headers, STRIP)
+    assert all(x["status"] == "ok" for x in panels_of(p))
+    async with transaction() as db:
+        rows = (await db.execute(select(PanelVersion.attempt, PanelVersion.qa_status, PanelVersion.qa_scores)
+                                 .order_by(PanelVersion.attempt))).all()  # fmt: skip
+    first = [r for r in rows if r[0] == 0 and r[2] and any(c for c in (r[2].get("problems") or []))]
+    assert first and all(r[1] == "fail" for r in first)
+    assert all(any(pr.startswith("unlocalised:") for pr in r[2]["problems"]) for r in first)
+    assert all(r[1] == "pass" for r in rows if r[0] == 1)
+
+
 async def test_safety_failures_stay_hidden_after_retries(
     client: Any, headers: dict[str, str], worker: Any
 ) -> None:

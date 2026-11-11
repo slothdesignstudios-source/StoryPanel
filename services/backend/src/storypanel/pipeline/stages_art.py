@@ -400,6 +400,7 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
                 flags += b.flags
                 db.add(Balloon(project_id=project.id, panel_id=panel.id, order_index=b.index,
                                type=b.type, speaker_id=b.speaker, text=b.text,
+                               moderated_sha=moderation.text_sha(b.text),  # moderated with the script
                                geometry=b.geometry(styles().get(preset).font), flags=b.flags))  # fmt: skip
         await db.flush()
         for flag in flags:

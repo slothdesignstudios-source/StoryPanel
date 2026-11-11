@@ -252,6 +252,9 @@ class Balloon(Base, Timestamps):
     style: Mapped[JSON] = mapped_column(JSONB, default=dict)
     flags: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     user_edited: Mapped[bool] = mapped_column(Boolean, default=False)
+    # sha256 of the text as it last passed the full moderation classifier (the script's, for
+    # generated balloons). Export re-moderates every balloon whose text no longer matches.
+    moderated_sha: Mapped[str | None] = mapped_column(String(64))
     version: Mapped[int] = mapped_column(Integer, default=1)
 
 

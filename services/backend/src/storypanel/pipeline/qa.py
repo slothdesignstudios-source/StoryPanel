@@ -144,6 +144,16 @@ async def evaluate_panel(
         if o.identity_rating < 3:
             problems.append(f"identity_rating:{ch.id}")
 
+    # Identity embedding needs a location and references for every expected character that is
+    # present. Without them there is no identity evidence, which is a failure, not a pass.
+    for ch in expected:
+        o = observed.get(ch.id)
+        if o is None or not o.present:
+            continue
+        if not (o.body_box or o.head_box):
+            problems.append(f"unlocalised:{ch.id}")
+        elif not reference_embeddings.get(ch.id):
+            problems.append(f"no_reference:{ch.id}")
     # Identity embedding: crop each character and compare with their reference crops.
     similarities: dict[str, float] = {}
     crops = [(ch.id, crop_box(image, (observed[ch.id].body_box or observed[ch.id].head_box).model_dump()))  # type: ignore[union-attr]

@@ -79,3 +79,37 @@ async def test_duplicate_and_concurrent_retries_start_one_workflow(client: Any, 
             "select count(*) from outbox where kind = 'start_workflow' and payload->'input'->>'export_id' = :e"),
             {"e": export_id})).scalar_one()  # fmt: skip
     assert starts == 2  # the original and exactly one retry
+
+
+async def test_edited_dialogue_is_fully_moderated_before_export(
+    client: Any, headers: dict[str, str], worker: Any
+) -> None:
+    """Seed-word rules pass this edit; the full classifier (fake: '[[unsafe]]') blocks the export."""
+    p = await run_to_completion(client, headers)
+    pid = p["id"]
+    b = p["pages"][0]["panels"][0]["balloons"][0]
+    r = await client.patch(f"/v1/balloons/{b['id']}", headers=headers,
+                           json={"version": b["version"], "text": "Meet me later [[unsafe]]"})  # fmt: skip
+    assert r.status_code == 200  # passes the cheap synchronous rules
+    r = await client.post(f"/v1/projects/{pid}/exports", json={"format": "png"}, headers=headers)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "moderation_blocked"
+    async with transaction() as db:
+        assert (await db.execute(text("select count(*) from exports"))).scalar_one() == 0
+        calls = (await db.execute(text(
+            "select count(*) from provider_usage where stage = 'moderation.balloon_edit'"))).scalar_one()  # fmt: skip
+    assert calls == 1
+    # fixed text: moderated once, export proceeds; unchanged balloons are not re-checked
+    b2 = (await client.get(f"/v1/projects/{pid}", headers=headers)).json()["pages"][0]["panels"][0][
+        "balloons"
+    ][0]
+    await client.patch(
+        f"/v1/balloons/{b['id']}", headers=headers, json={"version": b2["version"], "text": "Meet me later."}
+    )
+    r = await client.post(f"/v1/projects/{pid}/exports", json={"format": "png"}, headers=headers)
+    assert r.status_code == 202
+    await _export(client, headers, pid, r.json()["id"], ("ready", "failed"))
+    r = await client.post(f"/v1/projects/{pid}/exports", json={"format": "pdf"}, headers=headers)
+    async with transaction() as db:
+        calls = (await db.execute(text(
+            "select count(*) from provider_usage where stage = 'moderation.balloon_edit'"))).scalar_one()  # fmt: skip
+    assert calls == 2
