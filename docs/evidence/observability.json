@@ -1,9 +1,9 @@
 {
- "at": "2026-11-10T23:32:04Z",
+ "at": "2026-11-11T13:09:46Z",
  "checks": {
   "correlated_trace": {
    "pass": true,
-   "trace_id": "b9868ed4f0b24cbf8fea61657898321f",
+   "trace_id": "90ea5ca782234feb8e9d79beb263f73e",
    "stages": {
     "http": true,
     "workflow_start": true,
@@ -58,7 +58,7 @@
    "exception": "simulated unexpected failure in text:bible",
    "tags": {
     "stage": "bible",
-    "workflow_id": "comic-8c60e15a-8683-422b-857c-47f2086e43a8",
+    "workflow_id": "comic-45fa7884-310f-47b1-8cfb-50063ca9cb03",
     "attempt": "1"
    },
    "has_user_block": false,
@@ -67,9 +67,9 @@
   },
   "logs": {
    "pass": true,
-   "json_lines": 40,
+   "json_lines": 42,
    "all_have_base_fields": true,
-   "request_lines_with_trace_and_user": 8,
+   "request_lines_with_trace_and_user": 10,
    "activity_fields": [
     "attempt",
     "duration_ms",
@@ -101,7 +101,7 @@
     "workflow_id",
     "workflow_run_id"
    ],
-   "pseudonymous_user": false,
+   "pseudonymous_user": true,
    "secret_canaries_found": {
     "SP_PSEUDONYM_SALT": false,
     "SP_DEV_AUTH_SECRET": false,

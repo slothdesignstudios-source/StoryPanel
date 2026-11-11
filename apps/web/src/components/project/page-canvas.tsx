@@ -39,7 +39,7 @@ function PanelArt({ panel, selected, onSelect }: { panel: Panel; selected: boole
     <Group onClick={onSelect} onTap={onSelect}>
       {img ? <KImage image={img} x={x} y={y} width={w} height={h} crop={crop} /> : <Rect x={x} y={y} width={w} height={h} fill="#e8e8e8" />}
       {!img && label && <Text x={x} y={y + h / 2 - 12} width={w} align="center" text={label} fontSize={22} fontFamily="Inter Variable, sans-serif" fill="#666" />}
-      <Rect x={x} y={y} width={w} height={h} stroke={selected ? "#17726d" : INK} strokeWidth={selected ? 7 : 3} listening={false} />
+      <Rect x={x} y={y} width={w} height={h} stroke={selected ? "#0e5a55" : INK} strokeWidth={selected ? 7 : 3} listening={false} />
     </Group>
   );
 }
@@ -122,9 +122,9 @@ function BalloonShape({ b, g, selected, editable, resizing, onSelect, onChange }
         ) : (
           <Text x={-g.w} y={g.h / 2 - blockH / 2} width={g.w * 3} align="center" text={fit!.lines.join("\n")} wrap="none" fontFamily={COMIC} fontSize={fit!.size} lineHeight={LINE_HEIGHT} fill={INK} />
         )}
-        {selected && !editable && <Rect width={g.w} height={g.h} stroke="#17726d" strokeWidth={3} dash={[8, 5]} listening={false} />}
+        {selected && !editable && <Rect width={g.w} height={g.h} stroke="#0e5a55" strokeWidth={3} dash={[8, 5]} listening={false} />}
       </Group>
-      {selected && editable && <Transformer ref={tr} rotateEnabled={false} keepRatio={false} flipEnabled={false} anchorSize={12} borderStroke="#17726d" anchorStroke="#17726d" boundBoxFunc={(o, n) => (n.width < 40 || n.height < 30 ? o : n)} />}
+      {selected && editable && <Transformer ref={tr} rotateEnabled={false} keepRatio={false} flipEnabled={false} anchorSize={12} borderStroke="#0e5a55" anchorStroke="#0e5a55" boundBoxFunc={(o, n) => (n.width < 40 || n.height < 30 ? o : n)} />}
     </>
   );
 }
