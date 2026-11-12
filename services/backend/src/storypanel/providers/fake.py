@@ -311,8 +311,9 @@ def render_fake_image(req: ImageRequest) -> bytes:
     base = ((seed >> 4) % 90 + 110, (seed >> 12) % 90 + 110, (seed >> 20) % 90 + 130)
     img = Image.new("RGB", (w, h), base)
     d = ImageDraw.Draw(img)
-    d.rectangle([0, int(h * 0.72), w, h], fill=tuple(max(0, c - 55) for c in base))
     kind = req.inputs.get("kind", "panel")
+    if kind not in ("turnaround", "expressions"):  # model sheets are drawn on a plain background
+        d.rectangle([0, int(h * 0.72), w, h], fill=tuple(max(0, c - 55) for c in base))
     chars: list[dict[str, Any]] = req.inputs.get("characters", [])
     if kind in ("turnaround", "expressions") and chars:
         chars = [{**chars[0], "slot": n} for n in range(4)]
@@ -320,13 +321,20 @@ def render_fake_image(req: ImageRequest) -> bytes:
     for n, c in enumerate(chars):
         pal = list(c.get("palette", {}).values()) or ["#CCCCCC", "#555555"]
         body, accent = _hex(pal[0]), _hex(pal[1 % len(pal)])
-        if "slot" in c:
-            cx = int(w * (0.125 + 0.25 * c["slot"]))
+        bottom = 0.92
+        if "slot" in c and kind == "expressions":  # 2 x 2 grid of busts
+            cx = int(w * (0.25 + 0.5 * (c["slot"] % 2)))
+            r, top = int(min(w, h) * 0.07), int(h * (0.18 + 0.5 * (c["slot"] // 2)))
+            bottom = 0.42 + 0.5 * (c["slot"] // 2)
+        elif "slot" in c:
+            cx, r, top = int(w * (0.125 + 0.25 * c["slot"])), int(min(w, h) * 0.09), int(h * 0.36)
         else:
-            cx = int(w * xs.get(c.get("position", "center"), 0.5))
-        r = int(min(w, h) * 0.09)
-        top = int(h * 0.36)
-        d.rounded_rectangle([cx - r, top + r, cx + r, int(h * 0.92)], radius=r // 2, fill=body,
+            cx, r, top = (
+                int(w * xs.get(c.get("position", "center"), 0.5)),
+                int(min(w, h) * 0.09),
+                int(h * 0.36),
+            )
+        d.rounded_rectangle([cx - r, top + r, cx + r, int(h * bottom)], radius=r // 2, fill=body,
                             outline=(20, 20, 20), width=3)  # fmt: skip
         d.ellipse([cx - r, top - r, cx + r, top + r], fill=body, outline=(20, 20, 20), width=3)
         d.rectangle([cx - r, top + r + 6, cx + r, top + r + 6 + r // 2], fill=accent)

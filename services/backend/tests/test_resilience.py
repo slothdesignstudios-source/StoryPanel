@@ -460,17 +460,20 @@ async def test_trace_context_crosses_api_outbox_workflow_and_activity(client: An
 
 
 # ------------------------------------------------------------------ targeted repair, provenance
+@pytest.mark.parametrize("mode", ["reference_edit", "inpaint"])
 async def test_local_qa_failure_is_repaired_in_place_not_redrawn(
-    client: Any, headers: dict[str, str], worker: Any
+    client: Any, headers: dict[str, str], worker: Any, mode: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """One character failing QA triggers an inpaint of that region; the rest of the panel is
-    pixel-identical to the first attempt."""
+    """One character failing QA triggers a repair of that region; the rest of the panel is
+    pixel-identical to the first attempt. reference_edit conditions the repair on the
+    character's approved portrait; inpaint (no reference input) only on the description."""
     import io
 
     from PIL import Image, ImageChops
 
     from storypanel.services import repo
 
+    monkeypatch.setattr(get_settings(), "repair_mode", mode)
     fake.control.qa_fail_attempts = 1
     p = await run_to_completion(client, headers, STRIP)
     assert all(x["status"] == "ok" for x in panels_of(p))
@@ -482,7 +485,14 @@ async def test_local_qa_failure_is_repaired_in_place_not_redrawn(
         )
         first, second = versions[0], versions[1]
         assert (first.attempt, first.qa_status, second.attempt, second.qa_status) == (0, "fail", 1, "pass")
-        assert second.model == "fake-inpaint" and second.references[0]["role"] == "repair_base"
+        assert second.references[0]["role"] == "repair_base" and second.references[0]["mode"] == mode
+        if mode == "reference_edit":
+            assert second.model == "fake-edit"
+            assert second.references[1]["role"] == "character" and second.references[1]["view"] == "portrait"
+        else:
+            assert second.model == "fake-inpaint"
+        repaired = (await db.execute(select(func.count()).select_from(PanelVersion).where(
+            PanelVersion.attempt == 1, PanelVersion.references[0]["role"].astext == "repair_base"))).scalar_one()  # fmt: skip
         box = first.qa_scores["repair"]["box"]
         a = Image.open(io.BytesIO(await repo.asset_bytes(db, first.image_asset_id))).convert("RGB")
         b = Image.open(io.BytesIO(await repo.asset_bytes(db, second.image_asset_id))).convert("RGB")
@@ -501,8 +511,8 @@ async def test_local_qa_failure_is_repaired_in_place_not_redrawn(
     assert (
         diff[0] >= x0 and diff[1] >= y0 and diff[2] <= x1 + 1 and diff[3] <= y1 + 1
     )  # ...only inside the mask
-    assert "fake-inpaint" in costs
-    assert sum("fake-inpaint" == m for m in fake.control.models_used) == 4  # one repair per panel
+    assert ("fake-edit" if mode == "reference_edit" else "fake-inpaint") in costs
+    assert repaired == 4  # one repair per panel, no full redraws
 
 
 async def test_exports_carry_ai_provenance_labels(client: Any, headers: dict[str, str], worker: Any) -> None:

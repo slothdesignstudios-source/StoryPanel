@@ -7,11 +7,9 @@ retry) and keep provider calls outside database transactions.
 from __future__ import annotations
 
 import asyncio
-import io
 import uuid
 from typing import Any
 
-from PIL import Image
 from sqlalchemy import select
 
 from storypanel import storage
@@ -36,7 +34,9 @@ from storypanel.domain.schemas import (
 from storypanel.domain.states import ProjectStatus as S
 from storypanel.domain.validation import has_errors
 from storypanel.errors import AppError, ErrorCode
-from storypanel.pipeline import art, moderation, qa, story
+from storypanel.obs import metrics
+from storypanel.obs.logging import get_logger
+from storypanel.pipeline import art, moderation, qa, sheets, story
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext, ImageInput, ImageRequest
 from storypanel.services import credits, events, repo
@@ -44,6 +44,7 @@ from storypanel.services import credits, events, repo
 TURNAROUND_VIEWS = ("front", "three_quarter", "side", "back")
 EXPRESSION_VIEWS = ("expr_happy", "expr_angry", "expr_sad", "expr_surprised")
 EMBEDDED_VIEWS = ("portrait", *TURNAROUND_VIEWS)
+log = get_logger("stages")
 
 
 async def _block(project_id: uuid.UUID, verdict: ModerationVerdict, surface: str) -> dict[str, Any]:
@@ -135,19 +136,6 @@ async def stage_bible(project_id: uuid.UUID) -> dict[str, Any]:
         await events.notify_after_commit(db)
     return {"outcome": "ready", "characters": [c.id for c in result.characters],
             "locations": [loc.id for loc in result.bible.locations]}  # fmt: skip
-
-
-def _crop_grid(data: bytes, cols: int, rows: int) -> list[bytes]:
-    out: list[bytes] = []
-    with Image.open(io.BytesIO(data)) as img:
-        rgb = img.convert("RGB")
-        cw, ch = rgb.width // cols, rgb.height // rows
-        for r in range(rows):
-            for c in range(cols):
-                buf = io.BytesIO()
-                rgb.crop((c * cw, r * ch, (c + 1) * cw, (r + 1) * ch)).save(buf, format="PNG")
-                out.append(buf.getvalue())
-    return out
 
 
 async def _safe_image(req: ImageRequest, ctx: CallContext, *, key: str, audience: AgeRating,
@@ -260,26 +248,34 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
         raise
 
     crops: dict[str, storage.ValidatedImage] = {"portrait": portrait}
-    for view, data in zip(TURNAROUND_VIEWS, _crop_grid(turnaround.data, 4, 1), strict=True):
-        crops[view] = storage.validate_image(data)
-    for view, data in zip(EXPRESSION_VIEWS, _crop_grid(expressions.data, 2, 2), strict=True):
-        crops[view] = storage.validate_image(data)
-    vectors = await metering.embed_images([crops[v].data for v in EMBEDDED_VIEWS], ctx)
-    embeddings = dict(zip(EMBEDDED_VIEWS, vectors, strict=True))
+    layout_report: dict[str, Any] = {}
+    for sheet_name, sheet, views, (cols, rows) in (("turnaround", turnaround, TURNAROUND_VIEWS, (4, 1)),
+                                                    ("expressions", expressions, EXPRESSION_VIEWS, (2, 2))):  # fmt: skip
+        layout = sheets.analyse(sheet.data, cols, rows)
+        layout_report[sheet_name] = {"method": layout.method, "problems": layout.problems}
+        metrics.sheet_layouts.labels(sheet_name, layout.method).inc()
+        for view, data in zip(views, layout.crops, strict=False):
+            crops[view] = storage.validate_image(data)
+    # Only views whose crop is verified become identity references; the portrait always is.
+    embedded = [v for v in EMBEDDED_VIEWS if v in crops]
+    vectors = await metering.embed_images([crops[v].data for v in embedded], ctx)
+    embeddings = dict(zip(embedded, vectors, strict=True))
 
     async with transaction() as db:
         char = (await db.execute(select(Character).where(Character.id == char_id)
                                  .with_for_update())).scalar_one()  # fmt: skip
         if char.sheet_version >= target:
             return {"outcome": "ready"}
-        sheets = {"turnaround_sheet": turnaround, "expression_sheet": expressions}
-        for view, image in {**crops, **sheets}.items():
+        sheet_images = {"turnaround_sheet": turnaround, "expression_sheet": expressions}
+        for view, image in {**crops, **sheet_images}.items():
             asset = await repo.save_image(db, owner_id=owner, project_id=project_id,
                                           kind=f"character_{view}", image=image)  # fmt: skip
             db.add(CharacterRef(character_id=char.id, sheet_version=target, view=view,
                                 asset_id=asset.id, embedding=embeddings.get(view)))  # fmt: skip
         char.sheet_version, char.sheet_status = target, "ready"
         char.spec = spec.model_dump(mode="json")
+        if any(r["method"] == "unverified" for r in layout_report.values()):
+            log.warning("sheet_layout_unverified", character=slug, report=layout_report)
         if revision:
             project = await repo.get_project(db, project_id, lock=True)
             project.cast_version += 1  # the approved content changed: approvals are stale

@@ -182,6 +182,19 @@ def compile_edit_prompt(instruction: str, style_preset: str,
                          characters=[{"name": n, "ref": r} for n, r in characters])  # fmt: skip
 
 
+def compile_reference_repair_prompt(spec: CharacterSpec, style_preset: str, fix_notes: tuple[str, ...],
+                                    box: dict[str, float]) -> str:  # fmt: skip
+    """Reference-conditioned repair: the edit model sees the panel and the approved portrait."""
+
+    def pct(v: float) -> int:
+        return round(100 * v)
+
+    return render_prompt("repair_reference", style_token=styles().get(style_preset).token, name=spec.name,
+                         canonical_description=spec.canonical_description(), fix_notes=list(fix_notes),
+                         left=pct(box["x"]), right=pct(box["x"] + box["w"]), top=pct(box["y"]),
+                         bottom=pct(box["y"] + box["h"]))  # fmt: skip
+
+
 def compile_repair_prompt(spec: CharacterSpec, style_preset: str, fix_notes: tuple[str, ...]) -> str:
     """Prompt for repainting one character's region. Uses the canonical description so the
     repaired figure is described in exactly the words every other prompt uses."""

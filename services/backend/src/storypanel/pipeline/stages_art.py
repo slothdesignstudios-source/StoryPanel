@@ -137,7 +137,9 @@ async def stage_generate_panel(
         # Targeted repair: if the previous attempt failed QA only locally (one character),
         # repaint that region instead of paying for, and re-rolling, the whole panel.
         repair_of: tuple[bytes, dict[str, Any]] | None = None
-        if attempt > 0 and kind != "edit" and (s.inpaint_model or s.provider_mode == "fake"):
+        repair_available = s.repair_mode == "reference_edit" or (
+            s.repair_mode == "inpaint" and (s.inpaint_model or s.provider_mode == "fake"))  # fmt: skip
+        if attempt > 0 and kind != "edit" and repair_available:
             prev_version = (await db.execute(select(PanelVersion).where(
                 PanelVersion.idempotency_key == f"panel:{panel_id}:{request_key}:a{attempt - 1}"))).scalar_one_or_none()  # fmt: skip
             target = (prev_version.qa_scores or {}).get("repair") if prev_version else None
@@ -157,14 +159,29 @@ async def stage_generate_panel(
 
     mask: bytes | None = None
     used: list[dict[str, Any]]
-    if repair_of is not None:
+    portrait_id = char_refs.get(repair_of[1]["character"], {}).get("portrait") if repair_of else None
+    if repair_of is not None and s.repair_mode == "reference_edit" and portrait_id:
+        base_image, target = repair_of
+        who = cast[target["character"]]
+        mask = repair.build_mask(base_image, target["box"])
+        async with transaction() as db:
+            portrait = await repo.asset_bytes(db, uuid.UUID(portrait_id))
+        prompt = art.compile_reference_repair_prompt(who, preset, tuple(fix_notes or ()), target["box"])
+        prompt_sha = hashlib.sha256(prompt.encode()).hexdigest()
+        used = [{"role": "repair_base", "key": str(panel_id), "box": target["box"], "character": target["character"],
+                 "mode": "reference_edit"},
+                {"role": "character", "key": target["character"], "view": "portrait", "asset_id": portrait_id}]  # fmt: skip
+        req = ImageRequest(prompt, aspect, (ImageInput(base_image), ImageInput(portrait)), mode="edit", seed=seed,
+                           audience=c["audience"].value,
+                           inputs={"kind": "repair", "character": target["character"]})  # fmt: skip
+    elif repair_of is not None:
         base_image, target = repair_of
         who = cast[target["character"]]
         mask = repair.build_mask(base_image, target["box"])
         prompt = art.compile_repair_prompt(who, preset, tuple(fix_notes or ()))
         prompt_sha = hashlib.sha256(prompt.encode()).hexdigest()
         used = [{"role": "repair_base", "key": str(panel_id), "box": target["box"],
-                 "character": target["character"]}]  # fmt: skip
+                 "character": target["character"], "mode": "inpaint"}]  # fmt: skip
         req = ImageRequest(prompt, aspect, mode="inpaint", seed=seed, image=base_image, mask=mask,
                            audience=c["audience"].value)  # fmt: skip
     elif kind == "edit":

@@ -38,6 +38,7 @@ provider_unreconciled_usd = Gauge(
     "sp_provider_unreconciled_usd",
     "Provider cost counted at estimate because the outcome is still open or unknown",
 )
+sheet_layouts = Counter("sp_sheet_layouts_total", "Reference sheet crop layout outcome", ["sheet", "method"])
 billing_anomalies = Counter("sp_billing_anomalies_total", "Billing situations needing attention", ["kind"])
 account_deletions = Counter("sp_account_deletions_total", "Account deletion progress", ["outcome"])
 account_deletions_overdue = Gauge(

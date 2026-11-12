@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # Fallback models are used only when the primary is failing (circuit breaker) or rejects
     # a request as malformed; see providers/metering.py. They must have verified profiles.
     image_model_fallback_generate: str | None = None
+    # Targeted repair of one character's region after a QA failure:
+    #   reference_edit (default): the multi-reference edit model gets the panel and the
+    #     character's approved portrait; the result is composited back through the mask.
+    #   inpaint: the mask-based fill model (SP_INPAINT_MODEL); it cannot take reference
+    #     images, so identity is conditioned only on the text description.
+    repair_mode: Literal["reference_edit", "inpaint", "off"] = "reference_edit"
     inpaint_model: str | None = None
     image_breaker_failures: int = 5  # provider errors within 60 s that open the breaker
     image_breaker_open_seconds: int = 120

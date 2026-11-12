@@ -327,3 +327,52 @@ def test_sampling_ratio_applies_to_browser_traces_and_is_consistent_across_hops(
         NonRecordingSpan(SpanContext(1, 1, is_remote=True, trace_flags=TraceFlags(0)))
     )
     assert s.should_sample(unsampled, 1, "x").decision is Decision.DROP
+
+
+def _sheet(figs: list[tuple[float, float, float, float]], size: tuple[int, int] = (1600, 900)) -> bytes:
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", size, (250, 248, 240))
+    d = ImageDraw.Draw(img)
+    w, h = size
+    for x0, y0, x1, y1 in figs:
+        d.rectangle([int(x0 * w), int(y0 * h), int(x1 * w), int(y1 * h)], fill=(40, 60, 160))
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
+def test_sheet_layout_validation() -> None:
+    from storypanel.pipeline import sheets
+
+    grid = [(0.05 + i * 0.25, 0.1, 0.2 + i * 0.25, 0.9) for i in range(4)]
+    assert sheets.analyse(_sheet(grid), 4, 1).method == "grid"
+    # model drew four figures, but crowded to the left: the fixed grid would cut them
+    crowded = [(0.02 + i * 0.17, 0.1, 0.15 + i * 0.17, 0.9) for i in range(4)]
+    seg = sheets.analyse(_sheet(crowded), 4, 1)
+    assert seg.method == "segmented" and len(seg.crops) == 4 and seg.problems
+    # three figures, one of them straddling a crop line: nothing reliable to crop
+    bad = sheets.analyse(_sheet([(0.05, 0.1, 0.2, 0.9), (0.4, 0.1, 0.6, 0.9), (0.8, 0.1, 0.95, 0.9)]), 4, 1)
+    assert bad.method == "unverified" and not bad.crops
+    assert any(p.startswith("figure_on_vertical_line") for p in bad.problems)
+    two_by_two = [(0.1, 0.1, 0.4, 0.4), (0.6, 0.1, 0.9, 0.4), (0.1, 0.6, 0.4, 0.9), (0.6, 0.6, 0.9, 0.9)]
+    assert sheets.analyse(_sheet(two_by_two, (1000, 1000)), 2, 2).method == "grid"
+    empty = sheets.analyse(_sheet(two_by_two[:3], (1000, 1000)), 2, 2)
+    assert "empty_cell:1,1" in empty.problems and empty.method == "unverified"
+
+
+def test_fake_sheets_have_the_layout_the_pipeline_crops() -> None:
+    from storypanel.pipeline import sheets
+    from storypanel.providers.base import ImageRequest
+    from storypanel.providers.fake import render_fake_image
+
+    ch = [{"id": "a", "position": "center", "palette": {"a": "#AA3333", "b": "#3333AA"}}]
+    t = render_fake_image(ImageRequest("t", "16:9", inputs={"kind": "turnaround", "characters": ch}))
+    e = render_fake_image(ImageRequest("e", "1:1", inputs={"kind": "expressions", "characters": ch}))
+    assert sheets.analyse(t, 4, 1).method == "grid"
+    assert sheets.analyse(e, 2, 2).method == "grid"
+    # a full-width floor band does not count as a figure on a crop line
+    floor = [(0.05 + i * 0.25, 0.1, 0.2 + i * 0.25, 0.7) for i in range(4)] + [(0.0, 0.75, 1.0, 1.0)]
+    assert sheets.analyse(_sheet(floor), 4, 1).method == "grid"
