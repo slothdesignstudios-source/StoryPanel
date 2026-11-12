@@ -38,6 +38,7 @@ Customer credits live in the credit ledger and are never computed from these fig
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -184,12 +185,26 @@ class Attempt:
     request_id: str | None
     estimate: Decimal
     price: pricing.Price
+    submitted_at: datetime | None = None
 
 
 def _snap(a: ProviderAttempt) -> Attempt:
     return Attempt(a.id, a.operation_id, a.attempt_no, a.provider, a.model, a.operation, a.status,
                    a.provider_request_id, a.cost_estimate_usd,
-                   pricing.Price.from_ref(a.provider, a.model, a.price_ref))  # fmt: skip
+                   pricing.Price.from_ref(a.provider, a.model, a.price_ref), a.submitted_at)  # fmt: skip
+
+
+def _time_budget(att: Attempt) -> float | None:
+    """Seconds of provider compute an attempt reserved, for compute-time billing; else None."""
+    if att.price.unit != "per_compute_second" or not att.price.usd:
+        return None
+    return float(att.estimate / att.price.usd)
+
+
+def _elapsed(att: Attempt) -> float:
+    if att.submitted_at is None:
+        return 0.0
+    return (datetime.now(UTC) - att.submitted_at).total_seconds()
 
 
 async def _latest(db: AsyncSession, key: str) -> ProviderAttempt | None:
@@ -241,6 +256,13 @@ async def _begin_attempt(ctx: CallContext, *, key: str, provider: str, model: st
                 status="reserved", prompt_version=ctx.prompt_version, submissions=0))  # fmt: skip
         else:
             op_id = op.id
+        if ctx.user_id:
+            # Deletion blocks new paid work at once, including activities already running when
+            # it was requested: no new reservation, so nothing new is submitted or billed.
+            deleted = (await db.execute(text("select deleted_at is not null from users where id = :u"),
+                                        {"u": _uuid(ctx.user_id)})).scalar_one_or_none()  # fmt: skip
+            if deleted:
+                raise AppError(ErrorCode.FORBIDDEN, "This account has been deleted.", retryable=False)
         latest = await _latest(db, key)
         if (latest.attempt_no if latest else 0) != after:
             # Someone else started an attempt for this operation since we looked.
@@ -335,8 +357,10 @@ async def structured(
     provider = get_providers().text
     model = provider.model_for(role)
     price = pricing.require(provider.name, model)
-    images_px = [_pixels(i.data) for i in images]
-    estimate = pricing.text_estimate(price, input_chars=len(system) + len(user), images_px=images_px,
+    # everything sent counts toward input: prompts, image labels and the output schema
+    input_bytes = (len(system.encode()) + len(user.encode()) + sum(len((i.label or "").encode()) for i in images)
+                   + len(json.dumps(schema.model_json_schema()).encode()))  # fmt: skip
+    estimate = pricing.text_estimate(price, input_bytes=input_bytes, images_wh=[_size(i.data) for i in images],
                                      max_tokens=provider.max_tokens)  # fmt: skip
     key = f"text:{uuid.uuid4().hex}"
     operation = f"text_{role}"
@@ -393,6 +417,18 @@ async def structured(
     return result
 
 
+def _size(data: bytes) -> tuple[int, int]:
+    import io
+
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            return int(img.width), int(img.height)
+    except Exception:
+        return 8000, 8000  # unknown: the largest accepted image, which the cap then bounds
+
+
 def _pixels(data: bytes) -> int:
     import io
 
@@ -413,6 +449,24 @@ def _final_ambiguous() -> AppError:
 
 
 Choose = Callable[[], Awaitable[tuple[str, pricing.Price, Decimal]]]
+
+
+async def _over_budget(att: Attempt, request_id: str, cancel: Callable[[str, str], Awaitable[None]],
+                       fail: Callable[..., AppError]) -> AppError:  # fmt: skip
+    """A compute-billed request used the time it reserved: cancel it at the provider and stop.
+    The provider may still finish (fal cannot always stop a running job), so the reserved
+    amount stays an unresolved potential charge until a provider charge is imported."""
+    try:
+        await cancel(att.model, request_id)
+    except Exception:
+        log.warning("provider_cancel_failed", model=att.model, provider_request_id=request_id)
+    await _close(att, status="cancelled", basis="unresolved", error_code="time_budget_exceeded",
+                 only_if=RESOLVABLE)  # fmt: skip
+    metrics.provider_calls.labels(att.provider, att.operation, "time_budget").inc()
+    log.warning("provider_time_budget_exceeded", model=att.model, provider_request_id=request_id,
+                budget_s=_time_budget(att))  # fmt: skip
+    return fail(ErrorCode.PROVIDER_ERROR, "This step took longer than its cost limit allows.", "time_budget",
+                retryable=False)
 
 
 async def _paid_request(
@@ -453,8 +507,11 @@ async def _paid_request(
 
     async with provider_slot("image"):
         request_id = att.request_id
+        budget = None if refetch else _time_budget(att)
+        submitted = time.monotonic() - _elapsed(att)  # resumed: when the provider accepted it
         if request_id is None:
             await _mark(att, status="submitting")
+            submitted = time.monotonic()
             try:
                 request_id = await submit(model)
             except AppError as exc:
@@ -482,9 +539,18 @@ async def _paid_request(
                 "provider_request_resumed", operation=operation, model=model, provider_request_id=request_id
             )
             metrics.provider_calls.labels(provider_name, operation, "resumed").inc()
+        wait = wait_seconds
+        if budget is not None:
+            # Compute-time billing: never wait (or let retries resume) past the reserved time.
+            remaining = budget - (time.monotonic() - submitted)
+            if remaining <= 0:
+                raise await _over_budget(att, request_id, cancel, fail)
+            wait = min(wait_seconds, remaining)
         try:
-            result = await fetch(model, request_id, wait_seconds)
+            result = await fetch(model, request_id, wait)
         except RequestPending as exc:
+            if budget is not None and time.monotonic() - submitted >= budget:
+                raise await _over_budget(att, request_id, cancel, fail) from exc
             # Still running at the provider: keep the id; the activity retry resumes it.
             raise fail(ErrorCode.TIMEOUT, "Illustration is taking longer than usual.", "pending") from exc
         except RetrievalFailed as exc:
@@ -716,7 +782,7 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
     unresolved (ambiguous). Lost/unknown ids are *not* released: they stay counted."""
     cutoff = datetime.now(UTC) - older_than
     outcome = {"released": 0, "ambiguous": 0, "succeeded_unused": 0, "failed": 0, "pending": 0, "lost": 0,
-               "retrieval_error": 0}  # fmt: skip
+               "retrieval_error": 0, "cancelled_over_budget": 0}  # fmt: skip
     async with transaction() as db:
         rows = [_snap(r) for r in (await db.execute(select(ProviderAttempt).where(
             ProviderAttempt.status.in_(RESOLVABLE), ProviderAttempt.updated_at < cutoff)
@@ -745,6 +811,18 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
                          calculated=calculated, images=1, only_if=RESOLVABLE)  # fmt: skip
             outcome["succeeded_unused"] += 1
         except RequestPending:
+            budget = _time_budget(att)
+            if budget is not None and att.status == "started" and _elapsed(att) >= budget:
+                # Abandoned compute-billed job past its reserved time: stop paying for it.
+                try:
+                    cancel = providers.upscale.cancel if att.operation == "upscale" else providers.image.cancel
+                    await cancel(att.model, att.request_id)
+                except Exception:
+                    log.warning("provider_cancel_failed", model=att.model, provider_request_id=att.request_id)
+                await _close(att, status="cancelled", basis="unresolved", error_code="time_budget_exceeded",
+                             only_if=("started",))  # fmt: skip
+                outcome["cancelled_over_budget"] += 1
+                continue
             if att.status == "cancelled":
                 try:
                     cancel = (

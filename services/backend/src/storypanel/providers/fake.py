@@ -50,6 +50,7 @@ class FakeControl:
     cancel_reports_job_failed: bool = False
     errors: dict[str, list[Exception]] = field(default_factory=dict)  # op -> queue of raises
     pending_fetches: int = 0  # next N image fetches report "still running"
+    pending_upscale_fetches: int = 0  # next N upscale fetches report "still running"
     submits: list[str] = field(default_factory=list)
     models_used: list[str] = field(default_factory=list)
     cancelled: list[str] = field(default_factory=list)
@@ -147,6 +148,9 @@ class FakeTextProvider:
         if "audience" in answers and answers["audience"] in ("all_ages", "teen", "mature"):
             audience = answers["audience"]
         pages = max(1, min(int(pages), i["max_pages"]))
+        # like the live model: a strip with a stated panel count ("3 panel strip") keeps it
+        pm = re.search(r"\b(\d+)[\s-]*panels?\b", low)
+        panels = int(pm.group(1)) if strip and pm else None
         names = re.findall(r"\bnamed ([A-Z][a-z]+)", prompt)[: i["max_characters"]]
         return {
             "brief": {
@@ -154,7 +158,7 @@ class FakeTextProvider:
                 "audience": audience, "pages": pages,
                 "format": "strip" if strip else "western_page", "style_preset": style,
                 "named_characters": names, "setting": "a rain-soaked neon city",
-                "must_haves": [],
+                "must_haves": [], "panels": panels,
             },
             "questions": questions,
         }  # fmt: skip
@@ -188,7 +192,7 @@ class FakeTextProvider:
             "bible": {
                 "title": "Noodles After Midnight", "logline": b["summary"][:160],
                 "audience": b["audience"], "genre": b["genre"],
-                "format": {"type": fmt, "pages": b["pages"],
+                "format": {"type": fmt, "pages": b["pages"], "panels": b.get("panels"),
                            "panels_per_page": "3-4" if fmt == "strip" else "4-6"},
                 "style_preset": b["style_preset"], "setting": b["setting"], "tone": b["tone"],
                 "themes": ["loneliness", "small kindnesses"],
@@ -218,7 +222,7 @@ class FakeTextProvider:
         climax_page = max(0, pages - 2) if pages > 1 else 0
         out_pages = []
         for p in range(pages):
-            n_panels = 4 if strip else 4 + (p % 2)
+            n_panels = (i.get("panels") or 4) if strip else 4 + (p % 2)
             panels = []
             for k in range(n_panels):
                 who = cast[: 1 + ((p + k) % min(len(cast), 3))]
@@ -494,6 +498,9 @@ class FakeUpscaleProvider:
     async def fetch(self, model: str, request_id: str, *, wait_seconds: float) -> ImageResult:
         control.fetches.append((model, request_id))
         control.raise_if_queued("upscale:fetch")
+        if control.pending_upscale_fetches > 0:
+            control.pending_upscale_fetches -= 1
+            raise RequestPending(request_id)
         job = self._jobs.get(request_id)
         if job is None or job[0] != model:
             raise RequestUnknown(request_id)

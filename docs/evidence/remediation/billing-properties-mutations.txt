@@ -1,0 +1,8 @@
+## mutation 1: grant the full allowance instead of the top-up
+FAILED tests/test_billing_properties.py::test_credits_depend_only_on_the_set_of_paid_invoices[upgrade_renew_downgrade]
+FAILED tests/test_billing_properties.py::test_credits_depend_only_on_the_set_of_paid_invoices[deferred_proration]
+2 failed, 3 passed in 5.23s
+## mutation 2: key entitlements by period start (the pre-0010 behaviour)
+FAILED tests/test_billing_properties.py::test_credits_depend_only_on_the_set_of_paid_invoices[upgrade_renew_downgrade]
+FAILED tests/test_billing_properties.py::test_credits_depend_only_on_the_set_of_paid_invoices[deferred_proration]
+2 failed, 3 passed in 5.32s

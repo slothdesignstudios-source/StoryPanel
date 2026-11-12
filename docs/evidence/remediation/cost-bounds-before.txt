@@ -1,0 +1,9 @@
+        time has passed the request is cancelled and the attempt closed, instead of being resumed by
+FAILED tests/test_cost_bounds.py::test_text_input_bound_covers_the_documented_token_rules
+FAILED tests/test_cost_bounds.py::test_text_reservation_is_the_full_output_cap_plus_the_input_bound
+FAILED tests/test_cost_bounds.py::test_structured_call_reserves_schema_and_labels_too
+FAILED tests/test_cost_bounds.py::test_compute_billed_request_is_cancelled_once_its_reserved_time_is_used
+FAILED tests/test_cost_bounds.py::test_reconciliation_cancels_an_abandoned_compute_billed_request
+FAILED tests/test_cost_bounds.py::test_nano_banana_paid_add_ons_are_explicitly_off[fal-ai/nano-banana-2]
+FAILED tests/test_cost_bounds.py::test_nano_banana_paid_add_ons_are_explicitly_off[fal-ai/nano-banana-2/edit]
+7 failed in 2.26s

@@ -2,7 +2,7 @@
 """Bounded smoke test: one 3-panel strip, end to end, through the running API and worker.
 
     live-smoke.py preflight                       free checks only; no paid calls
-    live-smoke.py estimate                        upper-bound spend from the recorded call profile
+    live-smoke.py estimate                        itemised cost model (expected, minimum cap, worst-case holds)
     live-smoke.py run --simulated                 same flow on fake providers; records the call profile
     live-smoke.py run --approve-usd X --run-id ID the paid run (live providers only)
 
@@ -14,12 +14,14 @@ are read back per stage from `provider_attempts`: reserved estimate, calculated 
 potential charges and provider-confirmed charges, kept separate.
 
 Spending safety (paid run):
-- refuses unless SP_PROVIDER_MODE=live and --approve-usd >= the computed upper bound;
+- refuses unless SP_PROVIDER_MODE=live and --approve-usd >= the smallest cap with which a clean run
+  can finish (see `estimate`); the approved amount is an application admission limit, not a
+  provider-enforced ceiling (docs/smoke-test-cost.md lists what can be billed beyond it);
 - the approved amount is persisted as a lifetime SpendCap on the smoke user (same serialised
   reservation as every ceiling; survives restarts, re-use the same --run-id). Every paid call
   reserves its estimate before dispatch, so the run stops (spend_limit_reached) instead of
-  exceeding it. Text estimates are heuristics, so a call's settled cost can exceed its estimate;
-  the report shows any such overrun.
+  reserving past it. Text reservations hold the full output cap plus an input bound; the report
+  shows any call whose settled cost exceeded its reservation.
 
 Environment: the API at SP_SMOKE_API (default http://127.0.0.1:8000) with SP_AUTH_MODE=dev in a
 non-deployed SP_ENV, and the same SP_DATABASE_URL as the API (to set the cap and read usage).
@@ -142,64 +144,164 @@ async def preflight() -> int:
 
 
 # ------------------------------------------------------------------ estimate
-def estimate(verbose: bool = True) -> Decimal:
-    """Upper bound from the recorded call profile, priced with the live table:
-    - text: 50k input tokens + the full output budget per call (more than any prompt here uses);
-    - images: the price for the configured 1K output; per-megapixel units at 1.1 MP;
-    - upscaling billed per compute second: rate x the full wait budget;
-    - every QA-repeatable panel stage x (1 + max_panel_qa_retries), the script stage x (1 +
-      max_script_repairs), character stages scaled to max_characters."""
+# Expected output tokens per text call: an ASSUMPTION for the expected-cost column only (reservations
+# always hold the full max_tokens). Replaced by measured usage after the first live run.
+EXPECTED_OUTPUT = {"intake": 600, "moderation": 250, "bible": 5000, "script": 7000, "image_safety": 250,
+                   "vision_qa": 900}  # fmt: skip
+LIVE_IMAGE_TOKENS_EXPECTED = 1369  # a 1K (1024x1024) image: ceil(1024/28)^2, official vision rule
+UPSCALE_SECONDS_EXPECTED = 10  # ASSUMPTION: no published ESRGAN run time; the reservation holds the full budget
+EMBED_PIXELS = {"character_sheet": 5 * 1_100_000, "identity_embedding": 3 * 400_000}  # live upper sizes
+
+
+def _expected_out(stage: str) -> int:
+    return next((v for k, v in EXPECTED_OUTPUT.items() if stage.startswith(k)), 600)
+
+
+def cost_model() -> dict[str, Any]:
+    """Every potentially billable call of the smoke test, from the code's own limits.
+
+    nominal  = the happy path once (no QA failure, no retry, no clarifying question);
+    maximum  = every bounded loop and every Temporal activity attempt used, every failure
+               counted as billed (SP_COUNT_FAILED_REQUESTS_AS_BILLED=true). Reservations are per call.
+    """
     from storypanel.config import Settings
+    from storypanel.pipeline.story import MAX_LOCATIONS
     from storypanel.providers import pricing
+    from storypanel.workflows.definitions import IMAGE, TEXT
 
-    # Works before any key exists: models and prices come from the environment / pricing file
-    # (config/live-smoke.env), not from a validated live Settings object.
-    # defaults only: validated as fake so the estimate needs no keys even when SP_PROVIDER_MODE=live is set
-    base = Settings(provider_mode="fake", _env_file=None)  # type: ignore[call-arg]
     env = {**_env_file(ROOT / "config/live-smoke.env"), **{k: v for k, v in os.environ.items() if k.startswith("SP_")}}
+    base = Settings(provider_mode="fake", _env_file=None)  # type: ignore[call-arg]
 
-    class _View:
-        def __getattr__(self, name: str) -> Any:
-            return env.get(f"SP_{name.upper()}") or getattr(base, name)
+    def setting(name: str) -> Any:
+        return env.get(f"SP_{name.upper()}") or getattr(base, name)
 
-    s = _View()
-    prof = json.loads(PROFILE.read_text())
     table = pricing.parse_table(json.loads((ROOT / env["SP_PRICING_FILE"]).read_text()))
-    chars = max(1, prof["characters"])
-    total = Decimal(0)
-    rows = []
-    for (stage, op), n in sorted(((tuple(k.split("|")), v) for k, v in prof["calls"].items())):
-        live_model = getattr(s, LIVE_MODEL_FOR[op])
-        if not live_model:
-            continue
-        price = table.get((_provider(op), live_model))
-        if price is None:
-            raise SystemExit(f"no price for {_provider(op)}/{live_model}; run preflight")
-        if op.startswith("text"):
-            unit = pricing.text_cost(price, 50_000, 16_000)
-        elif price.unit == "per_compute_second":
-            unit = pricing.image_cost(price, seconds=WAIT_SECONDS_UPSCALE)
-        else:
-            unit = pricing.image_cost(price, pixels=1_100_000 * (4 if op == "embed" else 1))
-        mult = 1
-        s_retries, s_repairs, s_chars = int(s.max_panel_qa_retries), int(s.max_script_repairs), int(s.max_characters)
-        if stage in ("panel_generate", "image_safety", "vision_qa", "identity_embedding", "panel_edit"):
-            mult = 1 + s_retries
-        elif stage.startswith("script"):
-            mult = 1 + s_repairs
-        elif stage.startswith("character"):
-            mult = max(1, -(-s_chars // chars))  # ceil(max_characters / simulated characters)
-        cost = unit * n * mult
-        total += cost
-        rows.append((stage, op, live_model, n, mult, unit, cost))
+    prof = json.loads(PROFILE.read_text())
+    sizes = prof["sizes"]
+    TA, IA = TEXT["retry_policy"].maximum_attempts, IMAGE["retry_policy"].maximum_attempts
+    QA = 1 + int(setting("max_panel_qa_retries"))
+    SR = 1 + int(setting("max_script_repairs"))
+    C, L, P, E, X = int(setting("max_characters")), MAX_LOCATIONS, PANELS_REQUESTED, 1, 3
+    L_NOM = min(L, prof["calls"].get("location_ref|image_generate", 1))
+    out_cap = 16000  # AnthropicTextProvider.max_tokens: provider-enforced output ceiling, thinking included
+    fake_in = {"text_story": Decimal(2), "text_light": Decimal("0.1"), "text_vision": Decimal("0.1")}
+    fake_out = {"text_story": Decimal(10), "text_light": Decimal("0.5"), "text_vision": Decimal("0.5")}
+
+    def price(op: str) -> pricing.Price:
+        return table[(_provider(op), setting(LIVE_MODEL_FOR[op]))]
+
+    def text_row(stage: str, op: str, images: int, nominal: float, maximum: int, why: str) -> dict[str, Any]:
+        pr = price(op)
+        sz = sizes[f"{stage.split(' ')[0]}|{op}"]
+        # recover the simulated input bound from the simulated reservation (same token formula)
+        est = Decimal(sz["max_estimate"])
+        in_bound = int((est * 1_000_000 - out_cap * fake_out[op]) / fake_in[op])
+        in_bound += images * pricing.IMAGE_TOKEN_CAP  # live images at the documented per-image cap
+        reserve = pricing.text_cost(pr, in_bound, out_cap)
+        exp_in = sz["max_input_tokens"] + images * LIVE_IMAGE_TOKENS_EXPECTED + 1000
+        expected = pricing.text_cost(pr, exp_in, _expected_out(stage))
+        return {"stage": stage, "model": pr.model, "unit": f"per MTok in ${pr.usd} / out ${pr.output_usd}",
+                "quantity": f"<= {in_bound:,} in + <= {out_cap:,} out tokens", "reserve": reserve,
+                "expected": expected, "nominal": nominal, "maximum": maximum, "why": why, "source": pr.source}
+
+    def image_row(stage: str, op: str, nominal: float, maximum: int, why: str) -> dict[str, Any]:
+        pr = price(op)
+        cost = pricing.image_cost(pr)
+        return {"stage": stage, "model": pr.model, "unit": f"per image ${pr.usd} (1K, 1 image)", "quantity": "1 image",
+                "reserve": cost, "expected": cost, "nominal": nominal, "maximum": maximum, "why": why,
+                "source": pr.source}
+
+    def embed_row(stage: str, nominal: float, maximum: int, why: str) -> dict[str, Any]:
+        pr = price("embed")
+        cost = pricing.image_cost(pr, pixels=EMBED_PIXELS[stage])
+        return {"stage": stage, "model": pr.model, "unit": f"per 1B pixels ${pr.usd}",
+                "quantity": f"<= {EMBED_PIXELS[stage]:,} px", "reserve": cost, "expected": cost,
+                "nominal": nominal, "maximum": maximum, "why": why, "source": pr.source}
+
+    up = price("upscale")
+    rows = [
+        text_row("intake", "text_light", 0, 1, 2 * TA, "brief; x2 if a clarifying question is answered; x TEXT attempts"),
+        text_row("moderation.prompt", "text_light", 0, 1, 2 * TA, "same activity as intake"),
+        text_row("bible", "text_story", 0, 1, TA, "Story Bible + cast"),
+        text_row("moderation.bible", "text_light", 0, 1, TA, "same activity as the bible"),
+        image_row("character_sheet portrait", "image_generate", C, C * IA, f"{C} characters x IMAGE attempts"),
+        image_row("character_sheet turnaround+expressions", "image_edit", 2 * C, 2 * C * IA, "2 per character"),
+        text_row("image_safety (sheets, locations)", "text_vision", 1, 3 * C + L_NOM, (3 * C + L) * IA,
+                 f"every reference image; locations nominal {L_NOM}, max {L}"),
+        embed_row("character_sheet", C, C * IA, "portrait + 4 verified crops per character"),
+        image_row("location_ref", "image_generate", L_NOM, L * IA, f"locations: nominal {L_NOM}, code cap {L}"),
+        text_row("script", "text_story", 0, 1, SR * TA, f"draft + {SR - 1} repairs, x TEXT attempts"),
+        text_row("moderation.script", "text_light", 0, 1, TA, "same activity as the script"),
+        image_row("panel_generate", "image_edit", P, P * QA * IA, f"{P} panels x {QA} QA rounds x IMAGE attempts"),
+        text_row("image_safety (panels)", "text_vision", 1, P, P * QA * IA, "QA safety per candidate"),
+        text_row("vision_qa", "text_vision", 4, P, P * QA * IA, "panel + up to 3 character references"),
+        embed_row("identity_embedding", P, P * QA * IA, "character crops per candidate"),
+        text_row("moderation.panel_edit", "text_light", 0, E, E * QA * IA, "edit instruction, each edit attempt"),
+        image_row("panel edit", "image_edit", E, E * QA * IA, "instruction edit x QA rounds x IMAGE attempts"),
+        text_row("image_safety (edit)", "text_vision", 1, E, E * QA * IA, ""),
+        text_row("vision_qa (edit)", "text_vision", 4, E, E * QA * IA, ""),
+        embed_row("identity_embedding", E, E * QA * IA, "edit candidates"),
+        {"stage": "export_upscale", "model": up.model, "unit": f"per compute second ${up.usd}",
+         "quantity": f"<= {WAIT_SECONDS_UPSCALE:.0f} s reserved, then cancelled", "reserve": up.usd * Decimal(str(WAIT_SECONDS_UPSCALE)),
+         "expected": up.usd * UPSCALE_SECONDS_EXPECTED, "nominal": P, "maximum": P * X * IA,
+         "why": f"one per final panel version, shared by the {X} exports; max {X} exports x IMAGE attempts",
+         "source": up.source},
+    ]
+    for r in rows:
+        r["expected_total"] = r["expected"] * Decimal(str(r["nominal"]))
+        r["nominal_reserve"] = r["reserve"] * Decimal(str(r["nominal"]))
+        r["max_reserve"] = r["reserve"] * r["maximum"]
+    tot = {k: sum((r[k] for r in rows), Decimal(0)) for k in ("expected_total", "nominal_reserve", "max_reserve")}
+    # ESRGAN stays at its reservation until a provider charge is imported, so the counted total at the end
+    # of a clean run is expected text/images + the full upscale reservations.
+    tot["counted_at_end"] = tot["expected_total"] - rows[-1]["expected_total"] + rows[-1]["nominal_reserve"]
+    # headroom: the largest single reservations that can be open at once (sheets + locations in parallel)
+    tot["headroom"] = sum(sorted((r["reserve"] for r in rows), reverse=True)[:4], Decimal(0))
+    tot["min_cap_nominal"] = tot["counted_at_end"] + tot["headroom"]
+    return {"rows": rows, "totals": tot, "limits": {"TEXT attempts": TA, "IMAGE attempts": IA, "QA rounds": QA,
+            "script drafts": SR, "characters": C, "locations": L, "panels": P, "edits": E, "exports": X,
+            "refusal fallback": setting("text_refusal_fallback")}, "profile": prof["recorded_at"]}  # fmt: skip
+
+
+def cost_markdown() -> str:
+    """The itemised table for docs/smoke-test-cost.md (generated; do not edit by hand)."""
+    m = cost_model()
+    t = m["totals"]
+    lines = [f"Generated by `live-smoke.py estimate --markdown` from the code limits {m['limits']}, the price table "
+             f"in config/live-smoke.env and the simulated call profile of {m['profile']}.", "",
+             "| Stage | Model | Unit price | Per call (reserved) | Reservation / call (USD) | Calls: clean run | "
+             "Calls: max | Expected, clean run (USD) | Held if every retry ran (USD) | Why the max |",
+             "|---|---|---|---|---:|---:|---:|---:|---:|---|"]  # fmt: skip
+    for r in m["rows"]:
+        lines.append(f"| {r['stage']} | `{r['model']}` | {r['unit']} | {r['quantity']} | {r['reserve']:.4f} | "
+                     f"{r['nominal']} | {r['maximum']} | {r['expected_total']:.4f} | {r['max_reserve']:.4f} | {r['why']} |")
+    lines += ["", f"- **Estimated cost of a clean run: USD {t['expected_total']:.2f}** (assumed output sizes)",
+              f"- Counted by the app at the end of a clean run: USD {t['counted_at_end']:.2f} "
+              "(ESRGAN stays at its full reservation until a provider charge is imported)",
+              f"- **Smallest cap with which a clean run can finish: USD {t['min_cap_nominal']:.2f}** "
+              f"(counted total + USD {t['headroom']:.2f} for reservations open at the same time)",
+              f"- Reservations if every bounded retry, QA round and activity attempt were used: USD {t['max_reserve']:.2f} "
+              "(the approved cap stops the run long before this)"]
+    return "\n".join(lines) + "\n"
+
+
+def estimate(verbose: bool = True) -> Decimal:
+    """Prints the itemised model; returns the smallest cap that lets a clean run finish."""
+    m = cost_model()
+    t = m["totals"]
     if verbose:
-        print(f"upper-bound estimate for one 3-panel strip + 1 edit + PDF/PNG/CBZ "
-              f"(profile recorded {prof['recorded_at']}, {prof['characters']} characters, {prof['panels']} panels)")  # fmt: skip
-        print(f"  {'stage':<20} {'operation':<15} {'model':<42} calls x retry  unit$     total$")
-        for stage, op, m, n, mult, unit, cost in rows:
-            print(f"  {stage:<20} {op:<15} {m:<42} {n:>4} x {mult:<4} {unit:>8.4f} {cost:>9.4f}")
-        print(f"  UPPER BOUND: USD {total:.2f}  (approve at least this; the cap stops the run at the approved amount)")
-    return total
+        print(f"limits from code/config: {m['limits']}")
+        print(f"  {'stage':40} {'model':28} {'reserve':>9} {'nom':>4} {'max':>4} {'expected':>9} {'max held':>9}")
+        for r in m["rows"]:
+            print(f"  {r['stage']:40} {r['model']:28} {r['reserve']:9.4f} {r['nominal']:>4} {r['maximum']:>4} "
+                  f"{r['expected_total']:9.4f} {r['max_reserve']:9.4f}")
+        print(f"  ESTIMATED cost of a clean run (assumed output sizes):          USD {t['expected_total']:.2f}")
+        print(f"  counted by the app at the end of a clean run (ESRGAN unresolved): USD {t['counted_at_end']:.2f}")
+        print(f"  smallest cap that lets a clean run finish (+ in-flight holds):  USD {t['min_cap_nominal']:.2f}")
+        print(f"  reservations if every retry/QA round/attempt were used:          USD {t['max_reserve']:.2f}")
+        print("  The cap you approve is an APPLICATION admission limit, not a provider-enforced ceiling;")
+        print("  see docs/smoke-test-cost.md for what can be billed beyond it.")
+    return Decimal(t["min_cap_nominal"]).quantize(Decimal("0.01"))
 
 
 # ------------------------------------------------------------------ the run
@@ -215,9 +317,10 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str) -> int:
         if s.provider_mode != "live":
             print("refusing: SP_PROVIDER_MODE is not live", file=sys.stderr)
             return 2
-        bound = estimate(verbose=False)
-        if approve is None or approve < bound:
-            print(f"refusing: --approve-usd {approve} is below the upper bound USD {bound:.2f}", file=sys.stderr)
+        need = estimate(verbose=False)
+        if approve is None or approve < need:
+            print(f"refusing: --approve-usd {approve} is below USD {need:.2f}, the smallest cap with which a clean "
+                  "run can finish (not a guaranteed upper bound on provider charges)", file=sys.stderr)
             return 2
     email = f"smoke-{run_id}@example.com"
     started = time.monotonic()
@@ -266,16 +369,19 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str) -> int:
             result["characters"] = len(p.get("characters") or [])
             await h.post(f"{API}/v1/projects/{pid}/characters/approve", headers=H, json={"cast_version": p["cast_version"]})
             p = await until(pid, lambda p: p["status"] == "awaiting_script_approval", "script")
+            # Checked before approval, so a wrong count costs no panel images (simulated and live alike).
+            scripted = [len(pg["panels"]) for pg in p["script"]["content"]["pages"]]
+            result["scripted_panels"] = scripted
+            if scripted != [PANELS_REQUESTED]:
+                raise RuntimeError(f"script has {scripted} panels; asked for one page of {PANELS_REQUESTED}")
             await h.post(f"{API}/v1/projects/{pid}/script/approve", headers=H, json={"script_version": p["script_version"]})
             p = await until(pid, lambda p: p["status"] in ("completed", "partially_completed")
                             and all(pg["preview_url"] for pg in p["pages"]), "panels")  # fmt: skip
             panels = [pn for pg in p["pages"] for pn in pg["panels"]]
             result["panels"] = len(panels)
             result["panel_status"] = [pn["status"] for pn in panels]
-            # live: the prompt asks for 3 panels (a 3-panel strip layout exists); the fake script writer always
-            # writes 4 for a strip, so the simulated rehearsal reports this without enforcing it
             result["panels_requested"] = PANELS_REQUESTED
-            if not simulated and len(panels) != PANELS_REQUESTED:
+            if len(panels) != PANELS_REQUESTED:  # same assertion in simulated and live runs
                 raise RuntimeError(f"asked for {PANELS_REQUESTED} panels, got {len(panels)}")
             first = panels[0]
             before = first.get("current_version_id")
@@ -355,6 +461,8 @@ async def _usage(pid: uuid.UUID, uid: uuid.UUID) -> dict[str, Any]:
         b = by.setdefault(f"{r['stage']}|{r['operation']}", {"calls": 0, "model": r["model"], "counted": Decimal(0),
                                                              "statuses": {}})  # fmt: skip
         b["calls"] += 1
+        b["max_estimate"] = max(Decimal(b.get("max_estimate", 0)), r["cost_estimate_usd"])
+        b["max_input_tokens"] = max(b.get("max_input_tokens", 0), r["input_tokens"] or 0)
         b["counted"] += r["cost_counted_usd"]
         b["statuses"][r["status"]] = b["statuses"].get(r["status"], 0) + 1
         tot["reserved_estimate"] += r["cost_estimate_usd"]
@@ -373,10 +481,16 @@ async def _usage(pid: uuid.UUID, uid: uuid.UUID) -> dict[str, Any]:
 
 
 def _record_profile(result: dict[str, Any]) -> None:
-    calls = {k: v["calls"] for k, v in result["usage"]["by_stage"].items()}
+    by = result["usage"]["by_stage"]
+    calls = {k: v["calls"] for k, v in by.items()}
+    # per stage|operation: the largest reservation made (simulated prices; text prices equal the live
+    # ones per token, and the input bound is recovered from it) and the largest recorded input size
+    sizes = {k: {"max_estimate": str(v["max_estimate"]), "max_input_tokens": v["max_input_tokens"]}
+             for k, v in by.items()}  # fmt: skip
     PROFILE.write_text(json.dumps({
         "recorded_at": datetime.now(UTC).date().isoformat(), "source": "live-smoke.py run --simulated",
-        "characters": result.get("characters", 0), "panels": result.get("panels", 0), "calls": calls}, indent=1))
+        "characters": result.get("characters", 0), "panels": result.get("panels", 0), "calls": calls,
+        "sizes": sizes}, indent=1, default=str))
     print(f"call profile recorded: {PROFILE}")
 
 
@@ -384,7 +498,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("preflight")
-    sub.add_parser("estimate")
+    e = sub.add_parser("estimate")
+    e.add_argument("--markdown", action="store_true", help="print the itemised table as Markdown")
     r = sub.add_parser("run")
     r.add_argument("--simulated", action="store_true")
     r.add_argument("--approve-usd", type=Decimal)
@@ -393,7 +508,10 @@ def main() -> int:
     if a.cmd == "preflight":
         return asyncio.run(preflight())
     if a.cmd == "estimate":
-        estimate()
+        if a.markdown:
+            print(cost_markdown(), end="")
+        else:
+            estimate()
         return 0
     return asyncio.run(run(a.simulated, a.approve_usd, a.run_id or uuid.uuid4().hex[:8]))
 

@@ -229,7 +229,7 @@ async def patch_script(db: AsyncSession, project: Project, body: api.PatchScript
         body.script, fmt=bible.format.type, expected_pages=len(body.script.pages)
         if bible.format.type is ComicFormat.WESTERN_PAGE else 1,
         character_ids=set((await repo.cast_specs(db, project.id)).keys()),
-        location_ids={loc.id for loc in bible.locations}, limits=story.script_limits())  # fmt: skip
+        location_ids={loc.id for loc in bible.locations}, limits=story.script_limits(bible))  # fmt: skip
     project.script_version += 1
     row = Script(project_id=project.id, version=project.script_version, beats=current.beats,
                  content=body.script.model_dump(), issues=[i.model_dump() for i in issues],

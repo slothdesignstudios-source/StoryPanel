@@ -2,7 +2,7 @@
  "recorded_at": "2026-11-12",
  "source": "live-smoke.py run --simulated",
  "characters": 2,
- "panels": 4,
+ "panels": 3,
  "calls": {
   "intake|text_light": 1,
   "moderation.prompt|text_light": 1,
@@ -10,15 +10,81 @@
   "moderation.bible|text_light": 1,
   "character_sheet|image_generate": 2,
   "location_ref|image_generate": 2,
-  "image_safety|text_vision": 13,
+  "image_safety|text_vision": 12,
   "character_sheet|image_edit": 4,
   "character_sheet|embed": 2,
   "script|text_story": 1,
   "moderation.script|text_light": 1,
-  "panel_generate|image_edit": 5,
-  "vision_qa|text_vision": 5,
-  "identity_embedding|embed": 5,
+  "panel_generate|image_edit": 4,
+  "vision_qa|text_vision": 4,
+  "identity_embedding|embed": 4,
   "moderation.panel_edit|text_light": 1,
-  "export_upscale|upscale": 4
+  "export_upscale|upscale": 3
+ },
+ "sizes": {
+  "intake|text_light": {
+   "max_estimate": "0.008732",
+   "max_input_tokens": 369
+  },
+  "moderation.prompt|text_light": {
+   "max_estimate": "0.008602",
+   "max_input_tokens": 387
+  },
+  "bible|text_story": {
+   "max_estimate": "0.178544",
+   "max_input_tokens": 479
+  },
+  "moderation.bible|text_light": {
+   "max_estimate": "0.008659",
+   "max_input_tokens": 531
+  },
+  "character_sheet|image_generate": {
+   "max_estimate": "0.040000",
+   "max_input_tokens": 0
+  },
+  "location_ref|image_generate": {
+   "max_estimate": "0.040000",
+   "max_input_tokens": 0
+  },
+  "image_safety|text_vision": {
+   "max_estimate": "0.008581",
+   "max_input_tokens": 165
+  },
+  "character_sheet|image_edit": {
+   "max_estimate": "0.080000",
+   "max_input_tokens": 0
+  },
+  "character_sheet|embed": {
+   "max_estimate": "0.000464",
+   "max_input_tokens": 0
+  },
+  "script|text_story": {
+   "max_estimate": "0.181246",
+   "max_input_tokens": 934
+  },
+  "moderation.script|text_light": {
+   "max_estimate": "0.008612",
+   "max_input_tokens": 412
+  },
+  "panel_generate|image_edit": {
+   "max_estimate": "0.080000",
+   "max_input_tokens": 0
+  },
+  "vision_qa|text_vision": {
+   "max_estimate": "0.008939",
+   "max_input_tokens": 407
+  },
+  "identity_embedding|embed": {
+   "max_estimate": "0.000102",
+   "max_input_tokens": 0
+  },
+  "moderation.panel_edit|text_light": {
+   "max_estimate": "0.008596",
+   "max_input_tokens": 373
+  },
+  "export_upscale|upscale": {
+   "max_estimate": "0.010000",
+   "max_input_tokens": 0
+  }
  }
 }

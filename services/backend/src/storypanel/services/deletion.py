@@ -15,8 +15,14 @@ Policy (docs/data-retention.md):
   invoice). Stripe identifiers are kept on the job until that succeeds.
 - The Clerk identity is deleted (unless Clerk itself told us it was deleted).
 - Finally the user row is anonymised. Retained: credit ledger and provider cost records
-  (financial, keyed by an internal id), audit entries, this job row (hashes and
-  timestamps only) and signup-grant hashes (abuse prevention).
+  (financial, keyed by an internal id; user-written text such as character names is stripped),
+  audit entries, this job row (hashes and timestamps only) and signup-grant hashes (abuse
+  prevention).
+- New paid provider calls are refused from the moment deletion is requested (metering checks
+  `deleted_at` in the same serialised transaction that reserves spend). Deletion never waits for
+  potential charges to be *resolved*: open attempts are given `deletion_drain_seconds`, then
+  cancelled at the provider and left counted as unresolved; `reconcile_open_requests` settles
+  them later by request id, independently of the deletion job.
 
 Each step is safe to repeat. A failing step records its error and is retried by the
 maintenance loop with backoff; nothing later runs until it succeeds.
@@ -254,6 +260,10 @@ async def _step_identity(job: AccountDeletion) -> None:
 async def _step_anonymising(job: AccountDeletion) -> None:
     async with transaction() as db:
         await db.execute(delete(IdempotencyKey).where(IdempotencyKey.user_id == job.user_id))
+        # Retained cost records keep amounts, models, dates and provider request ids (needed to
+        # reconcile and import provider charges) but not operation targets, which can be character
+        # slugs derived from user text. Ledger reasons never contain user text (append-only table).
+        await db.execute(text("update provider_usage set target_id = null where user_id = :u"), {"u": job.user_id})
         await db.execute(update(User).where(User.id == job.user_id).values(
             email=None, auth_subject=f"deleted:{job.user_id}", stripe_customer_id=None, subscription_id=None))  # fmt: skip
         await db.execute(update(AccountDeletion).where(AccountDeletion.user_id == job.user_id).values(

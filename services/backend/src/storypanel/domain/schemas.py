@@ -50,6 +50,8 @@ class ComicBrief(Strict):
     named_characters: list[str]
     setting: str
     must_haves: list[str]
+    # strip only: the panel count the user asked for (3 or 4), else null
+    panels: int | None = None
 
 
 class ClarifyingQuestion(Strict):
@@ -80,6 +82,7 @@ class FormatSpec(Strict):
     type: ComicFormat
     pages: int
     panels_per_page: str
+    panels: int | None = None  # strip: exact panel count requested in the brief
 
 
 class StoryBible(Strict):

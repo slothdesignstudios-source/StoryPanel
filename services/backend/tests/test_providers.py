@@ -310,7 +310,7 @@ def test_live_configuration_requires_verified_models_and_prices(monkeypatch: pyt
 def test_cost_estimates_are_upper_bounds() -> None:
     price = pricing.parse_table({"entries": [{"provider": "a", "model": "m", "unit": "per_mtok", "input_usd": "2",
                                                "output_usd": "10", "source": "s", "verified_at": "2026-01-01"}]})[("a", "m")]  # fmt: skip
-    est = pricing.text_estimate(price, input_chars=30_000, images_px=[1_000_000], max_tokens=16_000)
+    est = pricing.text_estimate(price, input_bytes=30_000, images_wh=[(1000, 1000)], max_tokens=16_000)
     actual = pricing.text_cost(price, input_tokens=9_000, output_tokens=2_000)
     assert est > actual and est >= Decimal("0.16")  # full output budget is reserved
 

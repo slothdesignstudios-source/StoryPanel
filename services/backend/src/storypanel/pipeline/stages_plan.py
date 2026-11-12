@@ -283,7 +283,7 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
             if pending and pending.get("reservation_id"):
                 rid = uuid.UUID(pending["reservation_id"])
                 await credits.charge(db, rid, s.credits_character_revision,
-                                     reason=f"Character revision: {char.name}",
+                                     reason="Character revision",  # no user text in financial records
                                      dedupe_key=f"revision:{pending['request_id']}")  # fmt: skip
                 await credits.close(db, rid)
             char.pending_revision = None

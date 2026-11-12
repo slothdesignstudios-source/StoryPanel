@@ -1,0 +1,242 @@
+{
+ "run_id": "sim4",
+ "mode": "SIMULATED",
+ "project_id": "88a98f01-dd64-4e85-8434-df8633152750",
+ "prompt": "A lighthouse keeper and a cheeky seagull argue over the last sandwich on a windy pier, as a 3 panel strip",
+ "approved_usd": null,
+ "characters": 2,
+ "scripted_panels": [
+  3
+ ],
+ "panels": 3,
+ "panel_status": [
+  "ok",
+  "ok",
+  "ok"
+ ],
+ "panels_requested": 3,
+ "edit_request": 202,
+ "exports": {
+  "pdf": {
+   "ok": true,
+   "bytes": 111320,
+   "all_fonts_embedded": true,
+   "selectable_text_chars": 156,
+   "fonts": [
+    "Bangers-Regular",
+    "ComicNeue-Bold",
+    "ComicNeue-Regular"
+   ],
+   "trim_box": [
+    9.0,
+    9.0,
+    441.0,
+    160.2
+   ],
+   "bleed_box": [
+    0.0,
+    0.0,
+    450.0,
+    169.2
+   ]
+  },
+  "png": {
+   "ok": true,
+   "size": [
+    2000,
+    700
+   ]
+  },
+  "cbz": {
+   "ok": true,
+   "entries": [
+    "page_001.png",
+    "ComicInfo.xml"
+   ]
+  }
+ },
+ "timings_s": {
+  "story+cast": 4.2,
+  "script": 2.1,
+  "panels": 2.1,
+  "edit": 2.1,
+  "export_pdf": 2.1,
+  "export_png": 2.1,
+  "export_cbz": 2.1,
+  "total": 18.4
+ },
+ "timing_resolution_s": 2,
+ "usage": {
+  "by_stage": {
+   "intake|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000137",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008732",
+    "max_input_tokens": 369
+   },
+   "moderation.prompt|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000139",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008602",
+    "max_input_tokens": 387
+   },
+   "bible|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "counted": "0.002958",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.178544",
+    "max_input_tokens": 479
+   },
+   "moderation.bible|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000153",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008659",
+    "max_input_tokens": 531
+   },
+   "character_sheet|image_generate": {
+    "calls": 2,
+    "model": "fake-image",
+    "counted": "0.080000",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_estimate": "0.040000",
+    "max_input_tokens": 0
+   },
+   "location_ref|image_generate": {
+    "calls": 2,
+    "model": "fake-image",
+    "counted": "0.080000",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_estimate": "0.040000",
+    "max_input_tokens": 0
+   },
+   "image_safety|text_vision": {
+    "calls": 12,
+    "model": "fake-vision",
+    "counted": "0.001404",
+    "statuses": {
+     "succeeded": 12
+    },
+    "max_estimate": "0.008581",
+    "max_input_tokens": 165
+   },
+   "character_sheet|image_edit": {
+    "calls": 4,
+    "model": "fake-edit",
+    "counted": "0.320000",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.080000",
+    "max_input_tokens": 0
+   },
+   "character_sheet|embed": {
+    "calls": 2,
+    "model": "fake-embed",
+    "counted": "0.000928",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_estimate": "0.000464",
+    "max_input_tokens": 0
+   },
+   "script|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "counted": "0.003868",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.181246",
+    "max_input_tokens": 934
+   },
+   "moderation.script|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000141",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008612",
+    "max_input_tokens": 412
+   },
+   "panel_generate|image_edit": {
+    "calls": 4,
+    "model": "fake-edit",
+    "counted": "0.320000",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.080000",
+    "max_input_tokens": 0
+   },
+   "vision_qa|text_vision": {
+    "calls": 4,
+    "model": "fake-vision",
+    "counted": "0.000555",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.008939",
+    "max_input_tokens": 407
+   },
+   "identity_embedding|embed": {
+    "calls": 4,
+    "model": "fake-embed",
+    "counted": "0.000255",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.000102",
+    "max_input_tokens": 0
+   },
+   "moderation.panel_edit|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000137",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008596",
+    "max_input_tokens": 373
+   },
+   "export_upscale|upscale": {
+    "calls": 3,
+    "model": "fake-upscale",
+    "counted": "0.030000",
+    "statuses": {
+     "succeeded": 3
+    },
+    "max_estimate": "0.010000",
+    "max_input_tokens": 0
+   }
+  },
+  "totals": {
+   "reserved_estimate": "1.372513",
+   "calculated": "0.840675",
+   "unresolved": "0",
+   "provider_confirmed": "0",
+   "counted": "0.840675"
+  },
+  "estimate_overruns": [],
+  "note": "calculated = usage x operator price table (not a provider charge); unresolved = potential charges counted at their estimate (e.g. compute-time upscaling) until a provider charge is imported"
+ }
+}

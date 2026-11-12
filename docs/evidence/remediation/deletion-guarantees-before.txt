@@ -1,0 +1,4 @@
+FAILED tests/test_deletion_guarantees.py::test_no_new_paid_call_is_reserved_or_submitted_after_deletion_is_requested
+FAILED tests/test_deletion_guarantees.py::test_only_minimal_accounting_is_retained_after_deletion
+FAILED tests/test_deletion_guarantees.py::test_ledger_reasons_never_contain_user_written_text
+3 failed, 1 passed in 2.24s

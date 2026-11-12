@@ -67,7 +67,9 @@ PROFILES: dict[str, FalProfile] = {
             _NB2_ASPECTS,
             seed_field="seed",
             # resolution fixed at 1K so the per-image price applies (draft quality, spec 7.8)
-            fixed={"num_images": 1, "output_format": "png", "resolution": "1K", "limit_generations": True},
+            fixed={"num_images": 1, "output_format": "png", "resolution": "1K", "limit_generations": True,
+                   # paid add-ons (fal: web search +$0.015, thinking +$0.002 per request) explicitly off
+                   "enable_web_search": False, "thinking_level": "minimal"},
             notes="NanoBanana2Input; output NanoBananaOutput.images[].url",
         ),
         FalProfile(
@@ -80,7 +82,9 @@ PROFILES: dict[str, FalProfile] = {
             max_references=14,
             reference_field="image_urls",
             seed_field="seed",
-            fixed={"num_images": 1, "output_format": "png", "resolution": "1K", "limit_generations": True},
+            fixed={"num_images": 1, "output_format": "png", "resolution": "1K", "limit_generations": True,
+                   # paid add-ons (fal: web search +$0.015, thinking +$0.002 per request) explicitly off
+                   "enable_web_search": False, "thinking_level": "minimal"},
             notes="NanoBanana2EditInput; output NanoBananaOutput.images[].url",
         ),
         FalProfile(

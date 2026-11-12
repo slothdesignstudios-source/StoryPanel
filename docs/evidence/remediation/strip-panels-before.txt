@@ -1,0 +1,4 @@
+FAILED tests/test_strip_panels.py::test_brief_keeps_a_strip_panel_count_within_product_limits
+FAILED tests/test_strip_panels.py::test_requested_count_is_exact_for_the_script
+FAILED tests/test_strip_panels.py::test_three_panel_strip_is_drawn_with_three_panels_and_edits_are_held_to_it
+3 failed in 3.57s

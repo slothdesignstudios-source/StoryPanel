@@ -1,24 +1,62 @@
 {
- "_note": "Prices checked 2026-11-12 against the providers' official pages. The pages themselves could not be fetched from the build sandbox (network policy), so each value was read from a web-search summary of the official page listed in `source`. Before the first paid run, open each source and confirm the value; if it differs, edit the entry and its verified_at. Units are the app's (see providers/pricing.py).",
+ "_note": "Checked 2026-11-12. 'verification' says how each value was checked: Anthropic prices were read from the official pricing page fetched directly (copy in docs/evidence/pricing-2026-11-12/). fal and Voyage pages could not be fetched from the build sandbox (network policy); their values come only from web-search summaries restricted to the providers' own domains and are UNVERIFIED until someone opens the source page. Units are the app's (see providers/pricing.py).",
  "entries": [
-  {"provider": "anthropic", "model": "claude-sonnet-5-5", "unit": "per_mtok", "input_usd": "2.00", "output_usd": "10.00",
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-5",
+   "unit": "per_mtok",
+   "input_usd": "2.00",
+   "output_usd": "10.00",
    "source": "https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/models/sonnet-5-5/overview (also Anthropic claude-api model table cached 2026-11-03)",
-   "verified_at": "2026-11-12"},
-  {"provider": "anthropic", "model": "claude-haiku-5-5", "unit": "per_mtok", "input_usd": "0.10", "output_usd": "0.50",
+   "verified_at": "2026-11-12",
+   "verification": "official page fetched 2026-11-12 (docs/evidence/pricing-2026-11-12/anthropic-pricing.txt)"
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-haiku-5-5",
+   "unit": "per_mtok",
+   "input_usd": "0.10",
+   "output_usd": "0.50",
    "source": "https://platform.claude.com/docs/en/about-claude/pricing (prompts up to 100K tokens; $0.50/$2.50 above 100K, not reached by this app's prompts)",
-   "verified_at": "2026-11-12"},
-  {"provider": "fal", "model": "fal-ai/nano-banana-2", "unit": "per_image", "usd": "0.08",
-   "source": "https://fal.ai/nano-banana-2 ; https://fal.ai/learn/tools/nano-banana-api ($0.08 per image at 1K; the app requests resolution 1K)",
-   "verified_at": "2026-11-12"},
-  {"provider": "fal", "model": "fal-ai/nano-banana-2/edit", "unit": "per_image", "usd": "0.08",
-   "source": "https://fal.ai/models/fal-ai/nano-banana-2/edit ($0.08 per image at 1K; 2K x1.5, 4K x2; the app requests 1K)",
-   "verified_at": "2026-11-12"},
-  {"provider": "fal", "model": "fal-ai/esrgan", "unit": "per_compute_second", "usd": "0.00111",
+   "verified_at": "2026-11-12",
+   "verification": "official page fetched 2026-11-12 (docs/evidence/pricing-2026-11-12/anthropic-pricing.txt)"
+  },
+  {
+   "provider": "fal",
+   "model": "fal-ai/nano-banana-2",
+   "unit": "per_image",
+   "usd": "0.08",
+   "source": "https://fal.ai/models/fal-ai/nano-banana-2 ; https://fal.ai/learn/tools/nano-banana-api ($0.08 per image at 1K; 0.5K x0.75, 2K x1.5, 4K x2; add-ons web search +$0.015 and thinking +$0.002 per request, both explicitly off)",
+   "verified_at": "2026-11-12",
+   "verification": "UNVERIFIED: search-result summary of the official page only (page not reachable from the sandbox)"
+  },
+  {
+   "provider": "fal",
+   "model": "fal-ai/nano-banana-2/edit",
+   "unit": "per_image",
+   "usd": "0.08",
+   "source": "https://fal.ai/models/fal-ai/nano-banana-2/edit ($0.08 per image at 1K; add-ons web search +$0.015 and thinking +$0.002 per request, both explicitly off)",
+   "verified_at": "2026-11-12",
+   "verification": "UNVERIFIED: search-result summary of the official page only (page not reachable from the sandbox)"
+  },
+  {
+   "provider": "fal",
+   "model": "fal-ai/esrgan",
+   "unit": "per_compute_second",
+   "usd": "0.00111",
    "source": "https://fal.ai/models/fal-ai/esrgan (billed per compute second, $0.00111/s; no per-image price)",
-   "verified_at": "2026-11-12"},
-  {"provider": "voyage", "model": "voyage-multimodal-3.5", "unit": "per_billion_pixels", "usd": "0.60",
+   "verified_at": "2026-11-12",
+   "verification": "UNVERIFIED: search-result summary of the official page only (page not reachable from the sandbox)"
+  },
+  {
+   "provider": "voyage",
+   "model": "voyage-multimodal-3.5",
+   "unit": "per_billion_pixels",
+   "usd": "0.60",
    "source": "https://docs.voyageai.com/docs/pricing ($0.12/M text tokens, $0.60/B pixels; first 200M tokens and 150B pixels free; the app embeds images only)",
-   "verified_at": "2026-11-12"}
+   "verified_at": "2026-11-12",
+   "verification": "UNVERIFIED: search-result summary of the official page only (page not reachable from the sandbox)"
+  }
  ],
  "not_used_by_the_smoke_test": {
   "fal-ai/flux-pro/v1/fill": "$0.05 per megapixel (rounded up), https://fal.ai/models/fal-ai/flux-pro/v1/fill (page summary flagged as ~2 years old: re-check before enabling SP_INPAINT_MODEL)",

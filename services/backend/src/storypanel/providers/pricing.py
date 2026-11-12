@@ -189,10 +189,26 @@ def require(provider: str, model: str, *, settings: Settings | None = None) -> P
 
 
 # ------------------------------------------------------------------ estimates
-def text_estimate(price: Price, *, input_chars: int, images_px: list[int], max_tokens: int) -> Decimal:
-    """Upper bound before the call: generous input estimate plus the full output budget."""
-    in_tokens = math.ceil(input_chars / 3) + sum(math.ceil(px / 750) for px in images_px) + 500
-    return text_cost(price, in_tokens, max_tokens)
+# Fixed allowance for input the API adds that we cannot see: message framing, the system prompt
+# that enables thinking, structured-output support. Not published as a number; an assumption,
+# checked against `usage.input_tokens` after every call (the calculated cost replaces the hold).
+TEXT_OVERHEAD_TOKENS = 4000
+# Claude 4.7+ (high-resolution tier, includes Haiku 5.5): an image costs ceil(w/28) x ceil(h/28)
+# visual tokens and is downscaled to at most 4,784 (platform.claude.com/docs/en/build-with-claude/vision).
+IMAGE_TOKEN_CAP = 4784
+
+
+def text_input_bound(*, input_bytes: int, images_wh: list[tuple[int, int]]) -> int:
+    """Input-token upper bound used for reservations. Text: one token per UTF-8 byte at most
+    (byte-level tokens are at least one byte). Images: the documented visual-token rule."""
+    visual = sum(min(math.ceil(w / 28) * math.ceil(h / 28), IMAGE_TOKEN_CAP) for w, h in images_wh)
+    return input_bytes + visual + TEXT_OVERHEAD_TOKENS
+
+
+def text_estimate(price: Price, *, input_bytes: int, images_wh: list[tuple[int, int]], max_tokens: int) -> Decimal:
+    """Reservation for one call: the input bound plus the full output cap. `max_tokens` is a
+    provider-enforced ceiling on output, thinking included."""
+    return text_cost(price, text_input_bound(input_bytes=input_bytes, images_wh=images_wh), max_tokens)
 
 
 def text_cost(price: Price, input_tokens: int, output_tokens: int) -> Decimal:
