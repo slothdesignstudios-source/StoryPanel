@@ -1,23 +1,23 @@
-# External requirements checklist
+# External requirements
 
-Everything below needs something from outside this repository. Secrets are never pasted into chat or
-committed: "Where" says where each value is entered (an untracked `.env` locally; the cloud environment's
-network-secrets form; GitHub repository secrets; the Render env group with `sync: false`).
+**The actionable list is [`setup-checklist.md`](setup-checklist.md)** (groups A–D: exact variable names,
+secret or public, where to configure, what each unlocks). This page keeps the blocker ids other documents
+refer to and maps them to it. Secrets are never pasted into chat or committed.
 
-| # | Missing | Where to set it up securely | Tests / verification it unlocks |
+| # | Missing | Checklist | Unlocks |
 |---|---|---|---|
-| B1 | **Provider keys and network access.** `SP_ANTHROPIC_API_KEY`, `SP_FAL_KEY`, `SP_VOYAGE_API_KEY`; model ids `SP_TEXT_MODEL_STORY`, `SP_TEXT_MODEL_LIGHT`, `SP_VISION_MODEL`, `SP_IMAGE_MODEL_GENERATE`, `SP_IMAGE_MODEL_EDIT`, optional `SP_IMAGE_MODEL_FALLBACK`, `SP_IMAGE_MODEL_FALLBACK_GENERATE`, `SP_INPAINT_MODEL`, `SP_UPSCALE_MODEL`, `SP_EMBEDDING_MODEL`; hosts `api.anthropic.com`, `queue.fal.run`, fal storage/CDN, `api.voyageai.com` | `.env` / environment network secrets / env group | First live calls (gate G2); live behaviour of the paid-request taxonomy: whether fal returns 404 vs expired results, cancellation after completion, retention windows (PR tests are simulated) |
-| B2 | **Your approval of a bounded live-evaluation budget.** Suggested: USD 5 for the fast subset, then USD 40 for all 63 prompts. Enforced as a persisted lifetime cap on the run's own user (`harness --live --max-usd N`) | A written go-ahead with the amount | §8.3 quality, cost (now including export/upscale and failed attempts) and latency on finished comics; reference-edit vs inpaint repair effectiveness; sheet-layout pass rate on real models; QA threshold calibration (gate G3) |
-| B3 | **Stripe test-mode account.** `SP_STRIPE_SECRET_KEY` (`sk_test_…`), `SP_STRIPE_WEBHOOK_SECRET`, `SP_STRIPE_PRICE_CREATOR`, `SP_STRIPE_PRICE_PRO`, `SP_STRIPE_PRICE_CREDIT_PACK`; the webhook endpoint's API version set to `SP_STRIPE_API_VERSION` (`2026-10-28.endive`); host `api.stripe.com`; webhook delivery (Stripe CLI or staging URL) | Stripe dashboard (test mode) → Developers | Real payloads for every entitlement case in `tests/test_billing.py` (renewal, immediate/deferred proration, downgrade, trial, failed then paid, refunds), Checkout idempotency, portal plan changes, deletion-time cancellation (gate G4) |
-| B4 | **Clerk development instance.** `SP_CLERK_ISSUER`, `SP_CLERK_JWKS_URL`, `SP_CLERK_AUTHORIZED_PARTIES`, `SP_CLERK_WEBHOOK_SECRET`, `SP_CLERK_SECRET_KEY` (identity deletion), `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`; the instance's hosts | Clerk dashboard → API keys, Webhooks | Real sign-in, token refresh, CSP/hostnames, Clerk session switch through the per-identity cache isolation, `user.deleted` webhook and backend user deletion (gate G4) |
-| B5 | **Verified provider prices** in a private copy of `packages/pricing/pricing.example.json` with today's `verified_at` (seven example entries are unverified estimates) | Provider pricing pages → `SP_PRICING_JSON` (env group) or `SP_PRICING_FILE` | Live startup (refuses without them); trustworthy ceilings and cost reports |
-| B6 | **Network access for Terraform providers** (`registry.terraform.io`, `releases.hashicorp.com`): refused by this environment's network policy. Docker, image builds, Compose and Prometheus/Alertmanager now work here | Any developer machine or the GitHub Actions workflow | `terraform init && terraform validate` (fmt passes), then `terraform plan` (needs B7) |
-| B7 | **Git remote and deploy targets.** GitHub repository; Render workspace with Blueprint permission; AWS account (short-lived credentials for plan); Temporal Cloud namespace + API key | GitHub; Render; AWS IAM; Temporal Cloud | CI run; Render plan; `terraform plan -var-file=staging.tfvars`; staging deploy and smoke test per [`staging-plan.md`](staging-plan.md) (gate G5) |
-| B8 | **Human decisions and reviews.** Legal (terms, IP/likeness, data protection, C2PA obligations, retention periods in [`data-retention.md`](data-retention.md)); finance/product sign-off of the entitlement policy in [`billing-policy.md`](billing-policy.md); manual accessibility audit; security review / pen test | Counsel; finance/product owner; accessibility specialist; security reviewer | Gates G7, G8 |
-| B9 | **Real alert receivers.** A PagerDuty (or Opsgenie) Events integration URL for pages and a Slack/ticketing webhook for tickets | Files mounted at `/etc/alertmanager/secrets/page_url` and `ticket_url` (secret store), never in the config | Pages and tickets reaching people; the local drill (`scripts/verify-alerting.sh`) already proves routing, firing and resolution to a local receiver (gate G6) |
+| B1 | Provider keys (`SP_ANTHROPIC_API_KEY`, `SP_FAL_KEY`, `SP_VOYAGE_API_KEY`) and network access to the provider hosts | A1–A4 | `scripts/live-smoke.py preflight`; first live calls (gate G2); live behaviour of the paid-request taxonomy (404 vs expired results, cancellation after completion) — all PR tests of it are simulated |
+| B2 | Your written approval of a bounded budget. **First the smoke test only** (current upper bound USD 4.84 for one 3-panel strip, printed by `live-smoke.py estimate`). The size of any larger evaluation will be proposed from the smoke test's *measured* cost; no amount for the 63-prompt suite is proposed or authorised yet | A6 | paid smoke run; later §8.3 quality, cost and latency (gate G3) |
+| B3 | Stripe test-mode account, prices, CLI | C1–C7 | `live_tests/test_stripe_live.py` (gate G4) |
+| B4 | Clerk development instance | B1–B9 | `e2e/live/clerk.spec.ts` (gate G4) |
+| B5 | Confirmation of the six prices in `packages/pricing/pricing.2026-11-12.json` (read from official pages via search summaries on 2026-11-12, see [`provider-verification.md`](provider-verification.md)) | A5 | trustworthy estimate and ceilings |
+| B6 | Network access for Terraform providers (`registry.terraform.io`, `releases.hashicorp.com`) — refused by this environment's policy, not changed | any developer machine or CI (D1) | `terraform init && validate`, then `plan` |
+| B7 | Git remote, AWS, Temporal Cloud, Render | D1–D7, D9 | CI; `live_tests/test_storage_live.py`; staging deploy per [`staging-plan.md`](staging-plan.md) (gate G5) |
+| B8 | Human decisions and reviews: legal (terms, IP/likeness, data protection, C2PA, retention periods in [`data-retention.md`](data-retention.md)); finance/product sign-off of [`billing-policy.md`](billing-policy.md); manual accessibility audit; security review | — | gates G7, G8 |
+| B9 | Real alert receivers (PagerDuty routing key, Slack webhook) as files in `ALERTMANAGER_SECRETS_DIR` | D8 | `scripts/verify-alerting.sh` against real receivers (gate G6) |
 
 ## Environment note
 In the first session one host, `temporal.download`, was added to the personal Default cloud environment so the
-Temporal SDK could fetch its test server. No environment setting or allowlist has been changed since. Blocked hosts
-met in this round (`ghcr.io` blobs, `quay.io`, `registry.terraform.io`) were worked around or recorded here, not
-added.
+Temporal SDK could fetch its test server. No environment setting or allowlist has been changed since. Blocked
+hosts (`ghcr.io` blobs, `quay.io`, `registry.terraform.io`, provider documentation sites) were worked around or
+recorded here, not added.

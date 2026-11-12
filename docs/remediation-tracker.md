@@ -244,3 +244,22 @@ not read back; fixed and covered by `test_durable_fake_queue_survives_a_new_prov
   fails on 0008 (`owner-guard-deadlock-before.txt`), passes on 0009.
 - **Stop/reconcile race (found by the F3 immutability trigger):** an attempt settling while being stopped —
   transitions are now conditional (`only_if`).
+
+## Audit 2026-11-12 — regression audit of the remediation (from dd0775a)
+
+All results below are from **simulated providers and local stubs**; none proves live provider, billing,
+auth or infrastructure behaviour (see [`setup-checklist.md`](setup-checklist.md)).
+
+| Edge case | Finding | Fix / evidence | Status |
+|---|---|---|---|
+| Lost provider result | held: cost kept on the lost attempt; replacement is a new attempt with its own reservation | `test_lost_result_keeps_its_cost_and_the_replacement_needs_its_own_reservation` | Verified (simulated) |
+| Cancellation acknowledgement | **defect**: a provider "cancelled" reply was released to $0 as if unbilled | new status `cancel_confirmed`, basis `unresolved`; same in reconcile (`5c9c2ea`); `test_cancellation_acknowledgement_is_not_proof_of_no_charge` | Fixed |
+| Deletion recovery | **defects**: a failing step was retried in the same pass; in-flight workflow cancels were fire-and-forget | per-pass `failed_steps`; cancels via outbox + `draining` step that revives dead letters; identifiers retained until each step succeeds; `test_deletion_recovers_when_stripe_clerk_and_storage_all_fail`, `test_deletion_waits_for_workflow_cancellation_and_retries_dead_letters` | Fixed |
+| Terraform version deletion | held: IAM grants exactly the actions storage uses (incl. `s3:DeleteObjectVersion`, `s3:ListBucketVersions`) | `test_terraform_iam_grants_exactly_what_storage_uses` | Verified (static) |
+| Account switch | held for late responses; autosave timers now cleared on unmount and `session_changed` save errors no longer toast | `e2e/isolation.spec.ts` "autosave pending at sign-out" — a guard: the old code did not visibly fail it (`audit-autosave-before.txt`) | Hardened |
+| Subscription periods | **defects**: anchor-reset upgrade and proration-before-base-invoice collided on `period_start` | entitlements keyed by `(subscription_id, period_end)` (migration 0010); `test_upgrade_with_billing_anchor_reset…`, `test_proration_arriving_before_the_base_invoice…`, `test_two_live_subscriptions…` | Fixed |
+| Eval lifetime budget | **defect**: a resumed run could be given a new budget | `ensure_run` refuses a changed budget; `--run-id`; `test_eval_run_budget_survives_restart_midnight_concurrency_and_unresolved_charges` | Fixed |
+| Compute-second billing (found while verifying prices) | **defect**: fal ESRGAN is billed per compute second; the table had a per-image placeholder | unit `per_compute_second`, reserved at rate × wait budget, unresolved until a provider charge is imported (`0f4b7c7`); `test_compute_second_billing…` | Fixed |
+| PDF vector renderer | **defects**: outlines half a stroke too large, tail tips overshooting (18 px at 1600 px), SFX stroke over / black fill | `61840a8`; `test_pdf_balloon_geometry_and_sfx_fill_match_the_png_renderer` (per-balloon ink boxes ≤ 3 px, SFX yellow ratio 0.85–1.15); visual comparison in `evidence/pdf-audit/` | Fixed; remaining differences explained there |
+| CSP for a production Clerk instance | **defect**: only `*.clerk.accounts.dev` allowed | `NEXT_PUBLIC_CLERK_FRONTEND_API` in CSP, Docker build arg, Render; `src/lib/csp.test.ts` | Fixed |
+| Real alert receivers | webhook-only config could not drive PagerDuty/Slack | `alertmanager.production.yml` (`amtool check-config` SUCCESS); compose overrides; drill reads Alertmanager counters for real receivers | Prepared, not executed live |

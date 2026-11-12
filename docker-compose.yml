@@ -112,9 +112,10 @@ services:
     image: prom/alertmanager:v0.29.0
     command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
     volumes:
-      - ./infra/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # ALERTMANAGER_CONFIG=alertmanager.production.yml + ALERTMANAGER_SECRETS_DIR for real receivers
+      - ./infra/observability/${ALERTMANAGER_CONFIG:-alertmanager.yml}:/etc/alertmanager/alertmanager.yml:ro
       # receiver URLs (secrets in a real deployment); locally they point at alert-sink
-      - ./infra/observability/alertmanager-local:/etc/alertmanager/secrets:ro
+      - ${ALERTMANAGER_SECRETS_DIR:-./infra/observability/alertmanager-local}:/etc/alertmanager/secrets:ro
     ports: ["127.0.0.1:9093:9093"]
   alert-sink:
     profiles: [observability]

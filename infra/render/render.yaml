@@ -110,5 +110,6 @@ services:
       - { key: NEXT_PUBLIC_API_URL, sync: false }
       - { key: NEXT_PUBLIC_AUTH_MODE, value: clerk }
       - { key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, sync: false }
+      - { key: NEXT_PUBLIC_CLERK_FRONTEND_API, sync: false }   # e.g. https://clerk.<your-domain> (production instance)
       - { key: NEXT_PUBLIC_ASSET_ORIGINS, sync: false }
       - { key: NEXT_PUBLIC_SENTRY_DSN, sync: false }
