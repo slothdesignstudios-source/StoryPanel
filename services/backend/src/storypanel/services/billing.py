@@ -262,32 +262,32 @@ async def _grant_entitlements(db: AsyncSession, user: User, inv: dict[str, Any])
         lines,
         key=lambda x: bool(((x.get("parent") or {}).get("subscription_item_details") or {}).get("proration")),
     ):
-        details = (ln.get("parent") or {}).get("subscription_item_details") or {}
         plan = plans.get(_price_of_line(ln) or "")
         period = ln.get("period") or {}
         start, end = _ts(period.get("start")), _ts(period.get("end"))
         if not plan or start is None or end is None or int(ln.get("amount") or 0) <= 0:
             continue  # unknown price, credit proration, or free line
         allowance = s.plan_monthly_credits.get(plan, 0)
-        existing = (await db.execute(select(SubscriptionEntitlement).where(
-            SubscriptionEntitlement.subscription_id == sub_id, SubscriptionEntitlement.period_start <= start,
-            SubscriptionEntitlement.period_end > start).with_for_update())).scalar_one_or_none()  # fmt: skip
-        if existing is None:
-            if details.get("proration"):
-                continue  # a proration alone never opens a period; the period's own line does
+        # A period is identified by its end: proration lines end with the period they adjust,
+        # so they top up the same entitlement whatever order the invoices arrive in, and a
+        # billing-anchor reset (a new period, new end) is a new entitlement.
+        ent = (await db.execute(select(SubscriptionEntitlement).where(
+            SubscriptionEntitlement.subscription_id == sub_id, SubscriptionEntitlement.period_end == end)
+            .with_for_update())).scalar_one_or_none()  # fmt: skip
+        if ent is None:
             ent = SubscriptionEntitlement(subscription_id=sub_id, user_id=user.id, period_start=start,
                                           period_end=end, plan=plan, credits_granted=0, invoices=[])  # fmt: skip
             db.add(ent)
             await db.flush()
-        else:
-            ent = existing
+        elif start < ent.period_start:
+            ent.period_start = start  # the period's base line arrived after a proration line
         top_up = allowance - ent.credits_granted
         if inv["id"] not in (ent.invoices or []):
             ent.invoices = [*(ent.invoices or []), inv["id"]]
         if top_up <= 0:
             outcome = "already_granted" if outcome == "ignored" else outcome
             continue  # downgrade or repeat: no clawback mid-period, no second grant
-        key = f"entitlement:{sub_id}:{int(ent.period_start.timestamp())}:{plan}"
+        key = f"entitlement:{sub_id}:{int(end.timestamp())}:{plan}"
         if await credits.grant(db, user.id, top_up, kind="grant",
                                reason=f"{plan.title()} plan credits" + (" (upgrade)" if ent.credits_granted else ""),
                                dedupe_key=key):  # fmt: skip

@@ -205,6 +205,9 @@ export function Editor({ project }: { project: Project }) {
   const refresh = useCallback(() => void qc.invalidateQueries({ queryKey: pk("project", project.id) }), [qc, project.id]);
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const versions = useRef<Record<string, number>>({});
+  // Pending autosaves belong to this editor and this session: never fire after unmount
+  // (navigation, sign-out, or another account taking over the tab).
+  useEffect(() => () => { for (const t of Object.values(timers.current)) clearTimeout(t); timers.current = {}; }, []);
   useEffect(() => {
     // Track the newest server version of each balloon for optimistic-concurrency saves.
     for (const b of project.pages.flatMap((p) => p.panels).flatMap((p) => p.balloons)) versions.current[b.id] = Math.max(versions.current[b.id] ?? 0, b.version);
@@ -229,6 +232,7 @@ export function Editor({ project }: { project: Project }) {
         now.set({ drafts: d, texts: t, save: Object.keys(d).length || Object.keys(t).length ? "dirty" : "saved" });
         refresh();
       } catch (e) {
+        if (e instanceof ApiError && e.code === "session_changed") return; // the person signed out meanwhile
         if (e instanceof ApiError && e.code === "version_conflict") {
           const now = useEditor.getState();
           const d = { ...now.drafts }, t = { ...now.texts };

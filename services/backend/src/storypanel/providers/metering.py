@@ -12,7 +12,8 @@ Attempt lifecycle:
     reserved -> submitting -> started(request id) -> succeeded [-> succeeded_unused]
         |            |               |-> failed     (provider: job failed / unusable output)
         |            |               |-> lost       (id unknown / result expired; NOT proof of no charge)
-        |            |               '-> cancelled  (we cancelled; reconciliation resolves it)
+        |            |               '-> cancelled  (we cancelled) -> cancel_confirmed (provider acknowledged;
+        |            |                                 still an unresolved potential charge)
         |            '-> ambiguous (submission outcome unknown: never resubmitted)
         '-> released (rejected before queueing)
 
@@ -505,9 +506,16 @@ async def _paid_request(
             raise fail(ErrorCode.PROVIDER_ERROR, "The illustration service lost this request.", "lost",
                        retryable=True) from exc  # fmt: skip
         except JobFailed as exc:
-            basis, _ = _failure_basis()
-            await _close(att, status="failed", basis=basis, error_code=(exc.error_type or "job_failed")[:40],
-                         latency_ms=int((time.monotonic() - started) * 1000))  # fmt: skip
+            if att.status == "cancelled":
+                # We cancelled it; the provider's "failed/cancelled" answer only acknowledges that.
+                # It may have run (and been billed) first, so the estimate stays a potential charge.
+                await _close(
+                    att, status="cancel_confirmed", basis="unresolved", error_code="cancel_acknowledged"
+                )
+            else:
+                basis, _ = _failure_basis()
+                await _close(att, status="failed", basis=basis, error_code=(exc.error_type or "job_failed")[:40],
+                             latency_ms=int((time.monotonic() - started) * 1000))  # fmt: skip
             _observe(provider_name, operation, "error", int((time.monotonic() - started) * 1000))
             if exc.moderation:
                 raise fail(ErrorCode.MODERATION_BLOCKED, "The illustration service refused this content.",
@@ -737,8 +745,12 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
             )  # touches updated_at: re-checked next sweep
             outcome["pending"] += 1
         except JobFailed as exc:
-            await _close(att, status="failed", basis=_failure_basis()[0], only_if=RESOLVABLE,
-                         error_code=(exc.error_type or "job_failed")[:40])  # fmt: skip
+            if att.status == "cancelled":  # acknowledgement of our cancel, not proof of no charge
+                await _close(att, status="cancel_confirmed", basis="unresolved", only_if=("cancelled",),
+                             error_code="cancel_acknowledged")  # fmt: skip
+            else:
+                await _close(att, status="failed", basis=_failure_basis()[0], only_if=RESOLVABLE,
+                             error_code=(exc.error_type or "job_failed")[:40])  # fmt: skip
             outcome["failed"] += 1
         except RequestUnknown as exc:
             await _close(att, status="lost", basis="unresolved", error_code=exc.reason, only_if=RESOLVABLE)

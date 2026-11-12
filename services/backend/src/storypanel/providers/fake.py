@@ -26,6 +26,7 @@ from storypanel.providers.base import (
     ImageInput,
     ImageRequest,
     ImageResult,
+    JobFailed,
     RequestPending,
     RequestUnknown,
     T,
@@ -45,6 +46,8 @@ class FakeControl:
     unsafe_attempts: int = 0  # every image is unsafe on its first N attempts
     stray_text_targets: set[str] = field(default_factory=set)
     unlocalised_attempts: int = 0  # the judge omits every box on the first N attempts
+    # after a cancel, the provider reports the job as failed/cancelled (an acknowledgement)
+    cancel_reports_job_failed: bool = False
     errors: dict[str, list[Exception]] = field(default_factory=dict)  # op -> queue of raises
     pending_fetches: int = 0  # next N image fetches report "still running"
     submits: list[str] = field(default_factory=list)
@@ -379,7 +382,9 @@ class _DurableQueue:
 
         r = redis_client()
         # the shared client decodes responses as text, so store the pickle base64-encoded
-        await r.set(f"sp:fake:job:{request_id}", base64.b64encode(pickle.dumps((model, req))).decode(), ex=86400)
+        await r.set(
+            f"sp:fake:job:{request_id}", base64.b64encode(pickle.dumps((model, req))).decode(), ex=86400
+        )
         await r.incr("sp:fake:submissions")
 
     @staticmethod
@@ -435,6 +440,8 @@ class FakeImageProvider:
         if control.hang_fetches > 0:
             control.hang_fetches -= 1
             await asyncio.sleep(3600)  # until cancelled
+        if control.cancel_reports_job_failed and request_id in control.cancelled:
+            raise JobFailed(request_id, "cancelled")
         job = self._jobs.get(request_id)
         if job is None and _DurableQueue.enabled():
             job = await _DurableQueue.get(request_id)

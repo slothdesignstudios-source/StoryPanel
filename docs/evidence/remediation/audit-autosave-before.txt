@@ -1,0 +1,3 @@
+Guard, not a reproduction: on the unfixed editor (dd0775a) a save in flight as A at sign-out
+completed as A, was never re-sent as B, and produced no toast in B's session, even with a 6 s
+artificial delay. Test passes on both old and new code.

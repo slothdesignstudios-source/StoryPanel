@@ -164,6 +164,24 @@ async def _job(uid: uuid.UUID) -> Any:
         return (await db.execute(select(AccountDeletion).where(AccountDeletion.user_id == uid))).scalar_one()
 
 
+async def _drive(uid: uuid.UUID, until: str = "completed", timeout: float = 30.0) -> Any:
+    """Advance the deletion job as the maintenance loop would, until it reaches `until`
+    (the outbox dispatcher in the `worker` fixture delivers workflow cancellations)."""
+    import asyncio
+    import time
+
+    from storypanel.services import deletion
+
+    end = time.monotonic() + timeout
+    while True:
+        status = await deletion.advance(uid)
+        job = await _job(uid)
+        if status == until or (until != "completed" and until in (job.last_error or "")):
+            return job
+        assert time.monotonic() < end, (status, job.last_error)
+        await asyncio.sleep(0.3)
+
+
 async def _uid(client: Any, headers: dict[str, str]) -> uuid.UUID:
     return uuid.UUID((await client.get("/v1/me", headers=headers)).json()["id"])
 
@@ -186,7 +204,8 @@ async def test_account_deletion_blocks_purges_and_resists_recreation(client: Any
     other = auth("grace@example.com")
     assert (await client.get("/v1/me", headers=other)).status_code == 200
     assert (await client.delete("/v1/me", headers=headers)).status_code == 204
-    job = await _job(uid)
+    assert (await client.get("/v1/me", headers=headers)).status_code == 401  # blocked before cleanup ends
+    job = await _drive(uid)
     assert job.status == "completed" and job.auth_subject is None and set(job.steps) >= {
         "cancelling", "draining", "purging", "billing", "identity", "anonymising"}  # fmt: skip
     c = await _counts()
@@ -246,8 +265,9 @@ async def test_deletion_during_generation_drains_cancels_and_leaves_nothing(
             break
     assert started
     assert (await client.delete("/v1/me", headers=headers)).status_code == 204
-    job = await _job(uid)
-    assert job.status == "draining" and "paid provider calls still in flight" in (job.last_error or "")
+    # first the workflow cancellations are delivered, then the paid call holds the drain
+    job = await _drive(uid, until="paid provider calls still in flight")
+    assert job.status == "draining"
     assert (await client.get(f"/v1/projects/{pid}", headers=headers)).status_code == 401  # blocked at once
     monkeypatch.setattr(get_settings(), "deletion_drain_seconds", 0)
     assert await deletion.advance(uid) == "completed"
@@ -273,7 +293,7 @@ async def test_deletion_during_export_cancels_the_export(
                           json={"format": "pdf"})  # fmt: skip
     assert r.status_code in (200, 202), r.text
     assert (await client.delete("/v1/me", headers=headers)).status_code == 204
-    assert (await _job(uid)).status == "completed"
+    assert (await _drive(uid)).status == "completed"
     import asyncio
 
     await asyncio.sleep(2)
@@ -331,8 +351,13 @@ async def test_billing_failure_keeps_identifiers_and_retries(client: Any, header
         and job.stripe_customer_id == "cus_del"
         and job.subscription_ids == ["sub_del"]
     )
-    assert job.attempts == 1 and "PROVIDER_ERROR" not in (job.last_error or "x") or job.last_error
-    assert (await _counts())["projects"] == 0  # content is already gone; billing cleanup is pending
+    assert job.attempts == 1 and (job.last_error or "").startswith("billing: AppError: The payment service")
+    # billing is independent: content was still purged and the identity step ran; only
+    # anonymisation waits, and the account stays blocked
+    assert {"cancelling", "draining", "purging", "identity"} <= set(job.steps) and "billing" not in job.steps
+    assert "anonymising" not in job.steps and job.auth_subject is not None
+    assert (await _counts())["projects"] == 0
+    assert (await client.get("/v1/me", headers=headers)).status_code == 401
     assert await deletion.advance(uid) == "completed"
     job = await _job(uid)
     assert job.stripe_customer_id is None and job.subscription_ids == []

@@ -115,3 +115,37 @@ test.describe("account switch isolation", () => {
     await expectNoTraceOf(page, markersA);
   });
 });
+
+test("an autosave pending at sign-out never runs as the next account or surfaces in its session", async ({ page, request }) => {
+  const stamp = Date.now();
+  const A = `iso-edit-a-${stamp}@example.com`, B = `iso-edit-b-${stamp}@example.com`;
+  const comic = await finishedComic(request, await apiToken(request, A), PROMPT);
+  const balloon = comic.pages[0]!.panels.flatMap((p) => p.balloons)[0]!;
+  await signIn(page, A);
+  await page.goto(`/projects/${comic.id}`);
+  await page.getByRole("button", { name: /^(speech|caption):/ }).first().click();
+  const patches: { who: string | null; url: string }[] = [];
+  page.on("request", (r) => { if (r.method() === "PATCH" && r.url().includes("/v1/balloons/")) patches.push({ who: emailOf(r), url: r.url() }); });
+  // slow every balloon save down so one is still in flight when A signs out
+  await page.route(`${API}/v1/balloons/**`, async (route) => { await new Promise((r) => setTimeout(r, 6000)); await route.continue().catch(() => undefined); });
+  const text = page.getByLabel("Text");
+  await text.fill("Draft typed by A just before signing out");
+  await page.waitForTimeout(900); // the debounce fired: A's save is in flight
+  await page.getByRole("link", { name: "Comics" }).first().click(); // leave the editor (client-side)
+  await signOutViaShell(page);
+  await page.getByLabel("Email").fill(B);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Your comics" })).toBeVisible();
+  // record every toast shown to B while A's slow save completes (toasts auto-dismiss)
+  const seen = new Set<string>();
+  for (let i = 0; i < 45; i++) {
+    for (const t of await page.locator("[data-sonner-toast]").allInnerTexts()) seen.add(t);
+    await page.waitForTimeout(200);
+  }
+  expect(patches.length, "A's save was in flight at sign-out").toBeGreaterThan(0);
+  expect(patches.every((p) => p.who === A), JSON.stringify(patches)).toBeTruthy(); // never sent as B
+  expect([...seen].filter((t) => /session changed|couldn.t save|try again/i.test(t)), "toasts shown to B").toEqual([]);
+  const html = await page.content();
+  expect(html).not.toContain("Draft typed by A");
+  expect(html).not.toContain(balloon.id);
+});

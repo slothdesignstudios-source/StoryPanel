@@ -206,6 +206,37 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
             await credits.close_for_project(db, pid)
 
 
+async def ensure_run(run_id: str, budget: Any, reason: str) -> tuple[uuid.UUID, Any]:
+    """The run's dedicated user and lifetime spend cap, created once and reused after a
+    restart. Everything already counted for the run (including failed and unresolved
+    attempts) stays counted. A different budget for an existing run is refused rather than
+    silently changing the ceiling."""
+    from decimal import Decimal
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from storypanel.db.models import ProviderAttempt, SpendCap
+
+    subject = f"eval-run:{run_id}"
+    async with transaction() as db:
+        await db.execute(pg_insert(User).values(id=uuid.uuid4(), auth_subject=subject, plan="pro")
+                         .on_conflict_do_nothing(index_elements=["auth_subject"]))  # fmt: skip
+        user = (
+            await db.execute(select(User).where(User.auth_subject == subject).with_for_update())
+        ).scalar_one()
+        await credits.grant(
+            db, user.id, 100_000, kind="grant", reason="eval run", dedupe_key=f"eval:{user.id}"
+        )
+        cap = (await db.execute(select(SpendCap).where(SpendCap.user_id == user.id))).scalar_one_or_none()
+        if cap is None:
+            db.add(SpendCap(user_id=user.id, cap_usd=Decimal(budget), reason=reason[:80]))
+        elif Decimal(cap.cap_usd) != Decimal(budget):
+            raise ValueError(f"run {run_id} already has a budget of {cap.cap_usd} USD (asked {budget})")
+        spent = (await db.execute(select(func.coalesce(func.sum(ProviderAttempt.cost_counted_usd), 0)).where(
+            ProviderAttempt.user_id == user.id))).scalar_one()  # fmt: skip
+        return user.id, Decimal(spent)
+
+
 async def _costs(project_id: uuid.UUID) -> dict[str, float]:
     """Every attempt counts, including failed, lost and unresolved ones. The evaluation's own
     judge calls are reported separately so they do not inflate the product's cost."""
@@ -340,6 +371,11 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--live", action="store_true", help="use real providers (costs money)")
     ap.add_argument("--max-usd", type=float, default=0.0, help="hard budget for a --live run")
     ap.add_argument("--concurrency", type=int, default=3)
+    ap.add_argument(
+        "--run-id",
+        default=None,
+        help="persistent run identity; re-use it after a restart to keep the same budget",
+    )
     ap.add_argument("--out", default=str(EVALS / "reports"))
     args = ap.parse_args(argv)
     s = get_settings()
@@ -356,25 +392,22 @@ async def main(argv: list[str] | None = None) -> int:
         await storage.ensure_bucket()  # local runs may use a fresh S3 bucket
     golden = json.loads((EVALS / "golden" / "golden-v1.json").read_text())
     cases = [c for c in golden["cases"] if args.subset == "all" or c["id"] in golden["fast_subset"]]
-    async with transaction() as db:
-        user = User(id=uuid.uuid4(), auth_subject=f"eval:{uuid.uuid4().hex}", plan="pro")
-        db.add(user)
-        await db.flush()
-        await credits.grant(db, user.id, 100_000, kind="grant", reason="eval run",
-                            dedupe_key=f"eval:{user.id}")  # fmt: skip
-        user_id = user.id
     # The run's budget is persisted as a lifetime spend cap on this run's own user, enforced
     # by the same serialised reservation as every other ceiling: it does not reset at
-    # midnight and no other account's activity counts against it. Live: --max-usd. The
-    # global daily ceiling stays in force for live runs. Simulated: prices are fictional,
-    # so the global ceiling is lifted for this process; the per-comic ceiling stays.
+    # midnight, survives restarts (re-run with the same --run-id), and no other account's
+    # activity counts against it. Live: --max-usd. The global daily ceiling stays in force for
+    # live runs. Simulated: prices are fictional, so the global ceiling is lifted for this
+    # process; the per-comic ceiling stays.
     from decimal import Decimal
 
-    from storypanel.db.models import SpendCap
-
     budget = Decimal(str(args.max_usd)) if args.live else Decimal("100000")
-    async with transaction() as db:
-        db.add(SpendCap(user_id=user_id, cap_usd=budget, reason=f"eval run {args.subset} {mode}"))
+    run_id = args.run_id or uuid.uuid4().hex
+    try:
+        user_id, spent = await ensure_run(run_id, budget, f"eval run {args.subset} {mode}")
+    except ValueError as exc:
+        print(f"refusing to run: {exc}", file=sys.stderr)
+        return 2
+    print(f"run {run_id}: budget {budget} USD, already counted {spent} USD", file=sys.stderr)
     if not args.live:
         object.__setattr__(s, "spend_limit_global_daily_usd", budget)
     sem = asyncio.Semaphore(args.concurrency)

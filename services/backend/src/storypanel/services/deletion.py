@@ -5,7 +5,8 @@ Policy (docs/data-retention.md):
   transaction that records the job, every API call then fails with "deleted", and asset
   writes for the owner are refused (repo.save_* check the flag under a row lock).
 - Work is cancelled (project, panel and export workflows; queued workflow starts are
-  withdrawn), then drained: paid provider calls in flight are given
+  withdrawn) and subscriptions are cancelled. Draining then waits until every workflow
+  cancellation has been delivered to Temporal (dead-lettered ones are retried), and paid provider calls in flight are given
   `deletion_drain_seconds` to finish, after which they are cancelled at the provider and
   left counted as unresolved potential charges.
 - Content is deleted and *verified*: the step completes only when the owner has no asset
@@ -54,7 +55,9 @@ from storypanel.obs.logging import get_logger
 from storypanel.services import outbox
 
 log = get_logger("deletion")
-STEPS = ("cancelling", "draining", "purging", "billing", "identity", "anonymising")
+# Billing runs right after work is cancelled: a slow or stuck content purge must never keep
+# charging a customer who asked to leave.
+STEPS = ("cancelling", "billing", "draining", "purging", "identity", "anonymising")
 
 
 def identity_hash(kind: str, value: str) -> str:
@@ -140,21 +143,47 @@ async def _owned_workflow_ids(db: AsyncSession, user_id: uuid.UUID) -> set[str]:
 async def _step_cancelling(job: AccountDeletion) -> None:
     async with transaction() as db:
         wf_ids = await _owned_workflow_ids(db, job.user_id)
-        # Withdraw starts that have not been delivered yet, then cancel everything that may run.
-        await db.execute(text("""
+        # Withdraw starts that have not been delivered yet: those workflows never run.
+        withdrawn = set((await db.execute(text("""
             update outbox set status = 'withdrawn', last_error = 'account deleted'
             where status = 'pending' and kind in ('start_workflow', 'signal')
-              and payload->>'workflow_id' = any(:ids)"""), {"ids": list(wf_ids)})  # fmt: skip
-        for wf in sorted(wf_ids):
-            await outbox.enqueue(db, "cancel", f"cancel:deletion:{wf}", {"workflow_id": wf})
+              and payload->>'workflow_id' = any(:ids)
+            returning payload->>'workflow_id'"""), {"ids": list(wf_ids)})).scalars())  # fmt: skip
+        never_started = withdrawn - set((await db.execute(text(
+            "select payload->>'workflow_id' from outbox where kind = 'start_workflow' and status = 'delivered' "
+            "and payload->>'workflow_id' = any(:ids)"), {"ids": list(withdrawn)})).scalars())  # fmt: skip
+        to_cancel = sorted(wf_ids - never_started)
+        for wf in to_cancel:
+            await outbox.enqueue(db, "cancel", f"cancel:deletion:{job.user_id}:{wf}", {"workflow_id": wf})
         await db.execute(update(Export).where(Export.owner_id == job.user_id,
                                               Export.status.in_(("queued", "running")))
                          .values(status="cancelled"))  # fmt: skip
-    log.info("account_deletion_cancelled_work", workflows=len(wf_ids))
+    log.info("account_deletion_cancelled_work", workflows=len(to_cancel), never_started=len(never_started))
+
+
+async def _cancels_outstanding(user_id: uuid.UUID) -> int:
+    """Workflow cancellations not yet delivered to Temporal. Dead-lettered ones are put back
+    in the queue: deletion keeps retrying (and the overdue-deletion alert fires) rather than
+    proceeding while a workflow might still be running."""
+    async with transaction() as db:
+        revived = (await db.execute(text("""
+            update outbox set status = 'pending', attempts = 0, next_attempt_at = now() + interval '1 minute'
+            where kind = 'cancel' and status = 'dead' and dedupe_key like :k"""),
+            {"k": f"cancel:deletion:{user_id}:%"})).rowcount  # type: ignore[attr-defined]  # fmt: skip
+        if revived:
+            log.warning("account_deletion_cancel_requeued", count=revived)
+            metrics.account_deletions.labels("cancel_requeued").inc()
+        return int((await db.execute(text(
+            "select count(*) from outbox where kind = 'cancel' and status <> 'delivered' and dedupe_key like :k"),
+            {"k": f"cancel:deletion:{user_id}:%"})).scalar_one())  # fmt: skip
 
 
 async def _step_draining(job: AccountDeletion) -> None:
     from storypanel.providers import metering
+
+    outstanding = await _cancels_outstanding(job.user_id)
+    if outstanding:
+        raise StepPending(f"{outstanding} workflow cancellations not yet delivered")
 
     async with transaction() as db:
         open_attempts = list((await db.execute(select(ProviderAttempt).where(
@@ -235,16 +264,27 @@ _RUN = {"cancelling": _step_cancelling, "draining": _step_draining, "purging": _
         "billing": _step_billing, "identity": _step_identity, "anonymising": _step_anonymising}  # fmt: skip
 
 
+# Steps that must wait for an earlier one; billing and identity only need "cancelling".
+_REQUIRES = {"billing": ("cancelling",), "draining": ("cancelling",), "purging": ("draining",),
+             "identity": ("cancelling",), "anonymising": STEPS[:-1]}  # fmt: skip
+
+
 async def advance(user_id: uuid.UUID) -> str:
-    """Run the remaining steps in order until one cannot finish. Safe to call concurrently
-    (a row lock admits one runner) and repeatedly."""
+    """Run every step whose prerequisites are done. A failure in one independent step
+    (billing, purge chain, identity) does not hold up the others; anonymisation waits for
+    all of them. Safe to call concurrently (a lock admits one runner) and repeatedly.
+    Returns "completed", "busy", or the first step still outstanding."""
     from storypanel.services.events import redis_client
 
     lock = redis_client().lock(f"sp:deletion:{user_id}", timeout=900, blocking=False)
     if not await lock.acquire():
         return "busy"
     try:
-        while True:
+        progressed = True
+        failed: list[str] = []
+        failed_steps: set[str] = set()  # retried on a later call (with backoff), not in this one
+        while progressed:
+            progressed = False
             async with transaction() as db:
                 job = (
                     await db.execute(select(AccountDeletion).where(AccountDeletion.user_id == user_id))
@@ -252,38 +292,68 @@ async def advance(user_id: uuid.UUID) -> str:
                 db.expunge(job)
             if job.status == "completed":
                 return "completed"
-            step = next((st for st in STEPS if st not in (job.steps or {})), None)
-            assert step is not None
-            try:
-                await _RUN[step](job)
-            except StepPending as exc:
-                await _note(user_id, step, str(exc), backoff=False)
-                return step
-            except Exception as exc:
-                await _note(
-                    user_id, step, f"{type(exc).__name__}: {getattr(exc, 'message', exc)}", backoff=True
-                )
-                log.warning("account_deletion_step_failed", step=step, error=type(exc).__name__)
-                metrics.account_deletions.labels("step_failed").inc()
-                return step
+            done = dict(job.steps or {})
+            for step in STEPS:
+                if (
+                    step in done
+                    or step in failed_steps
+                    or any(r not in done for r in _REQUIRES.get(step, ()))
+                ):
+                    continue
+                try:
+                    await _RUN[step](job)
+                except StepPending as exc:
+                    await _note(user_id, step, str(exc), backoff=False)
+                    failed.append(f"{step}: {exc}")
+                    failed_steps.add(step)
+                    continue
+                except Exception as exc:
+                    await _note(user_id, step, f"{type(exc).__name__}: {getattr(exc, 'message', exc)}",
+                                backoff=True)  # fmt: skip
+                    log.warning("account_deletion_step_failed", step=step, error=type(exc).__name__)
+                    metrics.account_deletions.labels("step_failed").inc()
+                    failed.append(f"{step}: {type(exc).__name__}: {getattr(exc, 'message', exc)}")
+                    failed_steps.add(step)
+                    continue
+                done[step] = True
+                progressed = True
+                async with transaction() as db:
+                    await db.execute(text(
+                        "update account_deletions set steps = coalesce(steps, '{}'::jsonb) || "
+                        "jsonb_build_object(cast(:s as text), now()), "
+                        "status = case when cast(:s as text) = 'anonymising' then 'completed' else status end "
+                        "where user_id = :u"), {"s": step, "u": user_id})  # fmt: skip
+                if step == "anonymising":
+                    metrics.account_deletions.labels("completed").inc()
+                    log.info("account_deletion_completed")
+                    return "completed"
+                job = await _reload(user_id)
+            outstanding = next(st for st in STEPS if st not in done)
             async with transaction() as db:
-                await db.execute(text(
-                    "update account_deletions set steps = coalesce(steps, '{}'::jsonb) || "
-                    "jsonb_build_object(cast(:s as text), now()), "
-                    "status = case when cast(:s as text) = 'anonymising' then 'completed' else cast(:next as text) end, "
-                    "attempts = 0, "
-                    "last_error = null where user_id = :u"),
-                    {"s": step, "u": user_id,
-                     "next": STEPS[STEPS.index(step) + 1] if step != "anonymising" else "completed"})  # fmt: skip
-            if step == "anonymising":
-                metrics.account_deletions.labels("completed").inc()
-                log.info("account_deletion_completed")
-                return "completed"
+                values: dict[str, Any] = {
+                    "status": outstanding,
+                    "last_error": "; ".join(failed)[:200] or None,
+                }
+                if not failed:
+                    values["attempts"] = 0
+                await db.execute(
+                    update(AccountDeletion).where(AccountDeletion.user_id == user_id).values(**values)
+                )
+        return outstanding
     finally:
         try:
             await lock.release()
         except Exception:
             pass
+
+
+async def _reload(user_id: uuid.UUID) -> AccountDeletion:
+    async with transaction() as db:
+        job = (
+            await db.execute(select(AccountDeletion).where(AccountDeletion.user_id == user_id))
+        ).scalar_one()
+        db.expunge(job)
+        return job
 
 
 async def _note(user_id: uuid.UUID, step: str, error: str, *, backoff: bool) -> None:

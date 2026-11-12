@@ -389,7 +389,8 @@ class ProviderAttempt(Base):
     model: Mapped[str] = mapped_column(String(120))
     operation: Mapped[str] = mapped_column(String(30))
     provider_request_id: Mapped[str | None] = mapped_column(String(200), index=True)
-    # reserved|submitting|started|succeeded|succeeded_unused|failed|released|ambiguous|cancelled|lost
+    # reserved|submitting|started|succeeded|succeeded_unused|failed|released|ambiguous|cancelled|
+    # cancel_confirmed|lost
     status: Mapped[str] = mapped_column(String(20), index=True)
     price_ref: Mapped[JSON] = mapped_column(JSONB)
     cost_estimate_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6))
@@ -482,12 +483,14 @@ class BillingSubscription(Base):
 
 
 class SubscriptionEntitlement(Base):
-    """Credits granted for one subscription billing period. Grants are keyed by
-    (subscription, period start), never by invoice, so several invoices touching one
-    period cannot grant twice; an upgrade tops the period up to the higher allowance."""
+    """Credits granted for one subscription billing period, keyed by (subscription, period
+    end) and never by invoice: several invoices touching one period cannot grant twice, an
+    upgrade's proration lines (which end with the period) top the same period up whatever
+    order they arrive in, and a billing-anchor reset (a new period with a new end) is a new
+    entitlement. period_start is the earliest start seen for the period."""
 
     __tablename__ = "subscription_entitlements"
-    __table_args__ = (UniqueConstraint("subscription_id", "period_start"),)
+    __table_args__ = (UniqueConstraint("subscription_id", "period_end"),)
     id: Mapped[uuid.UUID] = pk()
     subscription_id: Mapped[str] = mapped_column(String(100), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
