@@ -10,6 +10,7 @@ x-backend-env: &backend-env
   SP_S3_ENDPOINT_URL: http://minio:9000
   # browsers fetch signed URLs from the host's published port, so sign for that host
   SP_S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+  SP_S3_SERVER_SIDE_ENCRYPTION: none  # the local gateway does not implement SSE; AWS uses AES256
   SP_S3_ACCESS_KEY_ID: storypanel
   SP_S3_SECRET_ACCESS_KEY: storypanel-local-secret
   SP_S3_BUCKET: storypanel-assets
@@ -36,15 +37,15 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20 }
-  # S3-compatible object storage that verifies SigV4 signatures, like S3. (The minio/minio
-  # image is no longer published on Docker Hub.) Local-only credentials.
+  # S3-compatible gateway (Versity, POSIX backend) that verifies SigV4 signatures like S3.
+  # The minio/minio image is no longer published on Docker Hub. Local-only credentials.
   minio:
-    image: chrislusf/seaweedfs:4.53
-    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-s3", "-s3.port=9000",
-              "-s3.config=/etc/seaweedfs/s3.json", "-master.volumeSizeLimitMB=1024"]
-    volumes: [miniodata:/data, ./infra/docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro]
+    image: versity/versitygw:v1.11.0
+    command: ["--port", ":9000", "posix", "/data"]
+    environment: { ROOT_ACCESS_KEY_ID: storypanel, ROOT_SECRET_ACCESS_KEY: storypanel-local-secret }
+    volumes: [miniodata:/data]
     ports: ["127.0.0.1:9000:9000"]
-    healthcheck: { test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status"], interval: 5s, timeout: 3s, retries: 30 }
+    healthcheck: { test: ["CMD", "nc", "-z", "127.0.0.1", "9000"], interval: 5s, timeout: 3s, retries: 30 }
   temporal:
     image: temporalio/temporal:1.10.0
     # The image runs as uid 1000 and has no /data: keep the SQLite file in its (existing,
@@ -101,11 +102,25 @@ services:
     volumes: ["./infra/observability/tempo.yaml:/etc/tempo.yaml:ro"]
   prometheus:
     profiles: [observability]
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.7.3
     volumes:
       - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports: ["127.0.0.1:9090:9090"]
+  alertmanager:
+    profiles: [observability]
+    image: prom/alertmanager:v0.29.0
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ./infra/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # receiver URLs (secrets in a real deployment); locally they point at alert-sink
+      - ./infra/observability/alertmanager-local:/etc/alertmanager/secrets:ro
+    ports: ["127.0.0.1:9093:9093"]
+  alert-sink:
+    profiles: [observability]
+    image: python:3.13-slim
+    command: ["python", "-u", "/sink.py", "8080"]
+    volumes: ["./infra/observability/alert_sink.py:/sink.py:ro"]
   grafana:
     profiles: [observability]
     image: grafana/grafana:latest

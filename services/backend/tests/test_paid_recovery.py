@@ -343,3 +343,27 @@ async def test_upscale_resume_uses_the_persisted_model(monkeypatch: pytest.Monke
     await metering.upscale_image(image, ctx, key=key)
     assert {m for m, _ in fake.control.fetches} == {"fake-upscale"}
     assert fake.control.models_used == ["fake-upscale"]
+
+
+async def test_run_budget_is_a_lifetime_cap_unaffected_by_day_boundaries() -> None:
+    """Evaluation runs: a SpendCap on the run's own user caps all its spend, including spend
+    recorded 'yesterday', instead of the resetting daily per-user ceiling."""
+    from storypanel.db.models import SpendCap
+
+    ctx = await _ctx()
+    async with transaction() as db:
+        db.add(SpendCap(user_id=uuid.UUID(ctx.user_id), cap_usd=Decimal("0.10"), reason="test"))  # type: ignore[arg-type]
+    await metering.generate_image(_req(), ctx, key=f"cap1:{ctx.project_id}")
+    async with transaction() as db:  # as if that spend happened before midnight
+        await db.execute(text("alter table provider_attempts disable trigger provider_attempts_guard"))
+        await db.execute(text("update provider_attempts set created_at = now() - interval '2 days'"))
+        await db.execute(text("alter table provider_attempts enable trigger provider_attempts_guard"))
+    await metering.generate_image(_req(), CallContext("panel_generate", ctx.user_id, str(uuid.uuid4())),
+                                  key=f"cap2:{ctx.project_id}")  # fmt: skip
+    with pytest.raises(AppError) as e:  # 0.08 spent across days; 0.04 more would cross 0.10
+        await metering.generate_image(_req(), CallContext("panel_generate", ctx.user_id, str(uuid.uuid4())),
+                                      key=f"cap3:{ctx.project_id}")  # fmt: skip
+    assert e.value.code is ErrorCode.SPEND_LIMIT
+    # another account's spend does not count against the run
+    other = await _ctx()
+    await metering.generate_image(_req(), other, key=f"cap4:{other.project_id}")

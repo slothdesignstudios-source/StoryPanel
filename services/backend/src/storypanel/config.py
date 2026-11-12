@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # use (e.g. http://localhost:9000 vs http://minio:9000 under Compose). SigV4 signs the
     # Host, so URLs must be signed for the host the browser will request.
     s3_public_endpoint_url: str | None = None
+    # SSE header on writes. AWS: AES256 (the Terraform bucket also enforces it by default).
+    # "none" only for local S3 gateways that do not implement SSE.
+    s3_server_side_encryption: str = "AES256"
     s3_region: str = "us-east-1"
     s3_bucket: str = "storypanel-assets"
     s3_access_key_id: SecretStr | None = None
@@ -189,6 +192,10 @@ class Settings(BaseSettings):
             ):
                 if getattr(self, name) is None:
                     problems.append(f"SP_{name.upper()} must be set")
+            if self.s3_server_side_encryption not in ("AES256", "aws:kms"):
+                problems.append(
+                    "SP_S3_SERVER_SIDE_ENCRYPTION must be AES256 or aws:kms in staging/production"
+                )
             if self.signup_bonus_credits > 50:
                 problems.append("SP_SIGNUP_BONUS_CREDITS above 50 is not permitted in staging/production")
         if self.auth_mode == "clerk" and not (self.clerk_issuer and self.clerk_jwks_url):

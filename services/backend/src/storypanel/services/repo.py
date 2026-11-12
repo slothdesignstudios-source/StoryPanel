@@ -74,10 +74,10 @@ async def fail_project(db: AsyncSession, project: Project, *, code: str, message
 
 
 async def assert_owner_active(db: AsyncSession, owner_id: uuid.UUID) -> None:
-    """Refuse to store content for an account being deleted. FOR SHARE makes deletion's
+    """Refuse to store content for an account being deleted. FOR KEY SHARE makes deletion's
     update of `deleted_at` wait for in-progress writes, and later writes see the flag, so
     no object can be written after deletion has started purging."""
-    deleted = (await db.execute(text("select deleted_at from users where id = :u for share"),
+    deleted = (await db.execute(text("select deleted_at from users where id = :u for key share"),
                                 {"u": owner_id})).scalar_one_or_none()  # fmt: skip
     if deleted is not None:
         raise AppError(ErrorCode.INVALID_STATE, "This account has been deleted.", retryable=False)

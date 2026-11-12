@@ -1,0 +1,3 @@
+E   asyncpg.exceptions.DeadlockDetectedError: deadlock detected
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.Error: deadlock detected
+E   sqlalchemy.exc.DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) deadlock detected

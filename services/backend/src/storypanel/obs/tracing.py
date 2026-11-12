@@ -25,6 +25,17 @@ _configured = False
 _langfuse: Any = None
 
 
+def sampler(ratio: float) -> ParentBased:
+    """Sampling trust policy. Browsers (and any external caller) send `traceparent` with
+    sampled=1, so a plain parent-based sampler would record every request and ignore the
+    configured ratio. Instead a sampled remote parent is re-decided by the same trace-id
+    ratio. The decision is a deterministic function of the trace id, so the API, the outbox
+    hop and the worker all agree and a sampled trace stays complete; an unsampled remote
+    parent is respected (never upsampled). In-process children follow their parent."""
+    ratio_sampler = TraceIdRatioBased(ratio)
+    return ParentBased(root=ratio_sampler, remote_parent_sampled=ratio_sampler)
+
+
 def configure_tracing(service: str, exporter: SpanExporter | None = None) -> None:
     """Idempotent. `exporter` lets tests capture spans in memory."""
     global _configured
@@ -35,7 +46,7 @@ def configure_tracing(service: str, exporter: SpanExporter | None = None) -> Non
         resource=Resource.create(
             {"service.name": service, "deployment.environment": s.env, "service.version": s.release}
         ),
-        sampler=ParentBased(TraceIdRatioBased(s.trace_sample_ratio)),
+        sampler=sampler(s.trace_sample_ratio),
     )
     try:
         if exporter is not None:

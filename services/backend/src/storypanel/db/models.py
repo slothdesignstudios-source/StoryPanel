@@ -517,6 +517,18 @@ class CreditPurchase(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class SpendCap(Base):
+    """A lifetime provider-spend cap for one user, replacing that user's daily ceiling. Used
+    for evaluation runs: each run has its own user, so the cap is the run's budget,
+    unaffected by midnight resets or other accounts' activity."""
+
+    __tablename__ = "spend_caps"
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    cap_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    reason: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ProjectEvent(Base):
     __tablename__ = "project_events"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

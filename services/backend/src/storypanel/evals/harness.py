@@ -38,7 +38,7 @@ from storypanel.pipeline import stages_art as art
 from storypanel.pipeline import stages_plan as plan
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext
-from storypanel.services import credits, events, repo
+from storypanel.services import credits, editor, events, repo
 
 EVALS = catalog_root().parent / "evals"
 # Metrics that only real providers can measure.
@@ -139,8 +139,25 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
 
         await asyncio.gather(*[page(p) for p in pages])
         final = await art.stage_finish(pid)
+        generated = time.monotonic()
+        # A finished comic includes its export (with export-time upscaling): run it exactly as
+        # ExportWorkflow does and include its time and cost.
+        export_status = "not_run"
+        if final["status"] in ("completed", "partially_completed"):
+            async with transaction() as db:
+                proj = (
+                    await db.execute(select(Project).where(Project.id == pid).with_for_update())
+                ).scalar_one()
+                export = await editor.create_export(db, proj, "pdf", f"eval:{pid}")
+                export_id = export.id
+            begin = await art.stage_export_begin(export_id)
+            for n in range(int(begin["pages"])):
+                await art.stage_export_page(export_id, n)
+            export_status = (await art.stage_export_assemble(export_id)).get("status", "ready")
         out.update(outcome=final["status"], time_to_first_page_s=round(first_page or 0, 2),
-                   time_to_complete_s=round(time.monotonic() - approved, 2),
+                   time_to_complete_s=round(generated - approved, 2),
+                   time_to_export_s=round(time.monotonic() - generated, 2), export_status=export_status,
+                   time_to_finished_comic_s=round(time.monotonic() - approved, 2),
                    pages=len(pages), panels=n_panels)  # fmt: skip
 
         async with transaction() as db:
@@ -149,8 +166,6 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
                 select(PanelVersion).join(Panel, Panel.id == PanelVersion.panel_id)
                 .where(Panel.project_id == pid))).scalars().all()  # fmt: skip
             balloons = (await db.execute(select(Balloon).where(Balloon.project_id == pid))).scalars().all()
-            cost = (await db.execute(select(func.coalesce(func.sum(ProviderUsage.cost_usd), 0)).where(
-                ProviderUsage.project_id == pid))).scalar_one()  # fmt: skip
             bible_doc = await repo.latest_bible(db, pid)
             script_json = row.content
         first = [v for v in versions if v.attempt == 0]
@@ -158,28 +173,54 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
                    if v.qa_scores and v.qa_scores.get("identity_rating_avg")]  # fmt: skip
         current = {p.current_version_id for p in panels}
         final_versions = [v for v in versions if v.id in current]
+        first_failed = {v.panel_id for v in first if v.qa_status != "pass"}
         out["panel_stats"] = {
             "first_attempt_pass": sum(v.qa_status == "pass" for v in first), "first_attempts": len(first),
+            # defects found on the first attempt / of those, fixed by automatic retries or
+            # repair / still defective in the delivered comic
+            "first_attempt_defects": len(first_failed),
+            "repaired_defects": sum(p.id in first_failed and p.status == "ok" for p in panels),
             "final_not_ok": sum(p.status != "ok" for p in panels), "panels": len(panels),
             "stray_text": sum(bool((v.qa_scores or {}).get("visible_text")) for v in final_versions),
             "identity_ratings": ratings,
-            "identity_pass": sum(not any(x.startswith("identity") for x in (v.qa_scores or {}).get("problems", []))
+            "identity_pass": sum(not any(x.startswith(("identity", "unlocalised", "no_reference"))
+                                         for x in (v.qa_scores or {}).get("problems", []))
                                  for v in final_versions),
             "final_versions": len(final_versions),
+            # nobody regenerates panels in an automated run; measured only with real users
+            "user_regenerations": None,
         }  # fmt: skip
         out["lettering"] = {
             "balloons": len(balloons), "covers_face": sum("covers_face" in b.flags for b in balloons),
             "reading_order": sum("reading_order" in b.flags for b in balloons),
             "overflow": sum("overflow" in b.flags for b in balloons),
         }  # fmt: skip
-        out["cost_usd"] = float(cost)
         if s.provider_mode == "live" and bible_doc is not None:
             out["story_quality"] = await judge_story(bible_doc, script_json, str(user_id), str(pid))
+        out["cost"] = await _costs(pid)
+        out["cost_usd"] = out["cost"]["product_usd"]
         return out
     finally:
         out["wall_s"] = round(time.monotonic() - started, 2)
         async with transaction() as db:
             await credits.close_for_project(db, pid)
+
+
+async def _costs(project_id: uuid.UUID) -> dict[str, float]:
+    """Every attempt counts, including failed, lost and unresolved ones. The evaluation's own
+    judge calls are reported separately so they do not inflate the product's cost."""
+    from storypanel.db.models import ProviderAttempt
+
+    async with transaction() as db:
+        rows = (await db.execute(select(ProviderAttempt.stage, ProviderAttempt.cost_counted_usd,
+                                        ProviderAttempt.cost_basis).where(
+            ProviderAttempt.project_id == project_id))).all()  # fmt: skip
+    judge = sum(float(c) for st, c, _ in rows if st.startswith("eval_"))
+    product = sum(float(c) for st, c, _ in rows if not st.startswith("eval_"))
+    return {"product_usd": round(product, 6), "eval_overhead_usd": round(judge, 6),
+            "unresolved_usd": round(sum(float(c) for _, c, b in rows if b in ("reserved", "unresolved")), 6),
+            "export_usd": round(sum(float(c) for st, c, _ in rows if st.startswith("export")), 6),
+            "attempts": len(rows)}  # fmt: skip
 
 
 async def judge_story(bible: StoryBible, script: dict[str, Any], user_id: str, project_id: str) -> float:
@@ -213,6 +254,9 @@ def _pct(values: list[float], q: float) -> float | None:
 
 
 def summarise(results: list[dict[str, Any]], mode: str) -> dict[str, Any]:
+    """Quality metrics are computed over completed comics, and every report carries the
+    denominators: how many cases errored, were blocked or did not finish are never hidden
+    behind an average of the successes."""
     done = [r for r in results if "panel_stats" in r]
     ps = [r["panel_stats"] for r in done]
 
@@ -239,6 +283,11 @@ def summarise(results: list[dict[str, Any]], mode: str) -> dict[str, Any]:
         "time_to_first_page_p90_s": _pct([r["time_to_first_page_s"] for r in done], 0.9),
         "full_comic_p50_s": _pct(four_page, 0.5),
         "cost_per_page_usd": round(sum(r["cost_usd"] for r in done) / pages, 4) if pages else None,
+        "first_attempt_defect_rate": total("first_attempt_defects") / total("panels") if ps and total("panels") else None,
+        "repaired_defect_rate": (total("repaired_defects") / total("first_attempt_defects")
+                                 if ps and total("first_attempt_defects") else None),
+        "finished_comic_p50_s": _pct([r["time_to_finished_comic_s"] for r in done if r.get("pages") == 4], 0.5),
+        "completion_rate": (len([r for r in allow if r.get("export_status") == "ready"]) / len(allow)) if allow else None,
         "policy_block_recall": (sum(r.get("outcome") == "blocked" for r in should_block) / len(should_block)
                                 if should_block else None),
         "script_valid_after_repair": (sum(r.get("script_errors", 1) == 0 for r in allow if "script_errors" in r)
@@ -260,9 +309,21 @@ def summarise(results: list[dict[str, Any]], mode: str) -> dict[str, Any]:
     return {
         "metrics": metrics, "gates": gates,
         "counts": {"cases": len(results), "completed": len(done),
+                   "allow_policy_cases": len(allow), "block_policy_cases": len(should_block),
+                   "exported": sum(r.get("export_status") == "ready" for r in done),
+                   "incomplete": [r["id"] for r in allow if "panel_stats" not in r and r.get("outcome") != "blocked"],
                    "false_blocks": sum(r.get("outcome") == "blocked" for r in allow),
                    "brief_mismatches": sum(r.get("brief_matches") is False for r in allow),
                    "errors": sum("error" in r for r in results)},
+        "denominators": {"quality_metrics": "completed comics", "completion_rate": "allow-policy cases",
+                         "policy_block_recall": "block-policy cases",
+                         "first_attempt_defect_rate": "panels in completed comics",
+                         "repaired_defect_rate": "first-attempt defects"},
+        "cost": {"product_usd": round(sum(r["cost"]["product_usd"] for r in done), 4),
+                 "eval_overhead_usd": round(sum(r["cost"]["eval_overhead_usd"] for r in done), 4),
+                 "unresolved_usd": round(sum(r["cost"]["unresolved_usd"] for r in done), 4),
+                 "note": "includes failed and unresolved attempts; cases that errored before completion are "
+                         "counted in the run budget (spend cap) but not here"},
     }  # fmt: skip
 
 
@@ -289,6 +350,10 @@ async def main(argv: list[str] | None = None) -> int:
     if args.live and args.max_usd <= 0:
         print("a --live run needs an explicit --max-usd budget", file=sys.stderr)
         return 2
+    if not s.is_deployed:
+        from storypanel import storage
+
+        await storage.ensure_bucket()  # local runs may use a fresh S3 bucket
     golden = json.loads((EVALS / "golden" / "golden-v1.json").read_text())
     cases = [c for c in golden["cases"] if args.subset == "all" or c["id"] in golden["fast_subset"]]
     async with transaction() as db:
@@ -298,14 +363,20 @@ async def main(argv: list[str] | None = None) -> int:
         await credits.grant(db, user.id, 100_000, kind="grant", reason="eval run",
                             dedupe_key=f"eval:{user.id}")  # fmt: skip
         user_id = user.id
-    # The run's budget. Live: the explicit --max-usd is the hard ceiling for the whole run.
-    # Simulated: prices are fictional, so the per-user/global ceilings are lifted for this
-    # process only; the per-comic ceiling stays in force and is part of what is tested.
+    # The run's budget is persisted as a lifetime spend cap on this run's own user, enforced
+    # by the same serialised reservation as every other ceiling: it does not reset at
+    # midnight and no other account's activity counts against it. Live: --max-usd. The
+    # global daily ceiling stays in force for live runs. Simulated: prices are fictional,
+    # so the global ceiling is lifted for this process; the per-comic ceiling stays.
     from decimal import Decimal
 
-    budget = Decimal(str(args.max_usd)) if args.live else Decimal("1000000")
-    object.__setattr__(s, "spend_limit_global_daily_usd", budget)
-    object.__setattr__(s, "spend_limit_user_daily_usd", budget)
+    from storypanel.db.models import SpendCap
+
+    budget = Decimal(str(args.max_usd)) if args.live else Decimal("100000")
+    async with transaction() as db:
+        db.add(SpendCap(user_id=user_id, cap_usd=budget, reason=f"eval run {args.subset} {mode}"))
+    if not args.live:
+        object.__setattr__(s, "spend_limit_global_daily_usd", budget)
     sem = asyncio.Semaphore(args.concurrency)
 
     async def guarded(case: dict[str, Any]) -> dict[str, Any]:

@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { ApiError } from "@/lib/api";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { setIdentity } from "@/lib/session";
+import { scrubBreadcrumb, scrubEvent } from "@/lib/telemetry";
 
 function makeClient() {
   return new QueryClient({
@@ -48,9 +49,14 @@ export function Providers({ children }: { children: ReactNode }) {
   useEffect(() => {
     const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
     if (!dsn) return;
-    // Browser error reporting: no PII, no request bodies, no session replay.
+    // Browser error reporting: no PII, no request bodies, no session replay, and every URL,
+    // message and breadcrumb scrubbed of signed-URL credentials and tokens (lib/telemetry.ts).
     void import("@sentry/browser").then((Sentry) =>
-      Sentry.init({ dsn, tracesSampleRate: 0, environment: process.env.NEXT_PUBLIC_ENV ?? "local", release: process.env.NEXT_PUBLIC_RELEASE }),
+      Sentry.init({
+        dsn, tracesSampleRate: 0, environment: process.env.NEXT_PUBLIC_ENV ?? "local", release: process.env.NEXT_PUBLIC_RELEASE,
+        beforeSend: (event) => scrubEvent(event as Parameters<typeof scrubEvent>[0]) as typeof event,
+        beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb as Parameters<typeof scrubBreadcrumb>[0]) as typeof crumb | null,
+      }),
     ).catch(() => undefined);
   }, []);
   return (

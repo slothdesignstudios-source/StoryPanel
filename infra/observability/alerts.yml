@@ -24,6 +24,11 @@ groups:
         annotations: { summary: "No worker is being scraped: nothing can be generated", runbook: docs/runbooks/stuck-generation.md }
   - name: storypanel-workflows
     rules:
+      - alert: WorkerInstanceDown
+        expr: count(up{job="worker"} == 0) > 0
+        for: 5m
+        labels: { severity: ticket }
+        annotations: { summary: "A worker instance is not being scraped; capacity is reduced." }
       - alert: StuckProjects
         expr: sp_projects_stuck > 0
         for: 10m

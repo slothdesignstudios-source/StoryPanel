@@ -1,0 +1,4083 @@
+{
+ "evidence": "SIMULATED (fake providers: not evidence of model quality, cost or latency)",
+ "mode": "simulated",
+ "subset": "all",
+ "at": "2026-11-12T00:07:39.595177+00:00",
+ "commit": "751a567",
+ "versions": {
+  "golden": "golden-v1",
+  "prompts": "v1",
+  "styles": "2026.11.1",
+  "layouts": "2026.11.1",
+  "lettering_font_range": [
+   15.0,
+   22.0
+  ]
+ },
+ "models": {
+  "story": null,
+  "light": null,
+  "vision": null,
+  "image": null,
+  "embedding": null
+ },
+ "duration_s": 510.9,
+ "metrics": {
+  "identity_rating_avg": 5.0,
+  "identity_pass_rate": 1.0,
+  "script_adherence_first_attempt": 1.0,
+  "panel_defect_rate": 0.0,
+  "stray_text_rate": 0.0,
+  "story_quality": null,
+  "balloon_face_overlap_rate": 0.0,
+  "reading_order_errors": 0,
+  "time_to_first_page_p50_s": 9.59,
+  "time_to_first_page_p90_s": 18.09,
+  "full_comic_p50_s": 16.98,
+  "cost_per_page_usd": 0.5989,
+  "first_attempt_defect_rate": 0.0,
+  "repaired_defect_rate": null,
+  "finished_comic_p50_s": 47.2,
+  "completion_rate": 1.0,
+  "policy_block_recall": 1.0,
+  "script_valid_after_repair": 1.0
+ },
+ "gates": {
+  "identity_rating_avg": {
+   "value": 5.0,
+   "target": ">= 4.0",
+   "verdict": "simulated_only"
+  },
+  "identity_pass_rate": {
+   "value": 1.0,
+   "target": ">= 0.9",
+   "verdict": "simulated_only"
+  },
+  "script_adherence_first_attempt": {
+   "value": 1.0,
+   "target": ">= 0.85",
+   "verdict": "simulated_only"
+  },
+  "panel_defect_rate": {
+   "value": 0.0,
+   "target": "<= 0.15",
+   "verdict": "simulated_only"
+  },
+  "stray_text_rate": {
+   "value": 0.0,
+   "target": "< 0.03",
+   "verdict": "simulated_only"
+  },
+  "story_quality": {
+   "value": null,
+   "target": ">= 3.8",
+   "verdict": "not_measured"
+  },
+  "balloon_face_overlap_rate": {
+   "value": 0.0,
+   "target": "< 0.05",
+   "verdict": "pass"
+  },
+  "reading_order_errors": {
+   "value": 0,
+   "target": "== 0",
+   "verdict": "pass"
+  },
+  "time_to_first_page_p50_s": {
+   "value": 9.59,
+   "target": "< 90",
+   "verdict": "simulated_only"
+  },
+  "time_to_first_page_p90_s": {
+   "value": 18.09,
+   "target": "< 180",
+   "verdict": "simulated_only"
+  },
+  "full_comic_p50_s": {
+   "value": 16.98,
+   "target": "< 360",
+   "verdict": "simulated_only"
+  },
+  "cost_per_page_usd": {
+   "value": 0.5989,
+   "target": "<= 0.55",
+   "verdict": "simulated_only"
+  },
+  "policy_block_recall": {
+   "value": 1.0,
+   "target": "== 1.0",
+   "verdict": "pass"
+  },
+  "script_valid_after_repair": {
+   "value": 1.0,
+   "target": "== 1.0",
+   "verdict": "pass"
+  }
+ },
+ "counts": {
+  "cases": 63,
+  "completed": 60,
+  "allow_policy_cases": 60,
+  "block_policy_cases": 3,
+  "exported": 60,
+  "incomplete": [],
+  "false_blocks": 0,
+  "brief_mismatches": 1,
+  "errors": 0
+ },
+ "denominators": {
+  "quality_metrics": "completed comics",
+  "completion_rate": "allow-policy cases",
+  "policy_block_recall": "block-policy cases",
+  "first_attempt_defect_rate": "panels in completed comics",
+  "repaired_defect_rate": "first-attempt defects"
+ },
+ "cost": {
+  "product_usd": 79.0511,
+  "eval_overhead_usd": 0,
+  "unresolved_usd": 0,
+  "note": "includes failed and unresolved attempts; cases that errored before completion are counted in the run budget (spend cap) but not here"
+ },
+ "cases": [
+  {
+   "id": "slice-robot-noodles",
+   "tags": [
+    "two_characters",
+    "night",
+    "non_human",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 9.59,
+   "time_to_complete_s": 12.95,
+   "time_to_export_s": 33.57,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 46.52,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.115028,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 114
+   },
+   "cost_usd": 2.115028,
+   "wall_s": 50.56
+  },
+  {
+   "id": "gag-cat-vacuum",
+   "tags": [
+    "strip",
+    "non_human",
+    "single_character"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 10.27,
+   "time_to_complete_s": 11.19,
+   "time_to_export_s": 4.68,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 15.87,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850464,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850464,
+   "wall_s": 21.89
+  },
+  {
+   "id": "edu-photosynthesis",
+   "tags": [
+    "education",
+    "non_human",
+    "two_characters"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 8.19,
+   "time_to_complete_s": 12.56,
+   "time_to_export_s": 31.64,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 44.2,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.115026,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 114
+   },
+   "cost_usd": 2.115026,
+   "wall_s": 48.24
+  },
+  {
+   "id": "bedtime-dragon",
+   "tags": [
+    "all_ages",
+    "night",
+    "non_human"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "soft_storybook",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 12.64,
+   "time_to_complete_s": 14.45,
+   "time_to_export_s": 35.82,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 50.27,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.115009,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 114
+   },
+   "cost_usd": 2.115009,
+   "wall_s": 54.63
+  },
+  {
+   "id": "noir-lighthouse",
+   "tags": [
+    "night",
+    "single_character",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 3,
+    "style_preset": "noir_duotone",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 20.02,
+   "time_to_complete_s": 21.66,
+   "time_to_export_s": 14.81,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 36.46,
+   "pages": 3,
+   "panels": 13,
+   "panel_stats": {
+    "first_attempt_pass": 13,
+    "first_attempts": 13,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 13,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 13,
+    "final_versions": 13,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 20,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.663345,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.13,
+    "attempts": 89
+   },
+   "cost_usd": 1.663345,
+   "wall_s": 51.3
+  },
+  {
+   "id": "action-courier",
+   "tags": [
+    "action_poses",
+    "single_character",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "bold_western_ink",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 10.09,
+   "time_to_complete_s": 12.91,
+   "time_to_export_s": 16.23,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 29.14,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302125,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302125,
+   "wall_s": 39.0
+  },
+  {
+   "id": "trio-bakery",
+   "tags": [
+    "three_characters",
+    "dialogue_heavy"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 12.65,
+   "time_to_complete_s": 16.98,
+   "time_to_export_s": 28.37,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 45.35,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 23,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.913519,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 107
+   },
+   "cost_usd": 1.913519,
+   "wall_s": 53.2
+  },
+  {
+   "id": "crowd-market",
+   "tags": [
+    "crowds",
+    "night",
+    "two_characters"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 3,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 15.57,
+   "time_to_complete_s": 16.21,
+   "time_to_export_s": 22.44,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 38.65,
+   "pages": 3,
+   "panels": 13,
+   "panel_stats": {
+    "first_attempt_pass": 13,
+    "first_attempts": 13,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 13,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 13,
+    "final_versions": 13,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 20,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.663332,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.13,
+    "attempts": 89
+   },
+   "cost_usd": 1.663332,
+   "wall_s": 43.63
+  },
+  {
+   "id": "strip-coffee",
+   "tags": [
+    "strip",
+    "non_human",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 17.68,
+   "time_to_complete_s": 17.75,
+   "time_to_export_s": 2.95,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 20.7,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850464,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850464,
+   "wall_s": 33.62
+  },
+  {
+   "id": "history-printing",
+   "tags": [
+    "education",
+    "historical",
+    "two_characters"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 12.71,
+   "time_to_complete_s": 14.5,
+   "time_to_export_s": 29.1,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 43.61,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.115005,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 114
+   },
+   "cost_usd": 2.115005,
+   "wall_s": 57.0
+  },
+  {
+   "id": "scifi-gardener",
+   "tags": [
+    "two_characters",
+    "non_human",
+    "long"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 6,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 10.14,
+   "time_to_complete_s": 14.44,
+   "time_to_export_s": 47.23,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 61.67,
+   "pages": 6,
+   "panels": 27,
+   "panel_stats": {
+    "first_attempt_pass": 27,
+    "first_attempts": 27,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 27,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 27,
+    "final_versions": 27,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 40,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.927884,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.27,
+    "attempts": 159
+   },
+   "cost_usd": 2.927884,
+   "wall_s": 69.9
+  },
+  {
+   "id": "mascot-launch",
+   "tags": [
+    "marketing",
+    "props",
+    "non_human"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 13.81,
+   "time_to_complete_s": 14.77,
+   "time_to_export_s": 21.5,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 36.27,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302119,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302119,
+   "wall_s": 43.57
+  },
+  {
+   "id": "tabletop-recap",
+   "tags": [
+    "three_characters",
+    "action_poses",
+    "non_human"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 17.15,
+   "time_to_complete_s": 23.21,
+   "time_to_export_s": 35.07,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 58.28,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.115037,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 114
+   },
+   "cost_usd": 2.115037,
+   "wall_s": 66.21
+  },
+  {
+   "id": "quiet-fishing",
+   "tags": [
+    "two_characters",
+    "low_dialogue"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 19.29,
+   "time_to_complete_s": 20.32,
+   "time_to_export_s": 11.64,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 31.96,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302087,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302087,
+   "wall_s": 43.59
+  },
+  {
+   "id": "mystery-library",
+   "tags": [
+    "long",
+    "night",
+    "single_character",
+    "teen"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 8,
+    "style_preset": "clean_manga_warm",
+    "audience": "teen"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 19.4,
+   "time_to_complete_s": 26.0,
+   "time_to_export_s": 52.45,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 78.45,
+   "pages": 8,
+   "panels": 36,
+   "panel_stats": {
+    "first_attempt_pass": 36,
+    "first_attempts": 36,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 36,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 36,
+    "final_versions": 36,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 53,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 3.740727,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.36,
+    "attempts": 204
+   },
+   "cost_usd": 3.740727,
+   "wall_s": 89.52
+  },
+  {
+   "id": "sports-underdog",
+   "tags": [
+    "action_poses",
+    "crowds"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 12.36,
+   "time_to_complete_s": 13.34,
+   "time_to_export_s": 12.92,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 26.26,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 12,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.100803,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 62
+   },
+   "cost_usd": 1.100803,
+   "wall_s": 37.22
+  },
+  {
+   "id": "strip-monday",
+   "tags": [
+    "strip",
+    "non_human"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 10.65,
+   "time_to_complete_s": 10.73,
+   "time_to_export_s": 6.37,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 17.1,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850458,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850458,
+   "wall_s": 26.38
+  },
+  {
+   "id": "friendship-kite",
+   "tags": [
+    "two_characters",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 14.63,
+   "time_to_complete_s": 17.75,
+   "time_to_export_s": 32.29,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 50.04,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.114974,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 114
+   },
+   "cost_usd": 2.114974,
+   "wall_s": 57.56
+  },
+  {
+   "id": "space-cat",
+   "tags": [
+    "two_characters",
+    "non_human",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 3,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 15.57,
+   "time_to_complete_s": 18.66,
+   "time_to_export_s": 26.51,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 45.16,
+   "pages": 3,
+   "panels": 13,
+   "panel_stats": {
+    "first_attempt_pass": 13,
+    "first_attempts": 13,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 13,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 13,
+    "final_versions": 13,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 20,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.663328,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.13,
+    "attempts": 89
+   },
+   "cost_usd": 1.663328,
+   "wall_s": 57.5
+  },
+  {
+   "id": "teen-band",
+   "tags": [
+    "three_characters",
+    "teen"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "teen"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 21.22,
+   "time_to_complete_s": 24.49,
+   "time_to_export_s": 26.77,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 51.26,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 23,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.913504,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 107
+   },
+   "cost_usd": 1.913504,
+   "wall_s": 60.19
+  },
+  {
+   "id": "adv-injection",
+   "tags": [
+    "adversarial",
+    "prompt_injection"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 15.54,
+   "time_to_complete_s": 15.6,
+   "time_to_export_s": 10.58,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 26.19,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302127,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302127,
+   "wall_s": 40.0
+  },
+  {
+   "id": "adv-style-artist",
+   "tags": [
+    "adversarial",
+    "living_artist_style"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 10.14,
+   "time_to_complete_s": 10.85,
+   "time_to_export_s": 13.45,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 24.3,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302027,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302027,
+   "wall_s": 36.21
+  },
+  {
+   "id": "adv-long-names",
+   "tags": [
+    "lettering_stress",
+    "two_characters"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 11.62,
+   "time_to_complete_s": 12.39,
+   "time_to_export_s": 11.63,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 24.02,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302111,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302111,
+   "wall_s": 33.21
+  },
+  {
+   "id": "adv-wordy",
+   "tags": [
+    "lettering_stress",
+    "dialogue_heavy"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 14.14,
+   "time_to_complete_s": 14.95,
+   "time_to_export_s": 10.68,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 25.64,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302097,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302097,
+   "wall_s": 31.93
+  },
+  {
+   "id": "slice-robot-noodles-short",
+   "tags": [
+    "two_characters",
+    "night",
+    "non_human",
+    "props",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 11.26,
+   "time_to_complete_s": 11.28,
+   "time_to_export_s": 3.57,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 14.85,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.85045,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.85045,
+   "wall_s": 24.14
+  },
+  {
+   "id": "slice-robot-noodles-strip",
+   "tags": [
+    "two_characters",
+    "night",
+    "non_human",
+    "props",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 8.02,
+   "time_to_complete_s": 8.12,
+   "time_to_export_s": 4.58,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 12.7,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850499,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850499,
+   "wall_s": 21.2
+  },
+  {
+   "id": "gag-cat-vacuum-pages",
+   "tags": [
+    "strip",
+    "non_human",
+    "single_character"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 7.88,
+   "time_to_complete_s": 7.96,
+   "time_to_export_s": 7.96,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 15.92,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302074,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302074,
+   "wall_s": 23.26
+  },
+  {
+   "id": "edu-photosynthesis-short",
+   "tags": [
+    "education",
+    "non_human",
+    "two_characters",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.41,
+   "time_to_complete_s": 6.45,
+   "time_to_export_s": 6.16,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 12.61,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850458,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850458,
+   "wall_s": 18.6
+  },
+  {
+   "id": "edu-photosynthesis-strip",
+   "tags": [
+    "education",
+    "non_human",
+    "two_characters",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 9.54,
+   "time_to_complete_s": 10.05,
+   "time_to_export_s": 2.83,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 12.87,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850507,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850507,
+   "wall_s": 17.87
+  },
+  {
+   "id": "bedtime-dragon-short",
+   "tags": [
+    "all_ages",
+    "night",
+    "non_human",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 8.88,
+   "time_to_complete_s": 8.98,
+   "time_to_export_s": 4.47,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 13.45,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850436,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850436,
+   "wall_s": 18.92
+  },
+  {
+   "id": "noir-lighthouse-short",
+   "tags": [
+    "night",
+    "single_character",
+    "props",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 5.07,
+   "time_to_complete_s": 5.12,
+   "time_to_export_s": 3.47,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 8.58,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850436,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850436,
+   "wall_s": 14.73
+  },
+  {
+   "id": "noir-lighthouse-strip",
+   "tags": [
+    "night",
+    "single_character",
+    "props",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 2.99,
+   "time_to_complete_s": 3.05,
+   "time_to_export_s": 4.25,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 7.3,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850487,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850487,
+   "wall_s": 13.65
+  },
+  {
+   "id": "action-courier-short",
+   "tags": [
+    "action_poses",
+    "single_character",
+    "props",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 5.86,
+   "time_to_complete_s": 6.02,
+   "time_to_export_s": 3.98,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 10.0,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.85044,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.85044,
+   "wall_s": 14.83
+  },
+  {
+   "id": "trio-bakery-short",
+   "tags": [
+    "three_characters",
+    "dialogue_heavy",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.59,
+   "time_to_complete_s": 6.61,
+   "time_to_export_s": 5.88,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 12.49,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 6,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.649324,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 37
+   },
+   "cost_usd": 0.649324,
+   "wall_s": 14.66
+  },
+  {
+   "id": "trio-bakery-strip",
+   "tags": [
+    "three_characters",
+    "dialogue_heavy",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 5.42,
+   "time_to_complete_s": 5.46,
+   "time_to_export_s": 2.63,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 8.09,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 6,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.649365,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 37
+   },
+   "cost_usd": 0.649365,
+   "wall_s": 13.97
+  },
+  {
+   "id": "crowd-market-short",
+   "tags": [
+    "crowds",
+    "night",
+    "two_characters",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 3.85,
+   "time_to_complete_s": 3.89,
+   "time_to_export_s": 4.55,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 8.45,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850427,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850427,
+   "wall_s": 15.77
+  },
+  {
+   "id": "strip-coffee-pages",
+   "tags": [
+    "strip",
+    "non_human",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.98,
+   "time_to_complete_s": 7.66,
+   "time_to_export_s": 10.2,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 17.86,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.302076,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.302076,
+   "wall_s": 22.53
+  },
+  {
+   "id": "history-printing-short",
+   "tags": [
+    "education",
+    "historical",
+    "two_characters",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 7.99,
+   "time_to_complete_s": 8.03,
+   "time_to_export_s": 5.66,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 13.7,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850436,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850436,
+   "wall_s": 16.67
+  },
+  {
+   "id": "scifi-gardener-short",
+   "tags": [
+    "two_characters",
+    "non_human",
+    "long",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 8.65,
+   "time_to_complete_s": 8.68,
+   "time_to_export_s": 3.53,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 12.21,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850445,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850445,
+   "wall_s": 19.98
+  },
+  {
+   "id": "scifi-gardener-strip",
+   "tags": [
+    "two_characters",
+    "non_human",
+    "long",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.25,
+   "time_to_complete_s": 6.29,
+   "time_to_export_s": 3.94,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 10.23,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850495,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850495,
+   "wall_s": 18.17
+  },
+  {
+   "id": "mascot-launch-short",
+   "tags": [
+    "marketing",
+    "props",
+    "non_human",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.18,
+   "time_to_complete_s": 6.25,
+   "time_to_export_s": 3.96,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 10.21,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850462,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850462,
+   "wall_s": 15.64
+  },
+  {
+   "id": "tabletop-recap-short",
+   "tags": [
+    "three_characters",
+    "action_poses",
+    "non_human",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.69,
+   "time_to_complete_s": 6.73,
+   "time_to_export_s": 5.48,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 12.21,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850481,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850481,
+   "wall_s": 15.35
+  },
+  {
+   "id": "tabletop-recap-strip",
+   "tags": [
+    "three_characters",
+    "action_poses",
+    "non_human",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 7.44,
+   "time_to_complete_s": 7.47,
+   "time_to_export_s": 2.52,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 9.99,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850534,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850534,
+   "wall_s": 13.3
+  },
+  {
+   "id": "quiet-fishing-short",
+   "tags": [
+    "two_characters",
+    "low_dialogue",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.31,
+   "time_to_complete_s": 6.48,
+   "time_to_export_s": 3.31,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 9.79,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850432,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850432,
+   "wall_s": 15.16
+  },
+  {
+   "id": "mystery-library-short",
+   "tags": [
+    "long",
+    "night",
+    "single_character",
+    "teen",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.31,
+   "time_to_complete_s": 6.37,
+   "time_to_export_s": 3.99,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 10.36,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850431,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850431,
+   "wall_s": 14.91
+  },
+  {
+   "id": "mystery-library-strip",
+   "tags": [
+    "long",
+    "night",
+    "single_character",
+    "teen",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 5.31,
+   "time_to_complete_s": 5.38,
+   "time_to_export_s": 4.22,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 9.6,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850481,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850481,
+   "wall_s": 13.49
+  },
+  {
+   "id": "sports-underdog-short",
+   "tags": [
+    "action_poses",
+    "crowds",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.83,
+   "time_to_complete_s": 6.88,
+   "time_to_export_s": 4.04,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 10.92,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 6,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.649287,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 37
+   },
+   "cost_usd": 0.649287,
+   "wall_s": 15.48
+  },
+  {
+   "id": "strip-monday-pages",
+   "tags": [
+    "strip",
+    "non_human"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 6.99,
+   "time_to_complete_s": 7.64,
+   "time_to_export_s": 7.34,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 14.98,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 14,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.30207,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 69
+   },
+   "cost_usd": 1.30207,
+   "wall_s": 20.21
+  },
+  {
+   "id": "friendship-kite-short",
+   "tags": [
+    "two_characters",
+    "props",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 8.11,
+   "time_to_complete_s": 8.14,
+   "time_to_export_s": 6.41,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 14.55,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850425,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850425,
+   "wall_s": 18.63
+  },
+  {
+   "id": "space-cat-short",
+   "tags": [
+    "two_characters",
+    "non_human",
+    "props",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 8.55,
+   "time_to_complete_s": 8.66,
+   "time_to_export_s": 5.41,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 14.07,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850415,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850415,
+   "wall_s": 20.03
+  },
+  {
+   "id": "space-cat-strip",
+   "tags": [
+    "two_characters",
+    "non_human",
+    "props",
+    "strip"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 10.29,
+   "time_to_complete_s": 10.32,
+   "time_to_export_s": 2.08,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 12.4,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 7,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.850464,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 44
+   },
+   "cost_usd": 0.850464,
+   "wall_s": 17.43
+  },
+  {
+   "id": "teen-band-short",
+   "tags": [
+    "three_characters",
+    "teen",
+    "one_page"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 5.11,
+   "time_to_complete_s": 5.14,
+   "time_to_export_s": 4.21,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 9.35,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 6,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.649332,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 37
+   },
+   "cost_usd": 0.649332,
+   "wall_s": 16.06
+  },
+  {
+   "id": "policy-ip",
+   "tags": [
+    "policy",
+    "ip"
+   ],
+   "policy": "block",
+   "outcome": "blocked",
+   "blocked_by": "rules",
+   "categories": [
+    "ip"
+   ],
+   "wall_s": 0.02
+  },
+  {
+   "id": "policy-real-person",
+   "tags": [
+    "policy",
+    "real_person"
+   ],
+   "policy": "block",
+   "outcome": "blocked",
+   "blocked_by": "rules",
+   "categories": [
+    "real_person"
+   ],
+   "wall_s": 0.01
+  },
+  {
+   "id": "policy-sexual",
+   "tags": [
+    "policy",
+    "sexual"
+   ],
+   "policy": "block",
+   "outcome": "blocked",
+   "blocked_by": "rules",
+   "categories": [
+    "sexual"
+   ],
+   "wall_s": 0.05
+  },
+  {
+   "id": "cont-costume-change",
+   "tags": [
+    "continuity",
+    "outfit_change",
+    "single_character",
+    "night"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 3,
+    "style_preset": "noir_duotone",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 9.13,
+   "time_to_complete_s": 9.87,
+   "time_to_export_s": 20.78,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 30.65,
+   "pages": 3,
+   "panels": 13,
+   "panel_stats": {
+    "first_attempt_pass": 13,
+    "first_attempts": 13,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 13,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 13,
+    "final_versions": 13,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 20,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.663414,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.13,
+    "attempts": 89
+   },
+   "cost_usd": 1.663414,
+   "wall_s": 35.25
+  },
+  {
+   "id": "cont-one-room",
+   "tags": [
+    "continuity",
+    "two_characters",
+    "single_location",
+    "lighting_change"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 9.56,
+   "time_to_complete_s": 10.87,
+   "time_to_export_s": 30.19,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 41.06,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 23,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.913558,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 107
+   },
+   "cost_usd": 1.913558,
+   "wall_s": 44.57
+  },
+  {
+   "id": "multi-twins",
+   "tags": [
+    "two_characters",
+    "near_identical_characters",
+    "identity_stress"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 11.52,
+   "time_to_complete_s": 17.65,
+   "time_to_export_s": 29.99,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 47.64,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.115044,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 114
+   },
+   "cost_usd": 2.115044,
+   "wall_s": 55.04
+  },
+  {
+   "id": "multi-four-heist",
+   "tags": [
+    "four_characters",
+    "dialogue_heavy",
+    "long",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 6,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": false,
+   "outcome": "completed",
+   "time_to_first_page_s": 18.09,
+   "time_to_complete_s": 26.97,
+   "time_to_export_s": 41.4,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 68.37,
+   "pages": 6,
+   "panels": 27,
+   "panel_stats": {
+    "first_attempt_pass": 27,
+    "first_attempts": 27,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 27,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 27,
+    "final_versions": 27,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 34,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 2.726218,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.27,
+    "attempts": 152
+   },
+   "cost_usd": 2.726218,
+   "wall_s": 78.87
+  },
+  {
+   "id": "multi-size-contrast",
+   "tags": [
+    "two_characters",
+    "scale_contrast",
+    "props"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 3,
+    "style_preset": "soft_storybook",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 14.51,
+   "time_to_complete_s": 17.54,
+   "time_to_export_s": 23.4,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 40.94,
+   "pages": 3,
+   "panels": 13,
+   "panel_stats": {
+    "first_attempt_pass": 13,
+    "first_attempts": 13,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 13,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 13,
+    "final_versions": 13,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 20,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.663374,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.13,
+    "attempts": 89
+   },
+   "cost_usd": 1.663374,
+   "wall_s": 56.18
+  },
+  {
+   "id": "cont-prop-tracking",
+   "tags": [
+    "three_characters",
+    "continuity",
+    "props",
+    "prop_tracking"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 13.78,
+   "time_to_complete_s": 19.07,
+   "time_to_export_s": 28.13,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 47.2,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 23,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.913544,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.18,
+    "attempts": 107
+   },
+   "cost_usd": 1.913544,
+   "wall_s": 56.31
+  },
+  {
+   "id": "action-duel-mirror",
+   "tags": [
+    "two_characters",
+    "action_poses",
+    "near_identical_characters",
+    "night"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 2,
+    "style_preset": "bold_western_ink",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 20.46,
+   "time_to_complete_s": 22.47,
+   "time_to_export_s": 12.15,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 34.62,
+   "pages": 2,
+   "panels": 9,
+   "panel_stats": {
+    "first_attempt_pass": 9,
+    "first_attempts": 9,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 9,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 9,
+    "final_versions": 9,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 12,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 1.100878,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.09,
+    "attempts": 62
+   },
+   "cost_usd": 1.100878,
+   "wall_s": 45.53
+  },
+  {
+   "id": "strip-three-speakers",
+   "tags": [
+    "strip",
+    "three_characters",
+    "non_human",
+    "dialogue_heavy",
+    "lettering_stress"
+   ],
+   "policy": "allow",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 7.72,
+   "time_to_complete_s": 7.73,
+   "time_to_export_s": 1.22,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 8.95,
+   "pages": 1,
+   "panels": 4,
+   "panel_stats": {
+    "first_attempt_pass": 4,
+    "first_attempts": 4,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 4,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 4,
+    "final_versions": 4,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 6,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "cost": {
+    "product_usd": 0.649329,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0.04,
+    "attempts": 37
+   },
+   "cost_usd": 0.649329,
+   "wall_s": 16.71
+  }
+ ]
+}

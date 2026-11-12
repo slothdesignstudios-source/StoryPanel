@@ -75,7 +75,7 @@ async def request_deletion(user_id: uuid.UUID, *, source: str, request_id: str |
 
     async with transaction() as db:
         # Lock the user row first: concurrent requests serialise here, and asset writers
-        # holding FOR SHARE finish before the account is marked deleted.
+        # holding FOR KEY SHARE finish before the account is marked deleted.
         user = (
             await db.execute(select(User).where(User.id == user_id).with_for_update())
         ).scalar_one_or_none()

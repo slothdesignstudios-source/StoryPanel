@@ -51,7 +51,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from storypanel.config import get_settings
-from storypanel.db.models import ProviderAttempt, ProviderUsage
+from storypanel.db.models import ProviderAttempt, ProviderUsage, SpendCap
 from storypanel.db.session import transaction
 from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
@@ -124,26 +124,32 @@ def _day_start() -> datetime:
     return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
-async def spend_totals(db: AsyncSession, ctx: CallContext) -> dict[str, Decimal]:
-    """Counted spend over every attempt, including failed, lost and unresolved ones."""
+async def spend_totals(db: AsyncSession, ctx: CallContext) -> dict[str, tuple[Decimal, Decimal]]:
+    """scope -> (counted spend, limit), over every attempt including failed, lost and
+    unresolved ones. A user with a SpendCap (e.g. an evaluation run's dedicated user) is held
+    to that lifetime cap instead of the daily per-user ceiling."""
+    s = get_settings()
     day = _day_start()
     counted = func.coalesce(func.sum(ProviderAttempt.cost_counted_usd), 0)
-    totals = {
-        "global": (await db.execute(select(counted).where(ProviderAttempt.created_at >= day))).scalar_one()
-    }
+
+    async def total(*where: Any) -> Decimal:
+        return Decimal((await db.execute(select(counted).where(*where))).scalar_one())
+
+    out = {"global": (await total(ProviderAttempt.created_at >= day), s.spend_limit_global_daily_usd)}
     if ctx.user_id:
-        totals["user"] = (await db.execute(select(counted).where(
-            ProviderAttempt.created_at >= day, ProviderAttempt.user_id == _uuid(ctx.user_id)))).scalar_one()  # fmt: skip
+        uid = _uuid(ctx.user_id)
+        cap = (await db.execute(select(SpendCap.cap_usd).where(SpendCap.user_id == uid))).scalar_one_or_none()
+        if cap is not None:
+            out["user_cap"] = (await total(ProviderAttempt.user_id == uid), Decimal(cap))
+        else:
+            out["user"] = (await total(ProviderAttempt.created_at >= day, ProviderAttempt.user_id == uid),
+                           s.spend_limit_user_daily_usd)  # fmt: skip
     if ctx.project_id:
-        totals["project"] = (await db.execute(select(counted).where(
-            ProviderAttempt.project_id == _uuid(ctx.project_id)))).scalar_one()  # fmt: skip
-    return {k: Decimal(v) for k, v in totals.items()}
-
-
-def _limits() -> dict[str, Decimal]:
-    s = get_settings()
-    return {"global": s.spend_limit_global_daily_usd, "user": s.spend_limit_user_daily_usd,
-            "project": s.spend_limit_project_usd}  # fmt: skip
+        out["project"] = (
+            await total(ProviderAttempt.project_id == _uuid(ctx.project_id)),
+            s.spend_limit_project_usd,
+        )
+    return out
 
 
 async def check_spend_limits(ctx: CallContext, estimate: Decimal = Decimal(0)) -> None:
@@ -152,9 +158,9 @@ async def check_spend_limits(ctx: CallContext, estimate: Decimal = Decimal(0)) -
         _enforce(await spend_totals(db, ctx), estimate)
 
 
-def _enforce(totals: dict[str, Decimal], estimate: Decimal) -> None:
-    for scope, total in totals.items():
-        if total + estimate > _limits()[scope]:
+def _enforce(totals: dict[str, tuple[Decimal, Decimal]], estimate: Decimal) -> None:
+    for scope, (total, limit) in totals.items():
+        if total + estimate > limit:
             metrics.spend_limit_hits.labels(scope).inc()
             log.warning(
                 "spend_limit_reached", scope=scope, total_usd=float(total), estimate_usd=float(estimate)

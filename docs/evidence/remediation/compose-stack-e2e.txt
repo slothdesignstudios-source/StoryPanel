@@ -1,0 +1,46 @@
+
+Running 9 tests using 1 worker
+
+  ✓  1 [desktop] › e2e/a11y.spec.ts:17:5 › main screens have no detectable WCAG A/AA violations (9.2s)
+  ✓  2 [desktop] › e2e/a11y.spec.ts:40:5 › gate screens (cast and script review) pass axe (4.0s)
+  ✓  3 [desktop] › e2e/a11y.spec.ts:54:5 › a comic can be created and a balloon edited with the keyboard alone (7.3s)
+  ✓  4 [desktop] › e2e/isolation.spec.ts:54:7 › account switch isolation › A then B: no previous-account data, and B's requests carry only B's identity (2.3s)
+  ✓  5 [desktop] › e2e/isolation.spec.ts:79:7 › account switch isolation › slow responses for A that land after the switch are dropped (6.4s)
+  ✓  6 [desktop] › e2e/isolation.spec.ts:99:7 › account switch isolation › offline: signing out clears A's data without network, then B signs in (3.3s)
+  ✓  7 [desktop] › e2e/journey.spec.ts:13:5 › prompt → cast approval → script approval → generation → edit → export (20.8s)
+[
+ {
+  "text": "Page 1. The rain kept falling.",
+  "match": 1,
+  "control": 0.24
+ },
+ {
+  "text": "I calculated you were hungry.",
+  "match": 1,
+  "control": 0.56
+ },
+ {
+  "text": "You made this for me?",
+  "match": 0.997,
+  "control": 0.279
+ },
+ {
+  "text": "CLANG!",
+  "match": 1,
+  "control": 0.27
+ },
+ {
+  "text": "I calculated you were hungry.",
+  "match": 0.995,
+  "control": 0.551
+ },
+ {
+  "text": "You made this for me?",
+  "match": 0.999,
+  "control": 0.308
+ }
+]
+  ✓  8 [desktop] › e2e/lettering.spec.ts:51:5 › editor lettering matches the export renderer (6.5s)
+  ✓  9 [desktop] › e2e/responsive.spec.ts:3:5 › core screens work at phone width without horizontal scrolling (801ms)
+
+  9 passed (1.1m)

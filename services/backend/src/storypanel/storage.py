@@ -114,8 +114,11 @@ async def _call(fn: Any, **kwargs: Any) -> Any:
 
 
 async def put_bytes(key: str, data: bytes, content_type: str) -> None:
-    await _call(_client().put_object, Bucket=get_settings().s3_bucket, Key=key, Body=data,
-                ContentType=content_type, ServerSideEncryption="AES256")  # fmt: skip
+    s = get_settings()
+    sse = (
+        {} if s.s3_server_side_encryption == "none" else {"ServerSideEncryption": s.s3_server_side_encryption}
+    )
+    await _call(_client().put_object, Bucket=s.s3_bucket, Key=key, Body=data, ContentType=content_type, **sse)
 
 
 async def get_bytes(key: str) -> bytes:

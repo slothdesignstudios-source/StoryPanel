@@ -412,3 +412,29 @@ def test_signed_urls_are_valid_for_the_host_the_browser_requests(monkeypatch: py
 
     assert valid_when_requested_at("localhost:9000")
     assert not valid_when_requested_at("minio:9000")  # what the old configuration produced for browsers
+
+
+async def test_concurrent_work_for_one_user_does_not_deadlock_on_the_owner_guard() -> None:
+    """Regression (found by the 63-case eval): the owner guard must not conflict with ordinary
+    updates of the user row, such as credit holds taken in the same transactions."""
+    import asyncio
+
+    from storypanel.db.models import Project, User
+    from storypanel.db.session import transaction
+    from storypanel.services import credits
+
+    uid = uuid.uuid4()
+    async with transaction() as db:
+        db.add(User(id=uid, auth_subject=f"t:{uid}"))
+    async with transaction() as db:
+        await credits.grant(db, uid, 1000, kind="grant", reason="t", dedupe_key=f"t:{uid}")
+
+    async def one(n: int) -> None:
+        async with transaction() as db:
+            p = Project(id=uuid.uuid4(), owner_id=uid, prompt="p")
+            db.add(p)
+            await db.flush()  # guard trigger runs here
+            await asyncio.sleep(0.02)  # overlap with the other transactions
+            await credits.reserve(db, uid, 8, purpose="plan", project_id=p.id, idempotency_key=f"c:{p.id}")
+
+    await asyncio.gather(*[one(n) for n in range(12)])

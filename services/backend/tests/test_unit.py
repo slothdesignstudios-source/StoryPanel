@@ -299,3 +299,31 @@ def test_production_config_refuses_fakes_and_dev_auth(monkeypatch: pytest.Monkey
         Settings(env="local", provider_mode="live", _env_file=None)  # type: ignore[call-arg]
     assert "SP_IMAGE_MODEL_GENERATE must be set" in str(e.value)  # no guessed model ids
     assert Settings(_env_file=None).max_pages == 8  # type: ignore[call-arg]
+
+
+def test_sampling_ratio_applies_to_browser_traces_and_is_consistent_across_hops() -> None:
+    """The browser always sends sampled=1; the configured ratio must still govern, and every
+    service must reach the same decision for one trace id."""
+    import random
+
+    from opentelemetry.sdk.trace.sampling import Decision
+    from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags, set_span_in_context
+
+    from storypanel.obs.tracing import sampler
+
+    s = sampler(0.2)
+    rng = random.Random(7)
+    sampled = 0
+    for _ in range(4000):
+        tid = rng.getrandbits(128)
+        parent = set_span_in_context(NonRecordingSpan(SpanContext(tid, rng.getrandbits(64), is_remote=True,
+                                                                  trace_flags=TraceFlags(TraceFlags.SAMPLED))))  # fmt: skip
+        api = s.should_sample(parent, tid, "POST /v1/projects").decision
+        worker = s.should_sample(parent, tid, "RunActivity").decision  # the outbox hop: same trace id
+        assert api == worker
+        sampled += api is Decision.RECORD_AND_SAMPLE
+    assert 0.17 < sampled / 4000 < 0.23  # ~20 %, not 100 %
+    unsampled = set_span_in_context(
+        NonRecordingSpan(SpanContext(1, 1, is_remote=True, trace_flags=TraceFlags(0)))
+    )
+    assert s.should_sample(unsampled, 1, "x").decision is Decision.DROP
