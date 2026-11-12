@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+from typing import Any
 
 import pytest
 from PIL import Image
