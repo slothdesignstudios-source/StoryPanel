@@ -3,6 +3,16 @@
 Everything needed for the paid smoke test, and nothing else (no Clerk, Stripe, AWS, Render or Temporal
 Cloud). Never paste a key into chat.
 
+> **Status (2026-11-12):**
+> - `v3.fal.media` is allowed.
+> - A fal key is saved as a network secret for `queue.fal.run`.
+> - The `rest.fal.ai` form was declined.
+> - **Anthropic hosts do not accept a network secret** in this environment, so the Anthropic key
+>   cannot be supplied that way.
+>
+> The remaining options are in "Choosing how to supply keys" below. Preflight result:
+> `evidence/preflight-after-network-change.txt`.
+
 ## 1. Setup checklist: where the test runs and where the keys go
 
 The test runs **in this cloud session's environment** (personal "Default" environment), not on your
@@ -33,6 +43,15 @@ Windows machine. A `.env` on your machine is never visible here. Never paste a k
 Running the test on your own machine instead: put the three real keys in an untracked `.env` at the
 repository root (`scripts/live-env.sh` reads only those three variables) and run the commands in §5
 there.
+
+### Choosing how to supply keys (because Anthropic cannot use a network secret)
+- **A. Environment variables on the cloud environment** (environment menu → Edit → Environment variables):
+  `SP_ANTHROPIC_API_KEY`, `SP_FAL_KEY` and `SP_VOYAGE_API_KEY`, entered by you, never in chat. A new
+  session picks them up. They are stored on the environment and visible to processes in its sessions.
+  The hosts `rest.fal.ai`, `api.fal.ai` and `api.voyageai.com` then still need allowing, which I would
+  propose as one network change for you to approve.
+- **B. Your own machine** (Windows: WSL 2 or Docker): restore the bundle, put the three keys in `.env`,
+  and run §5. I cannot see that run; the evidence folder it writes would have to be shared back.
 
 ## 2. Network hosts
 

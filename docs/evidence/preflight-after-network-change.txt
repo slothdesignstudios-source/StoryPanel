@@ -1,0 +1,13 @@
+preflight: configuration and contracts (no paid calls)
+  [PASS] network: api.anthropic.com reachable: HTTP 404 unauthenticated (text, moderation, vision QA; Models API)
+  [PASS] network: queue.fal.run reachable: HTTP 404 unauthenticated (image generation, edit, upscale jobs)
+  [FAIL] network: rest.fal.ai reachable: ProxyError: blocked or unresolved (short-lived upload token for reference images)
+  [FAIL] network: api.fal.ai reachable: ProxyError: blocked or unresolved (fal pricing API (free; checks the price table))
+  [PASS] network: v3.fal.media reachable: HTTP 404 unauthenticated (reference uploads (CDN token) and result downloads)
+  [FAIL] network: api.voyageai.com reachable: ProxyError: blocked or unresolved (identity embeddings)
+  [PASS] price table covers every configured model
+  [SKIP] object storage put/get/delete: needs valid live settings (the provider keys)
+  [PASS] API ready: {"status":"ok","checks":{"database":true,"redis":true,"storage":true,"temporal":true},"release":"dev"}
+  [FAIL] API runs live providers: fake
+  [FAIL] settings validate for live providers: Value error, invalid configuration: SP_ANTHROPIC_API_KEY must be set for live providers; SP_FAL_KEY must be set for live providers; SP_VOYAGE_API_KEY must be set for live providers
+preflight: FAIL (checks that need the provider keys were skipped)
