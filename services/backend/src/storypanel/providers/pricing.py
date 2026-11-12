@@ -124,7 +124,13 @@ def _load(provider_mode: str, file: str | None, inline: str | None) -> dict[tupl
     if inline:
         return parse_table(json.loads(inline))
     if file:
-        return parse_table(json.loads(Path(file).read_text()))
+        path = Path(file)
+        if not path.is_absolute() and not path.exists():
+            # relative to the repository root (the parent of the packages catalog), not the cwd
+            from storypanel.catalog import catalog_root
+
+            path = catalog_root().parent / file
+        return parse_table(json.loads(path.read_text()))
     return {}
 
 

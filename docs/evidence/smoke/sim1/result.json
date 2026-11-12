@@ -1,0 +1,206 @@
+{
+ "run_id": "sim1",
+ "mode": "SIMULATED",
+ "project_id": "8122859c-369c-411c-be17-b84e38e512df",
+ "prompt": "A lighthouse keeper and a cheeky seagull argue over the last sandwich on a windy pier, as a 3 panel strip",
+ "approved_usd": null,
+ "characters": 2,
+ "panels": 4,
+ "panel_status": [
+  "ok",
+  "ok",
+  "ok",
+  "ok"
+ ],
+ "edit_request": 202,
+ "exports": {
+  "pdf": {
+   "ok": true,
+   "bytes": 112579,
+   "selectable_text_chars": 200,
+   "fonts": [
+    "/Helvetica",
+    "Bangers-Regular",
+    "ComicNeue-Bold",
+    "ComicNeue-Regular"
+   ],
+   "trim_box": [
+    9.0,
+    9.0,
+    441.0,
+    160.2
+   ],
+   "bleed_box": [
+    0.0,
+    0.0,
+    450.0,
+    169.2
+   ]
+  },
+  "png": {
+   "ok": true,
+   "size": [
+    2000,
+    700
+   ]
+  },
+  "cbz": {
+   "ok": true,
+   "entries": [
+    "page_001.png",
+    "ComicInfo.xml"
+   ]
+  }
+ },
+ "timings_s": {
+  "story+cast": 2.1,
+  "script": 2.1,
+  "panels": 2.1,
+  "edit": 2.1,
+  "export_pdf": 2.1,
+  "export_png": 2.1,
+  "export_cbz": 2.1,
+  "total": 14.9
+ },
+ "usage": {
+  "by_stage": {
+   "intake|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000133",
+    "statuses": {
+     "succeeded": 1
+    }
+   },
+   "moderation.prompt|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000139",
+    "statuses": {
+     "succeeded": 1
+    }
+   },
+   "bible|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "counted": "0.002952",
+    "statuses": {
+     "succeeded": 1
+    }
+   },
+   "moderation.bible|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000153",
+    "statuses": {
+     "succeeded": 1
+    }
+   },
+   "character_sheet|image_generate": {
+    "calls": 2,
+    "model": "fake-image",
+    "counted": "0.080000",
+    "statuses": {
+     "succeeded": 2
+    }
+   },
+   "location_ref|image_generate": {
+    "calls": 2,
+    "model": "fake-image",
+    "counted": "0.080000",
+    "statuses": {
+     "succeeded": 2
+    }
+   },
+   "image_safety|text_vision": {
+    "calls": 13,
+    "model": "fake-vision",
+    "counted": "0.001521",
+    "statuses": {
+     "succeeded": 13
+    }
+   },
+   "character_sheet|image_edit": {
+    "calls": 4,
+    "model": "fake-edit",
+    "counted": "0.320000",
+    "statuses": {
+     "succeeded": 4
+    }
+   },
+   "character_sheet|embed": {
+    "calls": 2,
+    "model": "fake-embed",
+    "counted": "0.000928",
+    "statuses": {
+     "succeeded": 2
+    }
+   },
+   "script|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "counted": "0.003860",
+    "statuses": {
+     "succeeded": 1
+    }
+   },
+   "moderation.script|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000143",
+    "statuses": {
+     "succeeded": 1
+    }
+   },
+   "panel_generate|image_edit": {
+    "calls": 5,
+    "model": "fake-edit",
+    "counted": "0.400000",
+    "statuses": {
+     "succeeded": 5
+    }
+   },
+   "vision_qa|text_vision": {
+    "calls": 5,
+    "model": "fake-vision",
+    "counted": "0.000696",
+    "statuses": {
+     "succeeded": 5
+    }
+   },
+   "identity_embedding|embed": {
+    "calls": 5,
+    "model": "fake-embed",
+    "counted": "0.000266",
+    "statuses": {
+     "succeeded": 5
+    }
+   },
+   "moderation.panel_edit|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "counted": "0.000137",
+    "statuses": {
+     "succeeded": 1
+    }
+   },
+   "export_upscale|upscale": {
+    "calls": 4,
+    "model": "fake-upscale",
+    "counted": "0.040000",
+    "statuses": {
+     "succeeded": 4
+    }
+   }
+  },
+  "totals": {
+   "reserved_estimate": "1.434372",
+   "calculated": "0.930928",
+   "unresolved": "0",
+   "provider_confirmed": "0",
+   "counted": "0.930928"
+  },
+  "estimate_overruns": [],
+  "note": "calculated = usage x operator price table (not a provider charge); unresolved = potential charges counted at their estimate (e.g. compute-time upscaling) until a provider charge is imported"
+ }
+}

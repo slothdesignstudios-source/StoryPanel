@@ -1,0 +1,24 @@
+{
+ "recorded_at": "2026-11-12",
+ "source": "live-smoke.py run --simulated",
+ "characters": 2,
+ "panels": 4,
+ "calls": {
+  "intake|text_light": 1,
+  "moderation.prompt|text_light": 1,
+  "bible|text_story": 1,
+  "moderation.bible|text_light": 1,
+  "character_sheet|image_generate": 2,
+  "location_ref|image_generate": 2,
+  "image_safety|text_vision": 13,
+  "character_sheet|image_edit": 4,
+  "character_sheet|embed": 2,
+  "script|text_story": 1,
+  "moderation.script|text_light": 1,
+  "panel_generate|image_edit": 5,
+  "vision_qa|text_vision": 5,
+  "identity_embedding|embed": 5,
+  "moderation.panel_edit|text_light": 1,
+  "export_upscale|upscale": 4
+ }
+}
