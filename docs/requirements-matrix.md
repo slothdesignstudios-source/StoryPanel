@@ -167,11 +167,11 @@ provider, browser-side trace spans.
 | Gate | State |
 |---|---|
 | G1 All MVP requirements implemented and locally verified | Met for what can be exercised locally; the review's eight defects are fixed with regression tests. Items marked Blocked are excepted |
-| G2 Each provider exercised live with the configured models | Not met (B1) |
+| G2 Each provider exercised live with the configured models | Not met (B1). Prepared: `scripts/live-smoke.py` (free preflight, upper-bound estimate, capped 3-panel run); not run |
 | G3 §8.3 quality, cost and latency measured on the golden set | Not met (B1, B2) |
-| G4 Clerk and Stripe exercised in test mode | Not met (B3, B4) |
+| G4 Clerk and Stripe exercised in test mode | Not met (B3, B4). Prepared: `e2e/live/clerk.spec.ts`, `live_tests/test_stripe_live.py` (skip without credentials); not run |
 | G5 Images built, CI green on the hosting platform, staging deployed and smoke-tested | Partly: images build and the Compose stack passes the browser suite locally; CI and staging Not met (B7) |
-| G6 Observability stack running with a fired and resolved alert | Locally on Compose (see ALERT); real receivers (PagerDuty/Slack) and staging Not met (B7, B9) |
+| G6 Observability stack running with a fired and resolved alert | Locally on Compose (see ALERT); real receivers (PagerDuty/Slack) and staging Not met (B7, B9). Prepared: `alertmanager.production.yml` (config check passes) |
 | G7 Manual accessibility audit, security review, restore drill on managed infrastructure | Not met (B8) |
 | G8 Legal review: terms, IP/likeness policy, provenance obligations, data protection | Not met (B8) |
 

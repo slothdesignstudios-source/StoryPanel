@@ -371,7 +371,13 @@ def build_pdf(docs: list[PageDoc], art_pages: list[bytes], title: str) -> bytes:
     pw, ph = PDF_TRIM_WIDTH_PT, PDF_TRIM_WIDTH_PT * units[1] / units[0]
     bleed = PDF_BLEED_PT
     buf = io.BytesIO()
-    c = pdf_canvas.Canvas(buf, pagesize=(pw + 2 * bleed, ph + 2 * bleed), pageCompression=1)
+    # initial font = an embedded face; reportlab's default would add an unused, unembedded Helvetica resource
+    c = pdf_canvas.Canvas(
+        buf,
+        pagesize=(pw + 2 * bleed, ph + 2 * bleed),
+        pageCompression=1,
+        initialFontName=_pdf_font(docs[0].font),
+    )
     c.setTitle(title[:200])
     c.setCreator("StoryPanel")
     c.setSubject("AI-generated comic")

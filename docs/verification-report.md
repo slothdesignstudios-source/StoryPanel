@@ -1,5 +1,24 @@
 # Verification report
 
+## Regression audit and live-integration preparation, 2026-11-12 (from dd0775a)
+
+Findings and fixes: [`remediation-tracker.md`](remediation-tracker.md) § Audit 2026-11-12. Setup:
+[`setup-checklist.md`](setup-checklist.md). **Every result here uses simulated providers or local stubs. No
+live provider, Stripe, Clerk, storage or alert-receiver integration has been executed.**
+
+| Check | Result |
+|---|---|
+| Backend `uv run pytest -q` (run alone) | **281 passed** (12 new audit tests + strengthened PDF/deletion assertions) |
+| `ruff format --check`, `ruff check`, `mypy` (CI scope) | clean |
+| Web `tsc`, `eslint`, `vitest` | clean (1 pre-existing lint warning); 8 unit tests incl. CSP |
+| Browser suite on the rebuilt native stack | **11 passed, 1 skipped** (the skipped one is `e2e/live/clerk.spec.ts`, which needs Clerk credentials) |
+| Live tests without credentials | `live_tests/` 2 skipped; Clerk spec skipped — by design |
+| `live-smoke.py estimate` (no keys) | upper bound **USD 4.84** |
+| `live-smoke.py preflight` (no keys) | **FAIL, as expected**: lists the three missing keys; storage round trip and API readiness pass when run through `scripts/live-env.sh` |
+| `live-smoke.py run --simulated` | passes: 2 characters, 4 panels (fake script writer; live run requires 3), edit 202, PDF/PNG/CBZ valid, PDF fonts all embedded subsets; simulated cost 0.93 calculated / 1.43 reserved at fake prices (`evidence/smoke/sim3/`) — not a cost measurement |
+| PDF visual acceptance | `evidence/pdf-audit/` (PNG vs PDF vs diff); material differences fixed; residual 0.8 % differing pixels explained (anti-aliasing, hinting, bleed) |
+| `amtool check-config alertmanager.production.yml` | SUCCESS (real delivery not executed) |
+
 ## Remediation round, 2026-11-12 (independent review of 46e33b6)
 
 Per-finding reproduction, fix and tests: [`remediation-tracker.md`](remediation-tracker.md). All runs below used

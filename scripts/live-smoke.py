@@ -48,6 +48,7 @@ import httpx  # noqa: E402
 
 PROMPT = ("A lighthouse keeper and a cheeky seagull argue over the last sandwich on a windy pier, "
           "as a 3 panel strip")  # fmt: skip
+PANELS_REQUESTED = 3
 EDIT = "Make the seagull hold the sandwich in its beak."
 PROFILE = ROOT / "docs/evidence/smoke-call-profile.json"
 API = os.environ.get("SP_SMOKE_API", "http://127.0.0.1:8000")
@@ -90,7 +91,10 @@ async def preflight() -> int:
     try:
         s = get_settings()
     except Exception as exc:  # the startup validator lists every problem
-        check("settings validate for live providers", False, str(exc)[:600])
+        # messages only: pydantic's str() also echoes the raw input, which may contain key values
+        errs = getattr(exc, "errors", None)
+        msg = "; ".join(str(e.get("msg", "")) for e in errs()) if callable(errs) else type(exc).__name__
+        check("settings validate for live providers", False, msg[:600])
         return 1
     check("provider mode is live", s.provider_mode == "live", s.provider_mode)
     check("not a deployed environment (smoke uses dev sign-in)", not s.is_deployed, s.env)
@@ -145,12 +149,13 @@ def estimate(verbose: bool = True) -> Decimal:
     - upscaling billed per compute second: rate x the full wait budget;
     - every QA-repeatable panel stage x (1 + max_panel_qa_retries), the script stage x (1 +
       max_script_repairs), character stages scaled to max_characters."""
-    from storypanel.config import get_settings
+    from storypanel.config import Settings
     from storypanel.providers import pricing
 
     # Works before any key exists: models and prices come from the environment / pricing file
     # (config/live-smoke.env), not from a validated live Settings object.
-    base = get_settings()
+    # defaults only: validated as fake so the estimate needs no keys even when SP_PROVIDER_MODE=live is set
+    base = Settings(provider_mode="fake", _env_file=None)  # type: ignore[call-arg]
     env = {**_env_file(ROOT / "config/live-smoke.env"), **{k: v for k, v in os.environ.items() if k.startswith("SP_")}}
 
     class _View:
@@ -202,7 +207,7 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str) -> int:
     from sqlalchemy import select, text
 
     from storypanel.config import get_settings
-    from storypanel.db.models import SpendCap, User
+    from storypanel.db.models import SpendCap
     from storypanel.db.session import transaction
 
     s = get_settings()
@@ -267,6 +272,11 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str) -> int:
             panels = [pn for pg in p["pages"] for pn in pg["panels"]]
             result["panels"] = len(panels)
             result["panel_status"] = [pn["status"] for pn in panels]
+            # live: the prompt asks for 3 panels (a 3-panel strip layout exists); the fake script writer always
+            # writes 4 for a strip, so the simulated rehearsal reports this without enforcing it
+            result["panels_requested"] = PANELS_REQUESTED
+            if not simulated and len(panels) != PANELS_REQUESTED:
+                raise RuntimeError(f"asked for {PANELS_REQUESTED} panels, got {len(panels)}")
             first = panels[0]
             before = first.get("current_version_id")
             r = await h.post(f"{API}/v1/panels/{first['id']}/edit", headers={**H, "Idempotency-Key": f"edit-{run_id}"},
@@ -291,6 +301,7 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str) -> int:
         except Exception as exc:
             result["error"] = f"{type(exc).__name__}: {exc}"
     result["timings_s"] = {**timings, "total": round(time.monotonic() - started, 1)}
+    result["timing_resolution_s"] = 2  # stage timings are polled every 2 s (wall clock to first observed state)
     result["usage"] = await _usage(uuid.UUID(pid), uid)
     if simulated:
         _record_profile(result)
@@ -310,7 +321,9 @@ def _validate(fmt: str, data: bytes) -> dict[str, Any]:
         page = PdfReader(io.BytesIO(data)).pages[0]
         text = page.extract_text()
         fonts = sorted({str(f.get_object()["/BaseFont"]).split("+")[-1] for f in page["/Resources"]["/Font"].values()})
-        return {"ok": bool(text.strip()) and any("ComicNeue" in f for f in fonts), "bytes": len(data),
+        embedded = all("+" in str(f.get_object()["/BaseFont"]) for f in page["/Resources"]["/Font"].values())
+        return {"ok": bool(text.strip()) and any("ComicNeue" in f for f in fonts) and embedded, "bytes": len(data),
+                "all_fonts_embedded": embedded,
                 "selectable_text_chars": len(text), "fonts": fonts,
                 "trim_box": [float(v) for v in page.trimbox], "bleed_box": [float(v) for v in page.bleedbox]}  # fmt: skip
     if fmt == "cbz":

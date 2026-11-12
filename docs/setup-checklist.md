@@ -21,20 +21,27 @@ Sources and verification dates for every model, price and API version: [`provide
 | A5 | Confirm the six prices in `packages/pricing/pricing.2026-11-12.json` against their linked official pages; edit any that differ | public | the `source` URL in each entry | trustworthy estimate and ceilings (live startup refuses missing/zero/stale prices) |
 | A6 | **Budget approval**: a written "approve USD X" with X ≥ the printed upper bound (currently **USD 4.84**) | decision | reply in chat | the paid smoke run (`--approve-usd X`, enforced as a persisted cap) |
 
-Run order, with the local stack up (`scripts/native-services.sh start && scripts/native-stack.sh start`,
-API/worker restarted with `config/live-smoke.env` + the three keys):
+Run order (put the three keys in the untracked `.env` at the repository root first; `scripts/live-env.sh`
+loads the local stack endpoints, `config/live-smoke.env` and `.env`, and never prints values):
 
 ```bash
-python scripts/live-smoke.py preflight
+scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py estimate
 ```
 
 ```bash
-python scripts/live-smoke.py estimate
+scripts/native-stack.sh stop; scripts/native-services.sh start && SP_STACK_LIVE=1 scripts/native-stack.sh start
 ```
 
 ```bash
-python scripts/live-smoke.py run --approve-usd X --run-id smoke-1
+scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py preflight
 ```
+
+```bash
+scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py run --approve-usd X --run-id smoke-1
+```
+
+`estimate` needs no keys. Preflight is free (settings validation, prices, Anthropic Models API lookup, storage round trip, API
+readiness). It already passes its storage and API checks here and fails closed on the missing keys.
 
 ## B. Clerk authentication and identity deletion (development instance; local is fine)
 

@@ -430,6 +430,8 @@ def test_pdf_lettering_is_vector_text_matching_the_raster_renderer(tmp_path: Any
     fonts = {str(f.get_object()["/BaseFont"]) for f in page["/Resources"]["/Font"].values()}
     # the bundled faces, embedded as subsets ("XXXXXX+" prefix), as in the editor and PNG export
     assert {"ComicNeue-Regular", "Bangers-Regular"} <= {f.split("+", 1)[-1] for f in fonts if "+" in f}, fonts
+    # every font resource is an embedded subset: no unembedded base-14 font (print preflight rejects them)
+    assert all("+" in f for f in fonts), fonts
     assert [float(v) for v in page.trimbox] == [9.0, 9.0, 441.0, 657.0]
     assert [float(v) for v in page.mediabox] == [0.0, 0.0, 450.0, 666.0]
     if not shutil.which("pdftoppm"):
