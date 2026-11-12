@@ -27,8 +27,17 @@ from typing import Any, Literal
 from storypanel.config import Settings, get_settings
 from storypanel.errors import AppError, ErrorCode
 
-Unit = Literal["per_image", "per_megapixel", "per_mtok", "per_billion_pixels"]
-UNITS: tuple[str, ...] = ("per_image", "per_megapixel", "per_mtok", "per_billion_pixels")
+# per_compute_second: billed by the provider's compute time (e.g. fal's ESRGAN endpoint), which
+# we cannot observe. Reservations use rate x the request's wait budget; successful requests stay
+# "unresolved" at that upper bound until a provider-reported charge is imported.
+Unit = Literal["per_image", "per_megapixel", "per_mtok", "per_billion_pixels", "per_compute_second"]
+UNITS: tuple[str, ...] = (
+    "per_image",
+    "per_megapixel",
+    "per_mtok",
+    "per_billion_pixels",
+    "per_compute_second",
+)
 
 
 @dataclass(frozen=True)
@@ -188,9 +197,16 @@ def text_cost(price: Price, input_tokens: int, output_tokens: int) -> Decimal:
     )
 
 
-def image_cost(price: Price, *, images: int = 1, pixels: int = 1_048_576) -> Decimal:
+def image_cost(
+    price: Price, *, images: int = 1, pixels: int = 1_048_576, seconds: float | None = None
+) -> Decimal:
     if price.free:
         return Decimal(0)
+    if price.unit == "per_compute_second":
+        if seconds is None:
+            raise AppError(ErrorCode.PRICING_UNAVAILABLE, f"{price.model} is billed by compute time; "
+                           "a time budget is needed to estimate it.")  # fmt: skip
+        return price.usd * Decimal(str(seconds)) * images
     if price.unit == "per_image":
         return price.usd * images
     if price.unit == "per_megapixel":

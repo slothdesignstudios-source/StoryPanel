@@ -377,3 +377,42 @@ async def test_eval_run_budget_survives_restart_midnight_concurrency_and_unresol
         total = (await db.execute(text("select sum(cost_counted_usd) from provider_attempts where user_id = :u"),
                                   {"u": uid})).scalar_one()  # fmt: skip
     assert Decimal(total) == Decimal("0.28") <= Decimal("0.30")
+
+
+# ------------------------------------------------------------------ compute-time billing (fal ESRGAN)
+async def test_compute_second_billing_reserves_the_wait_budget_and_stays_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import io
+
+    from PIL import Image
+
+    from storypanel.providers import pricing
+
+    table = {"entries": [dict(e) for e in pricing.SIMULATED["entries"]]}
+    for e in table["entries"]:
+        if e["model"] == "fake-upscale":
+            e.update(unit="per_compute_second", usd="0.00111")
+    monkeypatch.setattr(pricing, "SIMULATED", table)
+    pricing.reset_cache()
+    try:
+        ctx = await _ctx("export")
+        buf = io.BytesIO()
+        Image.new("RGB", (32, 24), "white").save(buf, format="PNG")
+        result = await metering.upscale_image(
+            buf.getvalue(), ctx, key=f"up:{ctx.project_id}", wait_seconds=150
+        )
+        ((no, status, counted, basis),) = await _attempts(ctx.project_id)
+        assert status == "succeeded" and basis == "unresolved"  # compute time is not observable: upper bound
+        assert counted == Decimal("0.1665")  # 150 s x $0.00111
+        assert (
+            await metering.record_provider_charges(
+                [("fake", result.request_id or "", Decimal("0.0047"), "fal usage export")]
+            )
+            == 1
+        )
+        ((_, _, counted, basis),) = await _attempts(ctx.project_id)
+        assert (counted, basis) == (Decimal("0.0047"), "provider_confirmed")
+    finally:
+        monkeypatch.undo()
+        pricing.reset_cache()

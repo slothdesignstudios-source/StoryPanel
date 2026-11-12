@@ -544,18 +544,31 @@ async def _paid_request(
             await asyncio.shield(_stop())
             raise
     latency = int((time.monotonic() - started) * 1000)
-    calculated = (pricing.image_cost(price, pixels=_pixels(result.data)) if price.unit != "per_image"
-                  else pricing.image_cost(price))  # fmt: skip
+    calculated = _result_cost(price, result.data)
     if not refetch:
-        await _close(att, status="succeeded", basis="calculated", calculated=calculated, images=1,
-                     latency_ms=latency)  # fmt: skip
+        if calculated is None:  # compute-time billing: we cannot calculate it, keep the upper bound
+            await _close(att, status="succeeded", basis="unresolved", images=1, latency_ms=latency)
+        else:
+            await _close(att, status="succeeded", basis="calculated", calculated=calculated, images=1,
+                         latency_ms=latency)  # fmt: skip
     _observe(provider_name, operation, "ok", latency)
     metrics.provider_images.labels(provider_name, operation).inc()
     log.info("provider_call", provider=provider_name, model=model, operation=operation, stage=ctx.stage,
-             status="succeeded", duration_ms=latency, images=1, cost_usd=float(calculated),
-             cost_basis="calculated", prompt_version=ctx.prompt_version, provider_request_id=request_id,
+             status="succeeded", duration_ms=latency, images=1,
+             cost_usd=float(calculated if calculated is not None else att.estimate),
+             cost_basis="calculated" if calculated is not None else "unresolved", prompt_version=ctx.prompt_version, provider_request_id=request_id,
              attempt=att.no, refetch=refetch)  # fmt: skip
     return result
+
+
+def _result_cost(price: pricing.Price, data: bytes) -> Decimal | None:
+    """Usage-based cost of a delivered image, or None when the unit cannot be calculated
+    from what we observe (compute-time billing)."""
+    if price.unit == "per_compute_second":
+        return None
+    if price.unit == "per_image":
+        return pricing.image_cost(price)
+    return pricing.image_cost(price, pixels=_pixels(data))
 
 
 # ------------------------------------------------------------------ fallback routing
@@ -623,8 +636,8 @@ async def generate_image(req: ImageRequest, ctx: CallContext, *, key: str,
         raise
     att = await latest_attempt(key)
     assert att is not None
-    cost = (pricing.image_cost(att.price, pixels=_pixels(result.data)) if att.price.unit != "per_image"
-            else pricing.image_cost(att.price))  # fmt: skip
+    cost = _result_cost(att.price, result.data)
+    cost = att.estimate if cost is None else cost
     return result, Usage(result.provider, att.model, f"image_{req.role}", images=1, cost_usd=cost,
                          request_id=result.request_id)  # fmt: skip
 
@@ -636,7 +649,8 @@ async def upscale_image(
 
     async def choose() -> tuple[str, pricing.Price, Decimal]:
         price = pricing.require(provider.name, provider.model)
-        return provider.model, price, pricing.image_cost(price, pixels=_pixels(image) * s.upscale_factor**2)
+        return provider.model, price, pricing.image_cost(price, pixels=_pixels(image) * s.upscale_factor**2,
+                                                         seconds=wait_seconds)  # fmt: skip
 
     return await _paid_request(
         key=key, ctx=ctx, operation="upscale", provider_name=provider.name, choose=choose,
@@ -725,11 +739,10 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
                 result = await providers.upscale.fetch(att.model, att.request_id, wait_seconds=0)
             else:
                 result = await providers.image.fetch(att.model, att.request_id, wait_seconds=0)
-            calculated = (pricing.image_cost(att.price, pixels=_pixels(result.data))
-                          if att.price.unit != "per_image" else pricing.image_cost(att.price))  # fmt: skip
+            calculated = _result_cost(att.price, result.data)
             # Produced (and presumably billed), but nobody stored the result.
-            await _close(att, status="succeeded_unused", basis="calculated", calculated=calculated, images=1,
-                         only_if=RESOLVABLE)  # fmt: skip
+            await _close(att, status="succeeded_unused", basis="calculated" if calculated is not None else "unresolved",
+                         calculated=calculated, images=1, only_if=RESOLVABLE)  # fmt: skip
             outcome["succeeded_unused"] += 1
         except RequestPending:
             if att.status == "cancelled":
