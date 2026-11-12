@@ -531,6 +531,7 @@ async def stage_export_page(export_id: uuid.UUID, page_index: int) -> dict[str, 
         if str(page_index) in (export.pages_done or {}):
             return {"skipped": True}
         revision, owner, project_id = export.revision, export.owner_id, export.project_id
+        export_format = export.format
     page = revision["pages"][page_index]
     ctx = CallContext("export_upscale", str(owner), str(project_id), target_id=str(export_id))
     panels = []
@@ -560,7 +561,8 @@ async def stage_export_page(export_id: uuid.UUID, page_index: int) -> dict[str, 
         panels.append(render.PanelDoc(tuple(p["rect"]), image, tuple(p["balloons"])))
     doc = render.PageDoc(tuple(page["size"]), tuple(panels), revision["font"], revision["sfx_font"],
                          revision["watermark"])  # fmt: skip
-    rendered = storage.validate_image(render.render_page(doc, EXPORT_WIDTH))
+    # PDF draws lettering as vectors at assembly, so its page images are the art layer only.
+    rendered = storage.validate_image(render.render_page(doc, EXPORT_WIDTH, lettering=export_format != "pdf"))
     async with transaction() as db:
         export = (
             await db.execute(select(Export).where(Export.id == export_id).with_for_update())
@@ -586,7 +588,10 @@ async def stage_export_assemble(export_id: uuid.UUID) -> dict[str, Any]:
     # Provenance: every exported page carries a machine-readable AI-generation label.
     pages = [render.label_png(p, title) for p in pages]
     if fmt == "pdf":
-        data, ctype, ext = render.build_pdf(pages, title, tuple(order[0]["size"])), "application/pdf", "pdf"
+        docs = [render.PageDoc(tuple(pg["size"]), tuple(render.PanelDoc(tuple(p["rect"]), None, tuple(p["balloons"]))
+                                                        for p in pg["panels"]),
+                               revision["font"], revision["sfx_font"], revision["watermark"]) for pg in order]  # fmt: skip
+        data, ctype, ext = render.build_pdf(docs, pages, title), "application/pdf", "pdf"
     elif fmt == "cbz":
         data, ctype, ext = render.build_cbz(pages, title), "application/vnd.comicbook+zip", "cbz"
     else:

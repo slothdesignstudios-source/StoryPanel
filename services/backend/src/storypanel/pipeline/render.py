@@ -143,8 +143,9 @@ def _draw_balloon(layer: Image.Image, b: dict[str, Any], doc: PageDoc, k: float)
     _draw_text(d, g, kind, text, doc.font, x + w / 2, y + h / 2, k)
 
 
-def render_page(doc: PageDoc, width_px: int) -> bytes:
-    """Render one page to PNG at the requested pixel width."""
+def render_page(doc: PageDoc, width_px: int, *, lettering: bool = True) -> bytes:
+    """Render one page to PNG at the requested pixel width. `lettering=False` renders the
+    art layer only (panels and borders), for exports that draw lettering as vectors."""
     k_out = width_px / doc.size[0]
     k = k_out * SUPERSAMPLE
     W, H = round(doc.size[0] * k), round(doc.size[1] * k)
@@ -162,11 +163,11 @@ def render_page(doc: PageDoc, width_px: int) -> bytes:
             d.line([x + w, y, x, y + h], fill=(190, 190, 190), width=border)
         d.rectangle([x, y, x + w, y + h], outline=INK, width=border)
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    for p in doc.panels:
+    for p in doc.panels if lettering else ():
         for b in sorted(p.balloons, key=lambda b: b.get("order_index", 0)):
             _draw_balloon(layer, b, doc, k)
     page.alpha_composite(layer)
-    if doc.watermark:
+    if doc.watermark and lettering:
         f = _font(doc.font, 13 * k, bold=True)
         ImageDraw.Draw(page).text((W - 14 * k, H - 8 * k), "made with StoryPanel", font=f,
                                   fill=(120, 120, 120), anchor="rs")  # fmt: skip
@@ -214,19 +215,168 @@ def label_png(data: bytes, title: str) -> bytes:
 
 
 # ------------------------------------------------------------------ exporters
-def build_pdf(pages: list[bytes], title: str, page_units: tuple[int, int]) -> bytes:
-    """One PDF page per comic page, 6 inches wide, with a 0.125 in bleed margin for print."""
-    bleed = 9.0
-    pw = 432.0
-    ph = pw * page_units[1] / page_units[0]
+PDF_TRIM_WIDTH_PT = 432.0  # 6 in
+PDF_BLEED_PT = 9.0  # 0.125 in, the common print bleed
+
+
+def _bleed_extend(art_png: bytes, bleed_px: int) -> Image.Image:
+    """Extend the artwork into the bleed by replicating its outermost pixels outward, so that
+    a panel touching the trim edge continues past it (no white sliver after cutting), and a
+    page margin continues as page margin. The trim area is pixel-identical to the input."""
+    with Image.open(io.BytesIO(art_png)) as raw:
+        art = raw.convert("RGB")
+    w, h = art.size
+    out = Image.new("RGB", (w + 2 * bleed_px, h + 2 * bleed_px))
+    out.paste(art, (bleed_px, bleed_px))
+    out.paste(art.crop((0, 0, w, 1)).resize((w, bleed_px)), (bleed_px, 0))
+    out.paste(art.crop((0, h - 1, w, h)).resize((w, bleed_px)), (bleed_px, h + bleed_px))
+    left = out.crop((bleed_px, 0, bleed_px + 1, h + 2 * bleed_px))
+    right = out.crop((bleed_px + w - 1, 0, bleed_px + w, h + 2 * bleed_px))
+    out.paste(left.resize((bleed_px, h + 2 * bleed_px)), (0, 0))
+    out.paste(right.resize((bleed_px, h + 2 * bleed_px)), (w + bleed_px, 0))
+    return out
+
+
+_PDF_FONTS: set[str] = set()
+
+
+def _pdf_font(name: str, bold: bool = False) -> str:
+    """Register the bundled font (the same file the editor and PNG renderer use) with
+    reportlab, converting WOFF to TrueType in memory. Glyphs are embedded in the PDF."""
+    from fontTools.ttLib import TTFont as FTFont  # type: ignore[import-untyped]
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    key = f"sp-{name}{'-bold' if bold else ''}"
+    if key not in _PDF_FONTS:
+        f = FTFont(str(font_path(name, bold)))
+        f.flavor = None
+        buf = io.BytesIO()
+        f.save(buf)
+        buf.seek(0)
+        pdfmetrics.registerFont(TTFont(key, buf))
+        _PDF_FONTS.add(key)
+    return key
+
+
+def _pdf_balloon(c: Any, b: dict[str, Any], doc: PageDoc, k: float, ox: float, oy: float, ph: float) -> None:
+    """Draw one balloon as vector paths and text, mirroring `_draw_balloon` geometry.
+    Page units -> points: x*k + ox, and y flipped (PDF origin is bottom-left)."""
+    g, kind, text = b["geometry"], b["type"], str(b["text"])
+    if "lines" not in g and kind != "sfx":
+        g = typeset(kind, text, g, doc.font)[0]
+
+    def X(v: float) -> float:  # noqa: N802
+        return ox + v * k
+
+    def Y(v: float) -> float:  # noqa: N802
+        return oy + ph - v * k
+
+    x, y, w, h = float(g["x"]), float(g["y"]), float(g["w"]), float(g["h"])
+    c.setLineWidth(2.6 * k)
+    c.setStrokeColorRGB(*(v / 255 for v in INK))
+    if kind == "sfx":
+        size = float(g.get("font_size", 48)) * k
+        c.saveState()
+        c.translate(X(x + w / 2), Y(y + h / 2))
+        c.rotate(-float(g.get("rotation", 0.0)))
+        t = c.beginText()
+        t.setFont(_pdf_font(doc.sfx_font), size)
+        t.setTextRenderMode(2)  # fill and stroke
+        c.setFillColorRGB(1, 221 / 255, 51 / 255)
+        c.setLineWidth(3 * k)
+        width = c.stringWidth(text.upper(), _pdf_font(doc.sfx_font), size)
+        t.setTextOrigin(-width / 2, -size * 0.35)
+        t.textOut(text.upper())
+        c.drawText(t)
+        c.restoreState()
+        return
+    paper = tuple(v / 255 for v in PAPER)
+    poly = _tail_polygon(g)
+    if kind == "caption":
+        c.setFillColorRGB(*(v / 255 for v in CAPTION_FILL))
+        c.rect(X(x), Y(y + h), w * k, h * k, stroke=1, fill=1)
+    elif kind == "thought":
+        c.setFillColorRGB(*paper)
+        if poly:
+            (bx1, by1), (tx, ty), (bx2, by2) = poly
+            sx, sy = (bx1 + bx2) / 2, (by1 + by2) / 2
+            for n, t_ in enumerate((0.55, 0.78, 0.95)):
+                r = 9 - 3 * n
+                c.circle(X(sx + (tx - sx) * t_), Y(sy + (ty - sy) * t_), r * k, stroke=1, fill=1)
+        for n in range(14):
+            a = 2 * math.pi * n / 14
+            c.circle(X(x + w / 2 + math.cos(a) * w * 0.44), Y(y + h / 2 + math.sin(a) * h * 0.44),
+                     min(w, h) * 0.13 * k, stroke=1, fill=1)  # fmt: skip
+        c.ellipse(X(x + w * 0.06), Y(y + h * 0.94), X(x + w * 0.94), Y(y + h * 0.06), stroke=0, fill=1)
+    else:
+        c.setFillColorRGB(*paper)
+        if poly:
+            path = c.beginPath()
+            path.moveTo(X(poly[0][0]), Y(poly[0][1]))
+            for px, py in poly[1:]:
+                path.lineTo(X(px), Y(py))
+            path.close()
+            c.drawPath(path, stroke=1, fill=1)
+        c.ellipse(X(x), Y(y + h), X(x + w), Y(y), stroke=1, fill=1)
+        if poly:
+            (bx1, by1), (tx, ty), (bx2, by2) = poly
+            cx, cy = x + w / 2, y + h / 2
+            inner = [(cx + (bx1 - cx) * 0.94, cy + (by1 - cy) * 0.94), ((bx1 + bx2 + tx * 4) / 6, (by1 + by2 + ty * 4) / 6),
+                     (cx + (bx2 - cx) * 0.94, cy + (by2 - cy) * 0.94)]  # fmt: skip
+            path = c.beginPath()
+            path.moveTo(X(inner[0][0]), Y(inner[0][1]))
+            for px, py in inner[1:]:
+                path.lineTo(X(px), Y(py))
+            path.close()
+            c.drawPath(path, stroke=0, fill=1)
+    # Text: the stored lines and size (shared layout contract), centred as in the editor.
+    size, lines = float(g["text_size"]), list(g["lines"])
+    font = _pdf_font(doc.font)
+    c.setFillColorRGB(*(v / 255 for v in INK))
+    line_h = size * LINE_HEIGHT
+    top = y + h / 2 - len(lines) * line_h / 2
+    for n, line in enumerate(lines):
+        baseline = top + n * line_h + line_h / 2 + size * 0.35  # matches the PNG renderer's middle anchor
+        c.setFont(font, size * k)
+        c.drawCentredString(X(x + w / 2), Y(baseline), line)
+
+
+def build_pdf(docs: list[PageDoc], art_pages: list[bytes], title: str) -> bytes:
+    """Print PDF: the artwork as an image extended into a 0.125 in bleed, and all lettering
+    (balloons, captions, SFX, text) as vector paths and real, embedded, selectable text.
+    MediaBox = BleedBox = trim + bleed; TrimBox marks the cut."""
+    if len(docs) != len(art_pages) or not docs:
+        raise ValueError("one art page per page description is required")
+    units = docs[0].size
+    pw, ph = PDF_TRIM_WIDTH_PT, PDF_TRIM_WIDTH_PT * units[1] / units[0]
+    bleed = PDF_BLEED_PT
     buf = io.BytesIO()
     c = pdf_canvas.Canvas(buf, pagesize=(pw + 2 * bleed, ph + 2 * bleed), pageCompression=1)
     c.setTitle(title[:200])
     c.setCreator("StoryPanel")
     c.setSubject("AI-generated comic")
     c.setKeywords(f"AI-generated; DigitalSourceType={DIGITAL_SOURCE_TYPE}")
-    for data in pages:
-        c.drawImage(ImageReader(io.BytesIO(data)), bleed, bleed, width=pw, height=ph)
+    for doc, art in zip(docs, art_pages, strict=True):
+        with Image.open(io.BytesIO(art)) as im:
+            art_w = im.width
+        bleed_px = max(1, round(art_w * bleed / pw))
+        extended = _bleed_extend(art, bleed_px)
+        out = io.BytesIO()
+        extended.save(out, format="PNG")
+        c.setTrimBox((bleed, bleed, bleed + pw, bleed + ph))
+        c.setBleedBox((0, 0, pw + 2 * bleed, ph + 2 * bleed))
+        c.drawImage(
+            ImageReader(io.BytesIO(out.getvalue())), 0, 0, width=pw + 2 * bleed, height=ph + 2 * bleed
+        )
+        k = pw / doc.size[0]
+        for p in doc.panels:
+            for b in sorted(p.balloons, key=lambda b: b.get("order_index", 0)):
+                _pdf_balloon(c, b, doc, k, bleed, bleed, ph)
+        if doc.watermark:
+            c.setFont(_pdf_font(doc.font, bold=True), 13 * k)
+            c.setFillColorRGB(120 / 255, 120 / 255, 120 / 255)
+            c.drawRightString(bleed + pw - 14 * k, bleed + 8 * k, "made with StoryPanel")
         c.showPage()
     c.save()
     return buf.getvalue()

@@ -376,3 +376,103 @@ def test_fake_sheets_have_the_layout_the_pipeline_crops() -> None:
     # a full-width floor band does not count as a figure on a crop line
     floor = [(0.05 + i * 0.25, 0.1, 0.2 + i * 0.25, 0.7) for i in range(4)] + [(0.0, 0.75, 1.0, 1.0)]
     assert sheets.analyse(_sheet(floor), 4, 1).method == "grid"
+
+
+def _lettered_doc(edge_panel: bool = False) -> Any:
+    import io
+
+    from PIL import Image
+
+    from storypanel.pipeline import lettering, render
+
+    def art(color: tuple[int, int, int]) -> bytes:
+        out = io.BytesIO()
+        Image.new("RGB", (400, 300), color).save(out, format="PNG")
+        return out.getvalue()
+
+    balloons = []
+    for n, (kind, text, geo) in enumerate([
+        ("speech", "Meet me at the lighthouse after dark.", {"x": 80, "y": 60, "w": 260, "h": 120, "tail": {"x": 200, "y": 260}}),
+        ("caption", "Later that night.", {"x": 420, "y": 40, "w": 300, "h": 70}),
+        ("thought", "Is anyone there?", {"x": 460, "y": 400, "w": 240, "h": 140}),
+        ("sfx", "Crash", {"x": 120, "y": 700, "w": 240, "h": 110, "rotation": -8}),
+    ]):  # fmt: skip
+        g = {**geo, "font_size": 48 if kind == "sfx" else 22}
+        if kind != "sfx":
+            g = lettering.typeset(kind, text, g, "comic_neue")[0]
+        balloons.append({"type": kind, "text": text, "geometry": g, "order_index": n})
+    rect = (0.0, 0.0, 400.0, 600.0) if edge_panel else (40.0, 40.0, 360.0, 520.0)
+    panels = (render.PanelDoc(rect, art((30, 90, 160)), tuple(balloons[:2])),
+              render.PanelDoc((420.0, 360.0, 360.0, 560.0), art((200, 120, 60)), tuple(balloons[2:])))  # fmt: skip
+    return render.PageDoc((800, 1200), panels)
+
+
+def test_pdf_lettering_is_vector_text_matching_the_raster_renderer(tmp_path: Any) -> None:
+    import io
+    import shutil
+    import subprocess
+
+    from PIL import Image, ImageChops
+    from pypdf import PdfReader
+
+    from storypanel.pipeline import render
+
+    doc = _lettered_doc()
+    art = render.render_page(doc, 800, lettering=False)
+    pdf = render.build_pdf([doc], [art], "T")
+    page = PdfReader(io.BytesIO(pdf)).pages[0]
+    text = page.extract_text()
+    for b in [b for p in doc.panels for b in p.balloons if b["type"] != "sfx"]:
+        for line in b["geometry"]["lines"]:
+            assert line in text  # real, selectable text, not pixels
+    assert "CRASH" in text
+    fonts = {str(f.get_object()["/BaseFont"]) for f in page["/Resources"]["/Font"].values()}
+    # the bundled faces, embedded as subsets ("XXXXXX+" prefix), as in the editor and PNG export
+    assert {"ComicNeue-Regular", "Bangers-Regular"} <= {f.split("+", 1)[-1] for f in fonts if "+" in f}, fonts
+    assert [float(v) for v in page.trimbox] == [9.0, 9.0, 441.0, 657.0]
+    assert [float(v) for v in page.mediabox] == [0.0, 0.0, 450.0, 666.0]
+    if not shutil.which("pdftoppm"):
+        pytest.skip("pdftoppm not installed")
+    # rasterise the trim area at the PNG renderer's scale and compare the lettering ink
+    (tmp_path / "p.pdf").write_bytes(pdf)
+    dpi = 800 / (432 / 72)
+    subprocess.run(
+        ["pdftoppm", "-r", f"{dpi:.4f}", "-png", "-singlefile", str(tmp_path / "p.pdf"), str(tmp_path / "r")],
+        check=True,
+    )
+    ras = Image.open(tmp_path / "r.png").convert("L")
+    off = round(9 / 72 * dpi)
+    ras = ras.crop((off, off, off + 800, off + 1200))
+    png = Image.open(io.BytesIO(render.render_page(doc, 800))).convert("L")
+    art_l = Image.open(io.BytesIO(art)).convert("L")
+
+    def lettering_ink(img: Image.Image) -> Image.Image:  # lettering = pixels that differ from the art layer
+        return ImageChops.difference(img, art_l).point(lambda v: 255 if v > 60 else 0)
+
+    a, b = lettering_ink(ras), lettering_ink(png)
+    inter = ImageChops.multiply(a, b).histogram()[255]
+    union = ImageChops.lighter(a, b).histogram()[255]
+    print(f"lettering IoU pdf-vs-png: {inter / union:.3f}")
+    assert inter / union > 0.75, inter / union
+
+
+def test_pdf_bleed_extends_artwork_not_a_blank_margin() -> None:
+    import io
+
+    from PIL import Image
+    from pypdf import PdfReader
+
+    from storypanel.pipeline import render
+
+    doc = _lettered_doc(edge_panel=True)  # a panel touching the left/top trim edge
+    art = render.render_page(doc, 800, lettering=False)
+    ext = render._bleed_extend(art, 17)
+    a = Image.open(io.BytesIO(art)).convert("RGB")
+    assert ext.size == (a.width + 34, a.height + 34)
+    assert ext.crop((17, 17, 17 + a.width, 17 + a.height)).tobytes() == a.tobytes()  # trim area untouched
+    # the bleed continues the edge pixels: the panel art (blue) extends past the trim, not white
+    assert ext.getpixel((3, 300)) == a.getpixel((0, 300)) != (255, 255, 255)
+    assert ext.getpixel((3, 3)) == a.getpixel((0, 0))
+    pdf = render.build_pdf([doc], [art], "T")
+    page = PdfReader(io.BytesIO(pdf)).pages[0]
+    assert [float(v) for v in page.bleedbox] == [0.0, 0.0, 450.0, 666.0]
