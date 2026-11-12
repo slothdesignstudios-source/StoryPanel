@@ -5,6 +5,8 @@
     live-smoke.py estimate                        itemised cost model (expected, minimum cap, worst-case holds)
     live-smoke.py run --simulated                 same flow on fake providers; records the call profile
     live-smoke.py run --approve-usd X --run-id ID the paid run (live providers only)
+    live-smoke.py reconcile --run-id ID [--charges charges.csv]
+                                                  after the run: settle open requests, import provider charges
 
 The flow: create a comic from a fixed 3-panel prompt (text generation + moderation), approve the
 cast (character reference sheets + identity embeddings), approve the script (reference-conditioned
@@ -611,6 +613,52 @@ def _record_profile(result: dict[str, Any]) -> None:
     print(f"call profile recorded: {PROFILE}")
 
 
+async def reconcile(run_id: str, charges_csv: Path | None) -> int:
+    """After a live run: settle open requests with each provider, import provider-reported charges, and
+    write the reconciled usage next to the run's evidence. Charges CSV columns: provider,request_id,usd,source
+    (copy them from the provider dashboards; `source` says where, e.g. "fal usage page 2026-11-13")."""
+    import csv
+    from datetime import timedelta
+
+    from sqlalchemy import text
+
+    from storypanel.db.session import transaction
+    from storypanel.providers import metering
+
+    out_dir = ROOT / "docs/evidence/smoke" / run_id
+    async with transaction() as db:
+        uid = (await db.execute(text("select id from users where email = :e"),
+                                {"e": f"smoke-{run_id}@example.com"})).scalar_one_or_none()  # fmt: skip
+    if uid is None:
+        print(f"no smoke user for run {run_id}", file=sys.stderr)
+        return 2
+    settled = await metering.reconcile_open_requests(older_than=timedelta(0))
+    print(f"provider status checks: {settled}")
+    imported = 0
+    if charges_csv is not None:
+        rows = [(r["provider"], r["request_id"], Decimal(r["usd"]), r["source"])
+                for r in csv.DictReader(charges_csv.open())]  # fmt: skip
+        imported = await metering.record_provider_charges(rows)
+        print(f"provider-confirmed charges imported: {imported} attempt(s) from {len(rows)} row(s)")
+    async with transaction() as db:
+        open_rows = (await db.execute(text("""
+            select provider, model, stage, status, provider_request_id, cost_counted_usd
+            from provider_attempts where user_id = :u and cost_basis in ('reserved', 'unresolved')
+            order by created_at"""), {"u": uid})).mappings().all()  # fmt: skip
+    unresolved = [{k: str(v) for k, v in r.items()} for r in open_rows]
+    usage = await _usage(uuid.UUID("00000000-0000-0000-0000-000000000000"), uid)
+    report = {"run_id": run_id, "mode": "LIVE", "reconciled_at": datetime.now(UTC).isoformat(),
+              "provider_status_checks": settled, "charges_imported": imported, "usage": usage,
+              "still_unresolved": unresolved,
+              "note": "still_unresolved = potential charges counted at their reservation; look each request id up "
+                      "in the provider's dashboard and import it with --charges to confirm it"}  # fmt: skip
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "reconciled.json").write_text(json.dumps(report, indent=1, default=str))
+    print(json.dumps(usage["totals"], indent=1))
+    print(f"{len(unresolved)} attempt(s) still unresolved; report: {out_dir / 'reconciled.json'}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -621,6 +669,9 @@ def main() -> int:
     r.add_argument("--simulated", action="store_true")
     r.add_argument("--approve-usd", type=Decimal)
     r.add_argument("--run-id", default=None)
+    rc = sub.add_parser("reconcile", help="after a live run: settle, import provider charges, report")
+    rc.add_argument("--run-id", required=True)
+    rc.add_argument("--charges", type=Path, default=None, help="CSV: provider,request_id,usd,source")
     a = ap.parse_args()
     if a.cmd == "preflight":
         return asyncio.run(preflight())
@@ -630,6 +681,8 @@ def main() -> int:
         else:
             estimate()
         return 0
+    if a.cmd == "reconcile":
+        return asyncio.run(reconcile(a.run_id, a.charges))
     return asyncio.run(run(a.simulated, a.approve_usd, a.run_id or uuid.uuid4().hex[:8]))
 
 

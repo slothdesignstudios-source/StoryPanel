@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Starts Postgres (with pgvector) and Redis natively, for machines without Docker.
-# Usage: scripts/native-services.sh start|stop   (data lives in $SP_DATA, default /tmp/storypanel-data)
+# Usage: scripts/native-services.sh start|stop   (data lives in $SP_DATA, default /tmp/storypanel-data;
+# set SP_DATA to a persistent directory to keep the database, e.g. for reconciling a live run later)
+# Works as root (runs Postgres as the postgres user) or as a normal user (e.g. WSL); the Unix socket is
+# kept in the data directory, so /var/run/postgresql need not be writable. Clients connect over TCP.
 set -euo pipefail
 SP_DATA="${SP_DATA:-/tmp/storypanel-data}"
 PGBIN="${PGBIN:-/usr/lib/postgresql/16/bin}"
@@ -11,7 +14,7 @@ case "${1:-start}" in
     mkdir -p "$SP_DATA/pg" "$SP_DATA/redis"
     [ "$(id -u)" = "0" ] && chown -R postgres "$SP_DATA/pg"
     if [ ! -f "$SP_DATA/pg/PG_VERSION" ]; then run_pg "$PGBIN/initdb" -D "$SP_DATA/pg" -U storypanel --auth=trust >/dev/null; fi
-    run_pg "$PGBIN/pg_ctl" -D "$SP_DATA/pg" -o "-p $PGPORT -c listen_addresses=127.0.0.1 -c max_connections=200" -l "$SP_DATA/pg/log" -w start || true
+    run_pg "$PGBIN/pg_ctl" -D "$SP_DATA/pg" -o "-p $PGPORT -c listen_addresses=127.0.0.1 -c max_connections=200 -c unix_socket_directories=$SP_DATA/pg" -l "$SP_DATA/pg/log" -w start || true
     for db in storypanel storypanel_test; do
       psql -h 127.0.0.1 -p "$PGPORT" -U storypanel -d postgres -tc "select 1 from pg_database where datname='$db'" | grep -q 1 \
         || psql -h 127.0.0.1 -p "$PGPORT" -U storypanel -d postgres -c "create database $db" >/dev/null

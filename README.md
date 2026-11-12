@@ -29,6 +29,8 @@ docs/                     requirements matrix, decisions, policies, runbooks
 ```
 
 ## Run it locally
+**Step-by-step guide for Windows (WSL 2) / Ubuntu, including the first live comic: [`docs/RUN-LOCALLY.md`](docs/RUN-LOCALLY.md).**
+
 Everything below uses fake providers and a dev sign-in: no accounts or keys needed.
 
 ### With Docker
@@ -36,7 +38,7 @@ Everything below uses fake providers and a dev sign-in: no accounts or keys need
 docker compose up --build
 ```
 Open http://localhost:3000 and sign in with any email. Add `--profile observability` for Prometheus (9090) and Grafana (3001).
-The Compose file has not been run in the environment this was built in (no Docker daemon there).
+The Compose stack was verified with the browser suite (`docs/evidence/remediation/compose-stack-e2e.txt`).
 
 ### Without Docker
 Needs PostgreSQL 16 with pgvector, Redis, [uv](https://docs.astral.sh/uv/), Node 22 with pnpm, and the Temporal CLI.

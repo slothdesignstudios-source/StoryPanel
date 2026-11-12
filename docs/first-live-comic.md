@@ -50,8 +50,8 @@ there.
   session picks them up. They are stored on the environment and visible to processes in its sessions.
   The hosts `rest.fal.ai`, `api.fal.ai` and `api.voyageai.com` then still need allowing, which I would
   propose as one network change for you to approve.
-- **B. Your own machine** (Windows: WSL 2 or Docker): restore the bundle, put the three keys in `.env`,
-  and run §5. I cannot see that run; the evidence folder it writes would have to be shared back.
+- **B. Your own machine (chosen):** follow [`RUN-LOCALLY.md`](RUN-LOCALLY.md) (Windows + WSL 2). I cannot
+  see that run, so the evidence folder it writes has to be shared back.
 
 ## 2. Network hosts
 
