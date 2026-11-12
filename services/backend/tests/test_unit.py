@@ -477,3 +477,68 @@ def test_pdf_bleed_extends_artwork_not_a_blank_margin() -> None:
     pdf = render.build_pdf([doc], [art], "T")
     page = PdfReader(io.BytesIO(pdf)).pages[0]
     assert [float(v) for v in page.bleedbox] == [0.0, 0.0, 450.0, 666.0]
+
+
+def test_pdf_balloon_geometry_and_sfx_fill_match_the_png_renderer(tmp_path: Any) -> None:
+    """Per balloon: the lettering ink's bounding box in the rasterised PDF matches the PNG
+    renderer's within 3 px at 1600 px width (outline placement, tail tips that must not
+    overshoot), and SFX letters keep their yellow fill (stroke drawn outside, not over it)."""
+    import io
+    import shutil
+    import subprocess
+
+    from PIL import Image, ImageChops
+
+    from storypanel.pipeline import render
+
+    if not shutil.which("pdftoppm"):
+        pytest.skip("pdftoppm not installed")
+    doc = _lettered_doc()
+    W = 1600
+    art = render.render_page(doc, W, lettering=False)
+    dpi = W / (432 / 72)
+    off = round(9 / 72 * dpi)
+
+    def raster(pdf_doc: Any, name: str) -> Image.Image:
+        (tmp_path / f"{name}.pdf").write_bytes(render.build_pdf([pdf_doc], [art], "T"))
+        subprocess.run(["pdftoppm", "-r", f"{dpi:.4f}", "-png", "-singlefile", str(tmp_path / f"{name}.pdf"),
+                        str(tmp_path / name)], check=True)  # fmt: skip
+        return Image.open(tmp_path / f"{name}.png").convert("RGB").crop((off, off, off + W, off + W * 3 // 2))
+
+    pdf = raster(doc, "lettered")
+    # each renderer's lettering is isolated against its *own* art layer
+    pdf_art = raster(
+        render.PageDoc(doc.size, tuple(render.PanelDoc(p.rect, p.image, ()) for p in doc.panels)), "art"
+    )
+    png = Image.open(io.BytesIO(render.render_page(doc, W))).convert("RGB")
+    png_art = Image.open(io.BytesIO(art)).convert("RGB")
+    k = W / doc.size[0]
+
+    def ink(img: Image.Image, box: tuple[int, int, int, int]) -> tuple[int, int, int, int] | None:
+        base = pdf_art if img is pdf else png_art
+        return (
+            ImageChops.difference(img.crop(box), base.crop(box))
+            .convert("L")
+            .point(lambda v: 255 if v > 60 else 0)
+            .getbbox()
+        )
+
+    for b in (b for p in doc.panels for b in p.balloons):
+        g = b["geometry"]
+        xs = [g["x"], g["x"] + g["w"]] + ([g["tail"]["x"]] if g.get("tail") else [])
+        ys = [g["y"], g["y"] + g["h"]] + ([g["tail"]["y"]] if g.get("tail") else [])
+        pad = 40 if b["type"] != "sfx" else 120
+        box = (max(0, int(min(xs) * k) - pad), max(0, int(min(ys) * k) - pad),
+               min(W, int(max(xs) * k) + pad), min(W * 3 // 2, int(max(ys) * k) + pad))  # fmt: skip
+        a, c = ink(png, box), ink(pdf, box)
+        assert a and c, b["type"]
+        assert max(abs(u - v) for u, v in zip(a, c, strict=True)) <= 3, (b["type"], a, c)
+        if b["type"] == "sfx":
+
+            def yellow(img: Image.Image) -> int:
+                return sum(
+                    1 for px in img.crop(box).getdata() if px[0] > 220 and 190 < px[1] < 245 and px[2] < 110
+                )
+
+            ratio = yellow(pdf) / max(1, yellow(png))
+            assert 0.85 < ratio < 1.15, ratio

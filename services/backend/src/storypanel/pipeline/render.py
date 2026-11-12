@@ -273,29 +273,48 @@ def _pdf_balloon(c: Any, b: dict[str, Any], doc: PageDoc, k: float, ox: float, o
         return oy + ph - v * k
 
     x, y, w, h = float(g["x"]), float(g["y"]), float(g["w"]), float(g["h"])
-    c.setLineWidth(2.6 * k)
+    lw = 2.6  # page units, as in the PNG renderer
+    c.setLineWidth(lw * k)
+    c.setLineJoin(1)  # round: a mitred tail tip would overshoot the point it aims at
+    c.setLineCap(1)
     c.setStrokeColorRGB(*(v / 255 for v in INK))
+    i = lw / 2  # PIL draws outlines inside the box; PDF strokes straddle the path, so inset by half
     if kind == "sfx":
         size = float(g.get("font_size", 48)) * k
         c.saveState()
         c.translate(X(x + w / 2), Y(y + h / 2))
         c.rotate(-float(g.get("rotation", 0.0)))
-        t = c.beginText()
-        t.setFont(_pdf_font(doc.sfx_font), size)
-        t.setTextRenderMode(2)  # fill and stroke
-        c.setFillColorRGB(1, 221 / 255, 51 / 255)
-        c.setLineWidth(3 * k)
         width = c.stringWidth(text.upper(), _pdf_font(doc.sfx_font), size)
-        t.setTextOrigin(-width / 2, -size * 0.35)
-        t.textOut(text.upper())
-        c.drawText(t)
+        # Like the PNG renderer: an ink outline *outside* the yellow letters. A PDF stroke is
+        # centred on the glyph edge, so stroke at twice the width first, then fill on top.
+        for mode in (1, 0):  # 1 = stroke only, 0 = fill only
+            # The text render mode persists across text objects (and reportlab omits "0 Tr" for
+            # a fresh one), so each pass gets its own graphics state.
+            c.saveState()
+            c.setLineWidth(2 * 3 * k)
+            t = c.beginText()
+            t.setFont(_pdf_font(doc.sfx_font), size)
+            t.setTextRenderMode(mode)
+            t.setFillColorRGB(1, 221 / 255, 51 / 255)
+            t.setStrokeColorRGB(*(v / 255 for v in INK))
+            t.setTextOrigin(-width / 2, -size * 0.35)
+            t.textOut(text.upper())
+            c.drawText(t)
+            c.restoreState()
         c.restoreState()
         return
     paper = tuple(v / 255 for v in PAPER)
     poly = _tail_polygon(g)
+    if poly:
+        # The stroke's round join reaches half a stroke past the path: pull the tip back so
+        # the *outer edge* of the outline ends on the point the tail aims at.
+        (bx1, by1), (tx, ty), (bx2, by2) = poly
+        mx, my = (bx1 + bx2) / 2, (by1 + by2) / 2
+        dist = math.hypot(tx - mx, ty - my) or 1.0
+        poly = [(bx1, by1), (tx - (tx - mx) / dist * i, ty - (ty - my) / dist * i), (bx2, by2)]
     if kind == "caption":
         c.setFillColorRGB(*(v / 255 for v in CAPTION_FILL))
-        c.rect(X(x), Y(y + h), w * k, h * k, stroke=1, fill=1)
+        c.rect(X(x + i), Y(y + h - i), (w - lw) * k, (h - lw) * k, stroke=1, fill=1)
     elif kind == "thought":
         c.setFillColorRGB(*paper)
         if poly:
@@ -303,11 +322,11 @@ def _pdf_balloon(c: Any, b: dict[str, Any], doc: PageDoc, k: float, ox: float, o
             sx, sy = (bx1 + bx2) / 2, (by1 + by2) / 2
             for n, t_ in enumerate((0.55, 0.78, 0.95)):
                 r = 9 - 3 * n
-                c.circle(X(sx + (tx - sx) * t_), Y(sy + (ty - sy) * t_), r * k, stroke=1, fill=1)
+                c.circle(X(sx + (tx - sx) * t_), Y(sy + (ty - sy) * t_), (r - i) * k, stroke=1, fill=1)
         for n in range(14):
             a = 2 * math.pi * n / 14
             c.circle(X(x + w / 2 + math.cos(a) * w * 0.44), Y(y + h / 2 + math.sin(a) * h * 0.44),
-                     min(w, h) * 0.13 * k, stroke=1, fill=1)  # fmt: skip
+                     (min(w, h) * 0.13 - i) * k, stroke=1, fill=1)  # fmt: skip
         c.ellipse(X(x + w * 0.06), Y(y + h * 0.94), X(x + w * 0.94), Y(y + h * 0.06), stroke=0, fill=1)
     else:
         c.setFillColorRGB(*paper)
@@ -318,7 +337,7 @@ def _pdf_balloon(c: Any, b: dict[str, Any], doc: PageDoc, k: float, ox: float, o
                 path.lineTo(X(px), Y(py))
             path.close()
             c.drawPath(path, stroke=1, fill=1)
-        c.ellipse(X(x), Y(y + h), X(x + w), Y(y), stroke=1, fill=1)
+        c.ellipse(X(x + i), Y(y + h - i), X(x + w - i), Y(y + i), stroke=1, fill=1)
         if poly:
             (bx1, by1), (tx, ty), (bx2, by2) = poly
             cx, cy = x + w / 2, y + h / 2
