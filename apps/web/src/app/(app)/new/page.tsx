@@ -7,6 +7,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Card, Field, Notice, Select, Textarea, cn } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
 import { pk } from "@/lib/session";
+import { LETTERING_SUPPORTED_SUMMARY, unsupportedLetteringChars, unsupportedLetteringMessage } from "@/lib/lettering-charset";
 
 const STARTERS = [
   { label: "Birthday comic", prompt: "A birthday comic for my friend who loves hiking and terrible puns. 2 pages, warm and funny." },
@@ -45,12 +46,14 @@ export default function NewComic() {
     },
   });
   const err = create.error instanceof ApiError ? create.error : null;
-  const promptError = err?.fields.find((f) => f.field === "prompt")?.message ?? (err?.code === "moderation_blocked" ? err.message : null);
+  const unsupported = unsupportedLetteringChars(prompt);
+  const promptError = (unsupported.length ? unsupportedLetteringMessage(unsupported) : null)
+    ?? err?.fields.find((f) => f.field === "prompt")?.message ?? (err?.code === "moderation_blocked" ? err.message : null);
   const tooShort = prompt.trim().length < 10;
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!tooShort) create.mutate();
+    if (!tooShort && !unsupported.length) create.mutate();
   }
 
   return (
@@ -61,7 +64,7 @@ export default function NewComic() {
       </div>
       <Card className="p-6">
         <form onSubmit={submit} className="space-y-5" noValidate>
-          <Field label="Your idea" hint={`${prompt.trim().length}/2000 characters. Original characters only: no real people or existing franchises.`} error={promptError}>
+          <Field label="Your idea" hint={`${prompt.trim().length}/2000 characters. Original characters only: no real people or existing franchises. ${LETTERING_SUPPORTED_SUMMARY}`} error={promptError}>
             {(ids) => <Textarea {...ids} rows={5} maxLength={2000} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="A shy robot who runs a night-time noodle stall in a rainy city learns to make friends." />}
           </Field>
           <div>

@@ -78,8 +78,23 @@ def _env_file(path: Path) -> dict[str, str]:
 
 
 # ------------------------------------------------------------------ preflight (free)
+# Hosts the live run talks to, and how. `secret` = the provider key travels in this header (set as a
+# network secret in a cloud environment); hosts without one must still be reachable.
+HOSTS = [
+    ("api.anthropic.com", "x-api-key", "text, moderation, vision QA; Models API"),
+    ("queue.fal.run", "Authorization: Key", "image generation, edit, upscale jobs"),
+    ("rest.fal.ai", "Authorization: Key", "short-lived upload token for reference images"),
+    ("api.fal.ai", "Authorization: Key", "fal pricing API (free; checks the price table)"),
+    ("v3.fal.media", None, "reference uploads (CDN token) and result downloads"),
+    ("api.voyageai.com", "Authorization: Bearer", "identity embeddings"),
+]
+FAL_UNITS = {"per_image": ("image", "images"), "per_compute_second": ("second", "seconds", "compute second",
+                                                                     "compute seconds")}  # fmt: skip
+
+
 async def preflight() -> int:
-    from storypanel.config import get_settings
+    """Free checks only: nothing here is billed. Credential-free checks always run."""
+    from storypanel.config import Settings, get_settings
     from storypanel.providers import pricing
 
     ok = True
@@ -90,13 +105,37 @@ async def preflight() -> int:
         print(f"  [{'PASS' if passed else 'FAIL'}] {name}{(': ' + detail) if detail else ''}")
 
     print("preflight: configuration and contracts (no paid calls)")
+    # 1. Network: an unauthenticated request per host. Any HTTP answer means reachable; a refused
+    #    proxy tunnel or a failed DNS lookup means the environment's network does not allow it.
+    async with httpx.AsyncClient(timeout=15) as h:
+        for host, _, why in HOSTS:
+            try:
+                r = await h.get(f"https://{host}/")
+                check(f"network: {host} reachable", True, f"HTTP {r.status_code} unauthenticated ({why})")
+            except Exception as exc:
+                check(f"network: {host} reachable", False, f"{type(exc).__name__}: blocked or unresolved ({why})")
+    # 2. The price table itself (no keys needed).
+    env = {**_env_file(ROOT / "config/live-smoke.env"), **{k: v for k, v in os.environ.items() if k.startswith("SP_")}}
     try:
-        s = get_settings()
+        table = pricing.parse_table(json.loads((ROOT / env["SP_PRICING_FILE"]).read_text()))
+        models = [(p, env.get(f"SP_{k.upper()}")) for p, k in (
+            ("anthropic", "text_model_story"), ("anthropic", "text_model_light"), ("anthropic", "vision_model"),
+            ("fal", "image_model_generate"), ("fal", "image_model_edit"), ("fal", "upscale_model"),
+            ("voyage", "embedding_model"))]  # fmt: skip
+        missing = [f"{p}/{m}" for p, m in models if m and (p, m) not in table]
+        check("price table covers every configured model", not missing, ", ".join(missing))
+    except Exception as exc:
+        table = {}
+        check("price table parses", False, _safe_err(exc))
+    # 3. Object storage and the API the run will drive.
+    await _storage_and_api(check)
+    # 4. Settings as the live run will load them (needs the keys).
+    try:
+        s: Settings = get_settings()
     except Exception as exc:  # the startup validator lists every problem
         # messages only: pydantic's str() also echoes the raw input, which may contain key values
-        errs = getattr(exc, "errors", None)
-        msg = "; ".join(str(e.get("msg", "")) for e in errs()) if callable(errs) else type(exc).__name__
-        check("settings validate for live providers", False, msg[:600])
+        check("settings validate for live providers", False, _safe_err(exc))
+        print("preflight: FAIL (checks that need the provider keys were skipped)")
         return 1
     check("provider mode is live", s.provider_mode == "live", s.provider_mode)
     check("not a deployed environment (smoke uses dev sign-in)", not s.is_deployed, s.env)
@@ -105,7 +144,7 @@ async def preflight() -> int:
     problems = pricing.startup_problems(s)
     check("pricing table: every configured model priced, verified within "
           f"{s.pricing_max_age_days} days", not problems, "; ".join(problems)[:600])  # fmt: skip
-    # Anthropic model capabilities via the Models API (free).
+    # 5. Anthropic Models API (free): the key works and the configured models exist.
     if s.anthropic_api_key is not None:
         try:
             import anthropic
@@ -113,13 +152,63 @@ async def preflight() -> int:
             client = anthropic.AsyncAnthropic(api_key=s.anthropic_api_key.get_secret_value())
             for mid in sorted({m for m in (s.text_model_story, s.text_model_light, s.vision_model) if m}):
                 m = await client.models.retrieve(mid)
-                caps = getattr(m, "capabilities", None)
                 check(f"Anthropic model {mid} exists", m.id == mid, f"max_input={getattr(m, 'max_input_tokens', '?')}")
-                if caps is not None:
-                    print(f"         capabilities: {json.dumps(caps if isinstance(caps, dict) else caps.to_dict())[:300]}")
         except Exception as exc:
-            check("Anthropic Models API reachable with the key", False, f"{type(exc).__name__}: {str(exc)[:200]}")
-    # Object storage round trip (put/get/delete one tiny object).
+            check("Anthropic Models API with the key", False, _safe_err(exc))
+    # 6. fal pricing API (free, authenticated): official unit and price for every fal model we call.
+    if s.fal_key is not None:
+        fal_models = [m for m in (s.image_model_generate, s.image_model_edit, s.upscale_model) if m]
+        try:
+            async with httpx.AsyncClient(timeout=20) as h:
+                r = await h.get("https://api.fal.ai/v1/models/pricing", params=[("endpoint_id", m) for m in fal_models],
+                                headers={"Authorization": f"Key {s.fal_key.get_secret_value()}"})  # fmt: skip
+            check("fal pricing API with the key", r.status_code == 200, f"HTTP {r.status_code}")
+            official = {p["endpoint_id"]: p for p in (r.json().get("prices") or [])} if r.status_code == 200 else {}
+            for m in fal_models:
+                ours, theirs = table.get(("fal", m)), official.get(m)
+                if theirs is None or ours is None:
+                    check(f"fal price for {m}", False, "not returned by the pricing API" if theirs is None else "not in table")
+                    continue
+                unit_ok = str(theirs.get("unit", "")).lower() in FAL_UNITS.get(ours.unit, ())
+                price_ok = Decimal(str(theirs.get("unit_price"))) == ours.usd and theirs.get("currency", "USD") == "USD"
+                check(f"fal price for {m} matches the table", unit_ok and price_ok,
+                      f"official {theirs.get('unit_price')} {theirs.get('currency')}/{theirs.get('unit')}; table {ours.usd} {ours.unit}")
+        except Exception as exc:
+            check("fal pricing API with the key", False, _safe_err(exc))
+    # Voyage has no free authenticated endpoint: the key is first used by the paid run (free allowance).
+    print("  [INFO] Voyage key validity cannot be checked without an embedding call; it is checked by the run")
+    print("preflight:", "PASS" if ok else "FAIL")
+    return 0 if ok else 1
+
+
+def _safe_err(exc: Exception) -> str:
+    """Error text without echoed input: pydantic's str() repeats the raw settings, which may hold keys."""
+    errs = getattr(exc, "errors", None)
+    if callable(errs):
+        return "; ".join(str(e.get("msg", "")) for e in errs())[:300]
+    return f"{type(exc).__name__}: {str(exc).splitlines()[0][:200] if str(exc) else ''}"
+
+
+async def _storage_and_api(check: Any) -> None:
+    try:
+        from storypanel.config import get_settings
+
+        get_settings()
+    except Exception:
+        print("  [SKIP] object storage put/get/delete: needs valid live settings (the provider keys)")
+    else:
+        await _storage(check)
+    try:
+        async with httpx.AsyncClient(timeout=10) as h:
+            r = await h.get(f"{API}/readyz")
+            check("API ready", r.status_code == 200, r.text[:200])
+            meta = (await h.get(f"{API}/v1/meta")).json()
+            check("API runs live providers", meta.get("provider_mode") == "live", meta.get("provider_mode", "?"))
+    except Exception as exc:
+        check("API reachable", False, f"{API}: {type(exc).__name__}")
+
+
+async def _storage(check: Any) -> None:
     try:
         from storypanel import storage
 
@@ -129,18 +218,7 @@ async def preflight() -> int:
         res = await storage.delete_keys([key])
         check("object storage put/get/delete", got == b"ok" and res.ok, f"versioned={await storage.bucket_versioned()}")
     except Exception as exc:
-        check("object storage put/get/delete", False, f"{type(exc).__name__}: {str(exc)[:200]}")
-    # The API the run will drive.
-    try:
-        async with httpx.AsyncClient(timeout=10) as h:
-            r = await h.get(f"{API}/readyz")
-            check("API ready", r.status_code == 200, r.text[:200])
-            meta = (await h.get(f"{API}/v1/meta")).json()
-            check("API runs live providers", meta.get("provider_mode") == "live", meta.get("provider_mode", "?"))
-    except Exception as exc:
-        check("API reachable", False, f"{API}: {type(exc).__name__}")
-    print("preflight:", "PASS" if ok else "FAIL")
-    return 0 if ok else 1
+        check("object storage put/get/delete", False, _safe_err(exc))
 
 
 # ------------------------------------------------------------------ estimate
@@ -263,6 +341,38 @@ def cost_model() -> dict[str, Any]:
             "refusal fallback": setting("text_refusal_fallback")}, "profile": prof["recorded_at"]}  # fmt: skip
 
 
+def cap_scenarios(cap: Decimal = Decimal("5.00")) -> list[dict[str, Any]]:
+    """Counted spend before exports in progressively worse runs, and whether the exports still fit.
+
+    Exports run last and reserve 3 x the ESRGAN budget; a run whose counted spend plus those
+    reservations exceeds the cap stops at export time (the comic exists; the export fails). Settled
+    text calls count their usage-based cost (expected sizes); failed calls count their full reservation
+    (SP_COUNT_FAILED_REQUESTS_AS_BILLED=true)."""
+    m = cost_model()
+    r = {row["stage"]: row for row in m["rows"]}
+    exp = lambda k: r[k]["expected"]  # noqa: E731
+    res = lambda k: r[k]["reserve"]  # noqa: E731
+    up = r["export_upscale"]["reserve"] * 3
+    clean = m["totals"]["expected_total"] - r["export_upscale"]["expected_total"]
+    # one extra QA round for a panel (or the edit): image + safety + vision QA + identity embedding
+    qa_round = res("panel_generate") + exp("image_safety (panels)") + exp("vision_qa") + r["identity_embedding"]["reserve"]
+    worst_qa = qa_round * 2 * 4  # 3 panels + the edit, each using both repair rounds
+    script_repairs = exp("script") * 2  # two more drafts (each re-sends the script)
+    question = exp("intake") + exp("moderation.prompt")  # a clarifying question re-runs intake
+    # every paid call failing once at the provider and being re-sent: the failure counts its reservation
+    calls = {k: row["nominal"] for k, row in r.items() if k != "export_upscale"}
+    one_failure_each = sum((res(k) * Decimal(str(n)) for k, n in calls.items()), Decimal(0))
+    rows = []
+    for name, before in (("clean run", clean),
+                         ("every panel and the edit use both repair rounds", clean + worst_qa),
+                         ("... + 2 script repairs + a clarifying question", clean + worst_qa + script_repairs + question),
+                         ("... + every paid call fails once and is re-sent", clean + worst_qa + script_repairs + question
+                          + one_failure_each)):  # fmt: skip
+        rows.append({"scenario": name, "counted_before_exports": before, "with_exports": before + up,
+                     "fits": before + up <= cap})
+    return rows
+
+
 def cost_markdown() -> str:
     """The itemised table for docs/smoke-test-cost.md (generated; do not edit by hand)."""
     m = cost_model()
@@ -282,6 +392,13 @@ def cost_markdown() -> str:
               f"(counted total + USD {t['headroom']:.2f} for reservations open at the same time)",
               f"- Reservations if every bounded retry, QA round and activity attempt were used: USD {t['max_reserve']:.2f} "
               "(the approved cap stops the run long before this)"]
+    lines += ["", "**Will a USD 5.00 cap stop the run before the exports finish?** Exports run last and reserve "
+              "3 × USD 0.1665 for upscaling. Counted spend before exports, by scenario:", "",
+              "| Scenario | Counted before exports (USD) | + export reservations (USD) | Fits in USD 5.00 |",
+              "|---|---:|---:|---|"]
+    for c in cap_scenarios():
+        lines.append(f"| {c['scenario']} | {c['counted_before_exports']:.2f} | {c['with_exports']:.2f} | "
+                     f"{'yes' if c['fits'] else '**no: the export would be refused**'} |")
     return "\n".join(lines) + "\n"
 
 

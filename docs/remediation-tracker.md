@@ -285,3 +285,13 @@ Simulated providers and local stubs only. No paid call was made.
 | PDF safe area | **Defect:** the editor let lettering reach the trim (clamp to 0); automatic placement allowed 2 units; one representative page had 95 px of lettering outside the safe area | All geometry writers clamp to a 0.125 in safe area (rotated SFX and outline included); rendered-PDF check finds 0 px outside (`evidence/pdf-safe-area/`). Earlier README wrongly called lettering in the bleed harmless; corrected | Fixed |
 | Lettering collisions | **Defect:** captions and SFX were placed over other balloons' text | Free-corner captions, SFX search and shrink, `overlaps_lettering` / `tail_crosses_lettering` flags shown in the editor; 0 unflagged overlaps over 518 maximum-load pairs | Fixed |
 | Unprintable characters | **Defect:** characters outside the fonts (Ł, Cyrillic, CJK, emoji) would print as boxes | Script-validation error (no panel paid for), editor refusal, `typeset` flag | Fixed |
+
+## Live smoke preparation (from 39e18c2)
+
+| Item | Change | Status |
+|---|---|---|
+| Cost breakdown | Itemised table and cap scenarios generated into `smoke-test-cost.md` (`estimate --markdown`); a USD 5.00 cap fits even if every paid call fails once (USD 3.94 with exports) | Done |
+| Pricing | fal/Voyage pages blocked (no browser tool; fetch refused). Preflight now checks fal prices with fal's official pricing API once a key exists; Voyage remains unverified | Prepared |
+| Character coverage | Documented in the UI (prompt and balloon fields), `release-notes.md`; one actionable message everywhere; prompts with unsupported characters refused before any paid call; editor keeps such text as an unsaved draft; web list generated from the fonts (parity test) | Done |
+| Setup | `first-live-comic.md` §1: cloud network secrets per host (fal key on three hosts; `v3.fal.media` allowed without a key because uploads use a CDN token) | Done |
+| Preflight | Credential-free checks always run (host reachability, price table, API); errors sanitised; fal pricing API check | Done; result without credentials in `evidence/preflight-no-credentials.txt` |

@@ -106,6 +106,22 @@ def _supported() -> frozenset[int]:
     return frozenset(set.intersection(*sets))
 
 
+SUPPORTED_SUMMARY = (
+    "Lettering supports Western European (Latin-1) letters such as é, ñ, ü, ß, ø and Æ, plus Œ, œ, ı and "
+    "common punctuation (– — ‘ ’ “ ” „ … • € ™). Other scripts and symbols, for example Ł, ő, Č, Greek, "
+    "Cyrillic, Chinese, Japanese, Korean and emoji, are not supported yet."
+)
+
+
+def unsupported_message(missing: str) -> str:
+    """One actionable message for every place that refuses text the fonts cannot draw."""
+    shown = ", ".join(missing[:12]) + ("…" if len(missing) > 12 else "")
+    return (
+        f"These characters can't be lettered yet: {shown}. {SUPPORTED_SUMMARY} "
+        "Replace or remove them (for example Ł → L), then try again. Your text is never changed for you."
+    )
+
+
 def unsupported_chars(text: str) -> str:
     """Characters the lettering fonts cannot draw (they would print as empty boxes)."""
     ok = _supported()

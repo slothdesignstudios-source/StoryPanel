@@ -12,6 +12,7 @@ import { ApiError, api, describeError } from "@/lib/api";
 import { wordCount } from "@/lib/text";
 import type { Balloon, ExportOut, Geometry, Page, Panel, Project } from "@/lib/types";
 import { onIdentityReset, pk } from "@/lib/session";
+import { LETTERING_SUPPORTED_SUMMARY, unsupportedLetteringChars, unsupportedLetteringMessage } from "@/lib/lettering-charset";
 
 const PageCanvas = dynamic(() => import("./page-canvas"), { ssr: false, loading: () => <div className="halftone aspect-[2/3] w-full" /> });
 
@@ -168,10 +169,11 @@ function BalloonTools({ balloon, geometry, pageSize, onGeometry, onText, onDelet
   const nudge = (dx: number, dy: number) => onGeometry({ ...geometry, x: Math.min(Math.max(0, geometry.x + dx), pageSize[0] - geometry.w), y: Math.min(Math.max(0, geometry.y + dy), pageSize[1] - geometry.h), tail: geometry.tail ? { x: geometry.tail.x + dx, y: geometry.tail.y + dy } : geometry.tail });
   const size = (k: number) => onGeometry({ ...geometry, w: Math.max(50, geometry.w * k), h: Math.max(36, geometry.h * k) });
   const words = wordCount(textValue);
+  const unsupported = unsupportedLetteringChars(textValue);
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2"><h3 className="text-lg font-bold capitalize">{balloon.type === "sfx" ? "Sound effect" : balloon.type}</h3>{FLAG_LABELS.filter(([f]) => balloon.flags.includes(f)).map(([f, label]) => <Badge key={f} tone="warn">{label}</Badge>)}</div>
-      <Field label="Text" hint={`${words} of 25 words`} error={words > 25 ? "Balloons hold at most 25 words. Shorten this line." : null}>
+      <Field label="Text" hint={`${words} of 25 words. ${LETTERING_SUPPORTED_SUMMARY}`} error={words > 25 ? "Balloons hold at most 25 words. Shorten this line." : unsupported.length ? unsupportedLetteringMessage(unsupported) : null}>
         {(ids) => <Textarea {...ids} className="min-h-20 font-comic text-base" maxLength={300} value={textValue} onChange={(e) => onText(e.target.value)} />}
       </Field>
       {/* Keyboard and screen-reader path for everything the canvas does with a pointer. */}
@@ -227,7 +229,7 @@ export function Editor({ project }: { project: Project }) {
     set({ save: "dirty" });
     timers.current[id] = setTimeout(async () => {
       const s = useEditor.getState();
-      const body = { version: versions.current[id]!, ...(s.drafts[id] ? { geometry: { ...s.drafts[id]!, rotation: s.drafts[id]!.rotation ?? 0 } } : {}), ...(s.texts[id] !== undefined && s.texts[id]!.trim() ? { text: s.texts[id]! } : {}) };
+      const body = { version: versions.current[id]!, ...(s.drafts[id] ? { geometry: { ...s.drafts[id]!, rotation: s.drafts[id]!.rotation ?? 0 } } : {}), ...(s.texts[id] !== undefined && s.texts[id]!.trim() && !unsupportedLetteringChars(s.texts[id]!).length ? { text: s.texts[id]! } : {}) };  // text the fonts can't draw stays an unsaved draft; the field says why
       if (!("geometry" in body) && !("text" in body)) return;
       s.set({ save: "saving" });
       try {

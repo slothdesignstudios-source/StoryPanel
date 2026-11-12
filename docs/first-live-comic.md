@@ -3,27 +3,43 @@
 Everything needed for the paid smoke test, and nothing else (no Clerk, Stripe, AWS, Render or Temporal
 Cloud). Never paste a key into chat.
 
-## 1. Secrets (three)
+## 1. Setup checklist: where the test runs and where the keys go
 
-| Variable | Provider page | How the app sends it |
-|---|---|---|
-| `SP_ANTHROPIC_API_KEY` | Claude Console → API keys | `x-api-key` to `api.anthropic.com` |
-| `SP_FAL_KEY` | fal dashboard → Keys | `Authorization: Key …` to `queue.fal.run`, `rest.fal.ai`, `v3.fal.media` |
-| `SP_VOYAGE_API_KEY` | Voyage AI dashboard → API keys | `Authorization: Bearer …` to `api.voyageai.com` |
+The test runs **in this cloud session's environment** (personal "Default" environment), not on your
+Windows machine. A `.env` on your machine is never visible here. Never paste a key into chat.
 
-Configure them in **one** of these ways:
-- **Your own machine:** an untracked `.env` at the repository root, with the three lines `SP_ANTHROPIC_API_KEY=…`,
-  `SP_FAL_KEY=…` and `SP_VOYAGE_API_KEY=…` (`.env` is git-ignored). `scripts/live-env.sh` reads only these
-  three variables from it, parsing the file rather than executing it.
-- **This cloud session:** the environment's secure network-secrets form, one secret per host with the
-  header above. The proxy injects the real value, so `.env` then holds placeholders. I can open the
-  form when you say so, and its approval prompt shows exactly what gets saved.
+1. **Allow one host without a key: `v3.fal.media`.** fal reference uploads use a short-lived storage token,
+   not your key, and generated images are downloaded from this host. I propose this as an environment
+   network change, and you approve or decline it in the prompt.
+2. **Save each provider key as a network secret** in the secure form I open for each host. The proxy adds
+   the key to requests for that host only; it never enters the container, the repository or the chat.
+   Saving a secret also allows the host. The fal key is entered three times, once per fal host that
+   needs it.
+
+| Host | Key | Header the form should use | Used for |
+|---|---|---|---|
+| `api.anthropic.com` | Anthropic API key (Claude Console → API keys) | `x-api-key`, no prefix | story, moderation, vision QA; free Models API check |
+| `queue.fal.run` | fal key (fal dashboard → Keys) | `Authorization`, prefix `Key` | image generation, edit, upscale jobs |
+| `rest.fal.ai` | fal key | `Authorization`, prefix `Key` | upload token for reference images |
+| `api.fal.ai` | fal key | `Authorization`, prefix `Key` | free official pricing check in preflight |
+| `api.voyageai.com` | Voyage API key (Voyage dashboard → API keys) | `Authorization`, prefix `Bearer` | identity embeddings |
+
+3. **Inside the container**, `.env` holds only placeholders for `SP_ANTHROPIC_API_KEY`, `SP_FAL_KEY` and
+   `SP_VOYAGE_API_KEY`. They are needed because the app refuses to start without values, and the proxy
+   replaces them with the real keys.
+4. The secrets are stored on the Default environment, so they also apply to your future sessions on it.
+   Remove them afterwards in the environment's settings (Network secrets) if you prefer.
+
+Running the test on your own machine instead: put the three real keys in an untracked `.env` at the
+repository root (`scripts/live-env.sh` reads only those three variables) and run the commands in §5
+there.
 
 ## 2. Network hosts
 
-`api.anthropic.com`, `queue.fal.run`, `rest.fal.ai`, `v3.fal.media`, `api.voyageai.com`. On your machine
-nothing needs doing. In this cloud environment they are currently blocked. Saving a network secret for a
-host also allows it, which covers all five because each one carries a key.
+`api.anthropic.com`, `queue.fal.run`, `rest.fal.ai`, `api.fal.ai`, `v3.fal.media`, `api.voyageai.com`.
+Preflight checks each one without credentials and at no cost. Generated images are expected on
+`v3.fal.media`. If fal serves a result from another host, downloading it fails without the job being
+resubmitted: that image is already paid for, and the run stops after its retrieval retries.
 
 ## 3. Public configuration (already committed; review only)
 
@@ -42,9 +58,9 @@ No provider or model was substituted.
 |---|---|---|
 | `claude-sonnet-5-5` | $2 in / $10 out per MTok | **Verified**: official pricing page fetched (`evidence/pricing-2026-11-12/`) |
 | `claude-haiku-5-5` | $0.10 in / $0.50 out per MTok (prompts ≤ 100K tokens) | **Verified**: same page |
-| `fal-ai/nano-banana-2`, `/edit` | $0.08 per 1K image | **Unverified**: search summaries of fal's model pages; fal.ai is blocked here |
-| `fal-ai/esrgan` | $0.00111 per compute second | **Unverified**: same; there is no published run time either |
-| `voyage-multimodal-3.5` | $0.60 per billion pixels (first 150B free) | **Unverified**: search summary of Voyage's pricing page |
+| `fal-ai/nano-banana-2`, `/edit` | $0.08 per 1K image | **Unverified** until preflight: search summaries of https://fal.ai/models/fal-ai/nano-banana-2 and https://fal.ai/models/fal-ai/nano-banana-2/edit (fal.ai is blocked here). Preflight compares the table with fal's official pricing API (`GET https://api.fal.ai/v1/models/pricing`, free) and fails on any difference |
+| `fal-ai/esrgan` | $0.00111 per compute second | **Unverified** until preflight: https://fal.ai/models/fal-ai/esrgan, checked by the same API. There is no published run time |
+| `voyage-multimodal-3.5` | $0.60 per billion pixels (first 150B pixels free) | **Unverified**: search summary of https://docs.voyageai.com/docs/pricing (blocked here). Voyage has no pricing API. At about 0.02B pixels this run is roughly USD 0.01 at the listed price, or free within the allowance |
 
 Other remaining uncertainty:
 - Whether fal bills a *running* job after it is cancelled.

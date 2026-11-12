@@ -167,8 +167,8 @@ def _check_text(text: str) -> None:
                        fields=[{"field": "text", "message": "Shorten this line or split it."}])  # fmt: skip
     missing = lettering.unsupported_chars(text)
     if missing:
-        raise AppError(ErrorCode.VALIDATION, f"The lettering font can't draw these characters: {missing}",
-                       fields=[{"field": "text", "message": f"Remove or replace: {missing}"}])  # fmt: skip
+        raise AppError(ErrorCode.VALIDATION, lettering.unsupported_message(missing),
+                       fields=[{"field": "text", "message": lettering.unsupported_message(missing)}])  # fmt: skip
     verdict = moderation.rule_check(text)
     if verdict is not None:
         raise AppError(ErrorCode.MODERATION_BLOCKED, verdict.user_message)

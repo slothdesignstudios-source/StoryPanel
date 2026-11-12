@@ -224,3 +224,42 @@ def test_an_ordinary_strip_letters_without_any_overlap() -> None:
         for a in range(len(ps)):
             for b in range(a + 1, len(ps)):
                 assert lettering.overlap(lettering._ink_rect(ps[a]), lettering._ink_rect(ps[b])) == 0
+
+
+def test_web_character_list_matches_the_fonts() -> None:
+    """The browser checks the same set the server enforces (regenerate with scripts/gen-lettering-charset.py)."""
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[3]
+    spec = importlib.util.spec_from_file_location("gen", root / "scripts/gen-lettering-charset.py")
+    gen = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(gen)  # type: ignore[union-attr]
+    assert (root / "apps/web/src/lib/lettering-charset.ts").read_text() == gen.render()
+
+
+def test_unsupported_characters_message_is_actionable_and_honest() -> None:
+    m = lettering.unsupported_message("Łő")
+    assert m.startswith("These characters can't be lettered yet: Ł, ő.")
+    assert "Latin-1" in m and "Replace or remove them" in m and "never changed for you" in m
+    assert "unicode" not in m.lower()  # accented Latin is not described as full Unicode support
+
+
+async def test_a_prompt_the_fonts_cannot_letter_is_refused_before_any_paid_call(
+    client: Any, headers: dict[str, str]
+) -> None:
+    from storypanel.providers import fake
+
+    fake.control.reset()
+    r = await client.post(
+        "/v1/projects", json={"prompt": "Łukasz and his cat explore Kraków at night"}, headers=headers
+    )
+    assert r.status_code == 422, r.text
+    body = r.json()["error"]
+    assert body["code"] == "validation_error"
+    field = next(f for f in body["fields"] if f["field"] == "prompt")
+    assert "Ł" in field["message"] and "Replace or remove them" in field["message"]
+    assert fake.control.calls == []  # nothing was sent to any provider
+    r = await client.get("/v1/projects", headers=headers)
+    assert all(
+        "Łukasz" not in p["title"] for p in r.json()["projects"]
+    )  # and nothing was created or rewritten
