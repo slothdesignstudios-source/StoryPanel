@@ -45,7 +45,11 @@ resource "aws_s3_bucket_ownership_controls" "assets" {
 }
 resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
   bucket = aws_s3_bucket.assets.id
-  rule { apply_server_side_encryption_by_default { sse_algorithm = "AES256" } }
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 # Versioning is the restore path for accidental deletes; old versions expire so that a
 # user's deletion request is fully honoured within the documented window.

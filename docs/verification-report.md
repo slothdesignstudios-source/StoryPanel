@@ -1,4 +1,36 @@
-# Verification report (2026-11-11)
+# Verification report
+
+## Remediation round, 2026-11-12 (independent review of 46e33b6)
+
+Per-finding reproduction, fix and tests: [`remediation-tracker.md`](remediation-tracker.md). All runs below used
+**simulated providers** unless stated; nothing here is live-provider, Stripe, Clerk or staging evidence.
+
+| Check | Command | Result |
+|---|---|---|
+| Backend tests | `cd services/backend && uv run pytest -q` (Postgres 16 + pgvector, Redis, moto, Temporal dev server) | **267 passed** (was 209) |
+| Lint / types / migrations | `uv run ruff format --check src tests && uv run ruff check src tests && uv run mypy && uv run alembic check` | clean; migrations 0003–0009 apply on populated DBs (local, test, and inside the Compose container) |
+| Web | `pnpm typecheck && pnpm lint && pnpm test` | clean (1 pre-existing lint warning); 6 unit tests incl. telemetry scrubbing |
+| Browser, native stack | `pnpm exec playwright test` against `scripts/native-stack.sh` | **10/10**, incl. 3 new isolation specs that failed on the old web code (`evidence/remediation/F6-before.txt`) |
+| Production images | `docker build -f infra/docker/{backend,web}.Dockerfile --secret id=build_ca,…` | both built (847 MB / 413 MB); no CA material in layers or `/run/secrets` |
+| Compose stack | `docker compose up -d --no-build` | 7 services healthy, `/readyz` ok |
+| Browser, Compose containers | `pnpm exec playwright test --project=desktop` against the containers | **9/9** (`evidence/remediation/compose-stack-e2e.txt`) |
+| Simulated eval | `python -m storypanel.evals.harness --subset all` | 63 cases: 60 completed **and exported**, 3 blocked, 0 errors, explicit denominators (`evidence/remediation/eval-simulated-all.json`). Earlier runs exposed a deadlock introduced by the deletion guard (fixed in migration 0009) and a missing bucket bootstrap |
+| Alert delivery | Prometheus v3.7.3 + Alertmanager v0.29.0 on Compose, two workers | WorkerInstanceDown → ticket receiver; WorkerDown → page receiver; both resolved and delivered (`evidence/alerting-drill.txt`). The drill exposed that DNS-SD drops dead targets, so an `up == 0` rule could never fire; rewritten |
+| Alert/route config | `promtool check rules`, `amtool check-config` | 19 rules OK; config OK |
+| Terraform | `terraform fmt -check` (container) | passes after fixing a syntax error the earlier static check missed; `init/validate` blocked: `registry.terraform.io` Forbidden (B6) |
+| Infra static checks | `python scripts/validate-infra.py` | 0 problems |
+| Dependency audit | `pnpm audit --prod`; `pip-audit` | no known vulnerabilities |
+| Release drill | `python scripts/verify-release.py` | see `evidence/release-verification.json` |
+
+### Limits of this evidence
+- Provider behaviour (404 vs expiry, cancellation after completion, billing of failed jobs) is modelled by the
+  fake provider and fal's published SDK types, not observed live.
+- Stripe payload shapes are checked against the installed SDK's generated types for the pinned API version and a
+  local stub; no real Stripe event has been processed.
+- Repair effectiveness, sheet-layout pass rates on real models, and every §8.3 quality/cost/latency number need
+  the approved live budget (B2).
+
+## Earlier round (2026-11-11)
 
 Everything here ran in one sandbox: 4 vCPU Linux container, PostgreSQL 16 + pgvector, Redis 7, Temporal dev server
 1.32 (CLI 1.10), S3 emulated by moto, Chromium via Playwright 1.63. **All provider calls were simulated.**

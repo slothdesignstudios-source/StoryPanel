@@ -201,3 +201,43 @@ asserts one attempt, one submission, and provider submissions = recorded attempt
 - **Status:** Fixed, locally verified against generated SDK types and a local stub. **Not** verified against real
   Stripe test-mode payloads, Checkout, the portal, proration or dunning (B3). The entitlement policy itself needs
   product/finance sign-off (B8).
+
+## P1 — Reproducible deployment
+
+| Item | Reproduction / finding | Fix | Evidence | Status |
+|---|---|---|---|---|
+| Compose signed browser URLs for `http://minio:9000` | SigV4 signs the Host; a URL signed for `minio:9000` is invalid at `localhost:9000` | `SP_S3_PUBLIC_ENDPOINT_URL` + separate presigning client (`storage._signing_client`) | `test_signed_urls_are_valid_for_the_host_the_browser_requests` (botocore reference signer: valid for `localhost:9000`, invalid for `minio:9000`); Versity gateway: presigned GET 200, tampered signature 403; Compose browser journey loads images into the canvas | Fixed, locally verified |
+| Render blueprint lacked pricing inputs | — | `SP_PRICING_JSON`, optional fallback/inpaint models, `SP_CLERK_SECRET_KEY`, pinned `SP_STRIPE_API_VERSION` | `test_render_blueprint_supplies_a_complete_deployed_configuration` (all declared vars → valid staging config; dropping any critical one is refused) | Fixed, statically verified; not applied to Render (B7) |
+| Embedding dimension vs `vector(1024)` | config allowed 256/512/2048 | must equal `EMBEDDING_DIM` | same test (`2048` refused) | Fixed |
+| Production images | never built | both built: backend 847 MB, web 413 MB. Dockerfile changes: uv from PyPI (ghcr.io blob host not reachable here), pnpm pinned via npm, optional `build_ca` BuildKit secret for TLS-intercepting proxies (never stored in a layer: `docker history` and `/run/secrets` checked) | `docker build` logs | Built locally |
+| Compose stack | never run. Found: `minio/minio` no longer on Docker Hub; Temporal dev server could not write its SQLite file (non-root image, root-owned volume) | Versity S3 gateway v1.11.0 (SeaweedFS 4.53 was tried and failed SSE puts / raft after restart), `SP_S3_SERVER_SIDE_ENCRYPTION=none` locally (must be AES256/aws:kms when deployed), Temporal 1.10.0 pinned with its DB in the image's home dir | all 7 services healthy, `/readyz` ok; **9/9 browser tests pass against the containers** (`docs/evidence/remediation/compose-stack-e2e.txt`): journey incl. canvas, export download, a11y, isolation, lettering | Locally verified (Compose) |
+| Clerk hostnames/CSP | — | unchanged; needs a Clerk instance | — | Open — external (B4) |
+
+## P1 — Safety and comic output
+
+| Item | Finding | Fix | Regression test | Status |
+|---|---|---|---|---|
+| Edited dialogue only seed-word checked | an edit passing the rules (`"[[unsafe]]"` for the fake classifier) exported | `balloons.moderated_sha` (migration 0007); export runs the full classifier over every balloon whose text changed since it was moderated, under the project lock | `test_edited_dialogue_is_fully_moderated_before_export` (blocked → 422, no export, 1 classifier call; fixed → export; unchanged balloons not re-checked) | Fixed, locally verified |
+| Quarantine across previews/restore/upscale/export | re-inspected: export checks the *original* asset's flag even when an upscaled copy exists; restore refuses quarantined versions; all URL surfaces audited | — | existing quarantine URL audit test | Verified (no change needed) |
+| Identity QA passed without evidence | a present character without a box was silently skipped | `unlocalised:` / `no_reference:` problems fail QA | `test_missing_localisation_is_insufficient_identity_evidence` | Fixed, locally verified |
+| Sheets cropped on an assumed grid | the fake's own expression sheet was 4×1 while cropped 2×2 — silently wrong crops | `pipeline/sheets.py`: grid only if every cell has a figure and no crop line cuts one; else projection segmentation; else crops not used as identity references | `test_sheet_layout_validation`, `test_fake_sheets_have_the_layout_the_pipeline_crops` | Fixed; live sheet layouts unmeasured (B2) |
+| Inpainting without references | the fill endpoint takes no reference images | `SP_REPAIR_MODE=reference_edit` (default): multi-reference edit model with panel + approved portrait, composited through the mask; `inpaint` kept | repair test parametrised over both modes (pixels outside the mask identical) | Implemented; identity benefit unmeasured until live eval (B2) |
+| PDF lettering rasterised; bleed = blank margin | — | vector balloons/text with embedded font subsets from stored line breaks; art extended into a 0.125 in bleed; TrimBox/BleedBox | selectable text, embedded `ComicNeue`/`Bangers`, boxes, rasterised lettering IoU vs PNG renderer **0.866**; bleed pixels continue the edge art | Fixed, locally verified |
+
+## P1 — Evaluation and observability
+
+| Item | Fix | Evidence | Status |
+|---|---|---|---|
+| Eval stopped before export; cost from `cost_usd`; defects collapsed; no denominators; budget = daily ceilings | export + upscaling inside each case; cost from immutable attempts split product / eval overhead / unresolved; first-attempt, repaired and final defects; `user_regenerations` explicitly not measured; counts include errors and an `incomplete` list; per-run budget = lifetime `SpendCap` on the run's own user (migration 0008) | `test_run_budget_is_a_lifetime_cap_unaffected_by_day_boundaries`; simulated 63-case run: 60 completed **and exported**, 3 blocked, 0 errors (`eval-simulated-all.json`, labelled SIMULATED) | Fixed; live run Open — external (B1/B2) |
+| Browser `sampled=1` overrode the ratio | sampled remote parents re-decided by trace-id ratio | `test_sampling_ratio_applies_to_browser_traces_and_is_consistent_across_hops` (≈20 % at 0.2; API and worker agree) | Fixed |
+| No alert delivery | Alertmanager (page/ticket routes, file-based receiver URLs, inhibition), DNS-SD per-instance scraping, `WorkerInstanceDown` | `scripts/verify-alerting.sh` → `docs/evidence/alerting-drill.txt` | see verification report |
+| Browser telemetry | Sentry `beforeSend`/`beforeBreadcrumb` scrub signed-URL credentials, tokens, emails, headers, console | `src/lib/telemetry.test.ts` | Fixed, unit-verified |
+
+## Regressions found by the new checks (and fixed)
+
+- **Owner-guard deadlock (introduced by F4, found by the 63-case eval):** the trigger took `FOR SHARE`,
+  conflicting with ordinary `UPDATE users` (credit holds) → concurrent work for one user deadlocked. Migration
+  0009 uses `FOR KEY SHARE` (still blocked by deletion's `FOR UPDATE`). `test_concurrent_work_for_one_user_does_not_deadlock_on_the_owner_guard`
+  fails on 0008 (`owner-guard-deadlock-before.txt`), passes on 0009.
+- **Stop/reconcile race (found by the F3 immutability trigger):** an attempt settling while being stopped —
+  transitions are now conditional (`only_if`).

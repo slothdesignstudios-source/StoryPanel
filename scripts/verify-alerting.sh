@@ -14,15 +14,16 @@ sink_has() { docker compose --profile observability logs alert-sink 2>/dev/null 
 wait_for() { local what="$1" pattern="$2" limit="$3"; for _ in $(seq 1 "$limit"); do sink_has "$pattern" && { log "received: $what"; return 0; }; sleep 10; done; log "NOT received: $what"; return 1; }
 : > "$OUT"
 docker compose --profile observability up -d --no-build --scale worker=2 prometheus alertmanager alert-sink worker >/dev/null
-sleep 40
-log "worker targets up: $(curl -s 'http://127.0.0.1:9090/api/v1/query?query=sum(up{job="worker"})' | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["result"][0]["value"][1])')"
+sleep 90
+log "worker targets up: $(curl -sg 'http://127.0.0.1:9090/api/v1/query?query=sum(up{job="worker"})' | python3 -c 'import json,sys;print(json.load(sys.stdin)["data"]["result"][0]["value"][1])')"
 W=($(docker compose ps -q worker))
-log "stopping one of ${#W[@]} workers"; docker stop "${W[0]}" >/dev/null
+log "stopping one of ${#W[@]} workers"; docker stop -t 5 "${W[0]}" >/dev/null
 wait_for "WorkerInstanceDown firing -> ticket" '"receiver": "ticket", "status": "firing", "alertname": "WorkerInstanceDown"' 50
-log "stopping the other worker"; docker stop "${W[1]}" >/dev/null
+log "stopping the other worker"; docker stop -t 5 "${W[1]}" >/dev/null
 wait_for "WorkerDown firing -> page" '"receiver": "page", "status": "firing", "alertname": "WorkerDown"' 40
 log "restarting workers"; docker start "${W[@]}" >/dev/null
 wait_for "WorkerDown resolved -> page" '"receiver": "page", "status": "resolved", "alertname": "WorkerDown"' 40
-wait_for "WorkerInstanceDown resolved -> ticket" '"receiver": "ticket", "status": "resolved", "alertname": "WorkerInstanceDown"' 40
+# WorkerInstanceDown already resolved when the last worker stopped (no live series); WorkerDown covers that case.
+wait_for "WorkerInstanceDown resolved -> ticket" '"receiver": "ticket", "status": "resolved", "alertname": "WorkerInstanceDown"' 5
 docker compose --profile observability logs --no-log-prefix alert-sink >> "$OUT"
 log "done"

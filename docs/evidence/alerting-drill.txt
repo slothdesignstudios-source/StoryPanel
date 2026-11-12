@@ -1,0 +1,8 @@
+# Alert drill on the Compose stack, 2026-11-12 (Prometheus v3.7.3, Alertmanager v0.29.0, 2 workers, real alerts.yml + alertmanager.yml, local receiver)
+# 03:44 one worker stopped -> WorkerInstanceDown pending 03:45:18, firing+delivered (ticket) 03:50:18
+# 03:50:36 second worker stopped -> WorkerDown firing+delivered (page) 03:54:07; WorkerInstanceDown resolves (no live series; WorkerDown covers it)
+# 03:54:24 workers restarted -> WorkerDown resolved+delivered (page) 03:55:22
+{"receiver": "ticket", "status": "firing", "alertname": "WorkerInstanceDown", "severity": "ticket", "startsAt": "2026-11-12T03:50:18.931Z", "endsAt": "0001-01-01T00:00:00Z"}
+{"receiver": "ticket", "status": "resolved", "alertname": "WorkerInstanceDown", "severity": "ticket", "startsAt": "2026-11-12T03:50:18.931Z", "endsAt": "2026-11-12T03:51:03.931Z"}
+{"receiver": "page", "status": "firing", "alertname": "WorkerDown", "severity": "page", "startsAt": "2026-11-12T03:54:07.582Z", "endsAt": "0001-01-01T00:00:00Z"}
+{"receiver": "page", "status": "resolved", "alertname": "WorkerDown", "severity": "page", "startsAt": "2026-11-12T03:54:07.582Z", "endsAt": "2026-11-12T03:55:22.582Z"}

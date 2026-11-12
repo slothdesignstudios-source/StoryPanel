@@ -1,6 +1,6 @@
 {
  "prometheus": {
-  "alerts": 18,
+  "alerts": 19,
   "dashboard_queries": 34
  },
  "terraform": {
@@ -24,10 +24,12 @@
    "storypanel-worker",
    "storypanel-web"
   ],
-  "env_keys_checked": 46
+  "env_keys_checked": 52
  },
  "compose": {
   "services": [
+   "alert-sink",
+   "alertmanager",
    "api",
    "grafana",
    "migrate",

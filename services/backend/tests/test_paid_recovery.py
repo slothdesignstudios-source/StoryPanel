@@ -367,3 +367,14 @@ async def test_run_budget_is_a_lifetime_cap_unaffected_by_day_boundaries() -> No
     # another account's spend does not count against the run
     other = await _ctx()
     await metering.generate_image(_req(), other, key=f"cap4:{other.project_id}")
+
+
+async def test_durable_fake_queue_survives_a_new_provider_instance(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The crash drill relies on this: a job submitted by one worker process is fetched by another."""
+    from storypanel.providers.fake import FakeImageProvider
+
+    monkeypatch.setenv("SP_FAKE_DURABLE_QUEUE", "1")
+    ctx = await _ctx()
+    rid = await FakeImageProvider().submit(_req(), ctx, model="fake-image")
+    result = await FakeImageProvider().fetch("fake-image", rid, wait_seconds=0)  # a "new process"
+    assert result.data and result.request_id == rid

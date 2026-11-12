@@ -7,6 +7,7 @@ there, and the registry has no fallback path from live to fake.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import io
 import json
@@ -377,7 +378,8 @@ class _DurableQueue:
         from storypanel.services.events import redis_client
 
         r = redis_client()
-        await r.set(f"sp:fake:job:{request_id}", pickle.dumps((model, req)), ex=86400)
+        # the shared client decodes responses as text, so store the pickle base64-encoded
+        await r.set(f"sp:fake:job:{request_id}", base64.b64encode(pickle.dumps((model, req))).decode(), ex=86400)
         await r.incr("sp:fake:submissions")
 
     @staticmethod
@@ -387,7 +389,7 @@ class _DurableQueue:
         from storypanel.services.events import redis_client
 
         raw = await redis_client().get(f"sp:fake:job:{request_id}")
-        return pickle.loads(raw) if raw else None  # noqa: S301 - local test fixture data only
+        return pickle.loads(base64.b64decode(raw)) if raw else None  # noqa: S301 - local test fixture data only
 
 
 class FakeImageProvider:
