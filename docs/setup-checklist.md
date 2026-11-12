@@ -12,36 +12,12 @@ Sources and verification dates for every model, price and API version: [`provide
 
 ## A. First live comic (local stack, no hosting accounts)
 
-| # | Item | Kind | Where to obtain / configure | Unlocks |
-|---|---|---|---|---|
-| A1 | `SP_ANTHROPIC_API_KEY` | secret | Claude Console → API keys. Local `.env`; cloud env: network secret for `api.anthropic.com`, header `x-api-key` | preflight model check; story, moderation, safety and QA calls |
-| A2 | `SP_FAL_KEY` | secret | fal.ai dashboard → Keys. `.env`; cloud env: secret for `queue.fal.run` (+ allow `rest.fal.ai`, `auth.fal.ai`, `v3.fal.media`) | reference sheets, panels, edit, export upscaling |
-| A3 | `SP_VOYAGE_API_KEY` | secret | Voyage AI dashboard → API keys. `.env`; cloud env: secret for `api.voyageai.com` | identity embeddings |
-| A4 | Model ids, repair mode, pricing file: `SP_TEXT_MODEL_STORY`, `SP_TEXT_MODEL_LIGHT`, `SP_VISION_MODEL`, `SP_IMAGE_MODEL_GENERATE`, `SP_IMAGE_MODEL_EDIT`, `SP_UPSCALE_MODEL`, `SP_EMBEDDING_MODEL`, `SP_REPAIR_MODE`, `SP_PRICING_FILE` | public | already set in [`config/live-smoke.env`](../config/live-smoke.env); review only | live startup validation |
-| A5 | Confirm the six prices in `packages/pricing/pricing.2026-11-12.json` against their linked official pages; edit any that differ | public | the `source` URL in each entry | trustworthy estimate and ceilings (live startup refuses missing/zero/stale prices) |
-| A6 | **Budget approval**: a written "approve USD X" with X ≥ the printed upper bound (currently **USD 4.84**) | decision | reply in chat | the paid smoke run (`--approve-usd X`, enforced as a persisted cap) |
-
-Run order (put the three keys in the untracked `.env` at the repository root first; `scripts/live-env.sh`
-loads the local stack endpoints, `config/live-smoke.env` and `.env`, and never prints values):
-
-```bash
-scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py estimate
-```
-
-```bash
-scripts/native-stack.sh stop; scripts/native-services.sh start && SP_STACK_LIVE=1 scripts/native-stack.sh start
-```
-
-```bash
-scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py preflight
-```
-
-```bash
-scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py run --approve-usd X --run-id smoke-1
-```
-
-`estimate` needs no keys. Preflight is free (settings validation, prices, Anthropic Models API lookup, storage round trip, API
-readiness). It already passes its storage and API checks here and fails closed on the missing keys.
+**See [`first-live-comic.md`](first-live-comic.md)**: three secrets (`SP_ANTHROPIC_API_KEY`, `SP_FAL_KEY`,
+`SP_VOYAGE_API_KEY`), five network hosts, the committed public config (`config/live-smoke.env`), which
+prices are verified and which are not, the free preflight command and the paid command with its scope.
+The cost model behind the budget request is [`smoke-test-cost.md`](smoke-test-cost.md): the estimated
+cost is about USD 1.14, a clean run needs a cap of at least USD 2.21, and the approved cap is an
+application limit, not a guaranteed ceiling on provider charges.
 
 ## B. Clerk authentication and identity deletion (development instance; local is fine)
 

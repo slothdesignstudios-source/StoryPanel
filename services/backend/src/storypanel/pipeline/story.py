@@ -24,7 +24,6 @@ from storypanel.domain.validation import ScriptLimits, has_errors, validate_scri
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext
 
-
 MAX_LOCATIONS = 3  # reference images per comic (one generation each)
 
 

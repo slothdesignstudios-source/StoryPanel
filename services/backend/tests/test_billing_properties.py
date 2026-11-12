@@ -33,49 +33,97 @@ def _scenarios(n: str) -> dict[str, tuple[list[dict[str, Any]], list[dict[str, A
     def inv(name: str, reason: str, lines: list[dict[str, Any]], sub: str = a) -> dict[str, Any]:
         return invoice(f"in_{name}_{n}", reason, lines, sub=sub, customer=c)
 
-    def ln(price: str, period: tuple[int, int], amount: int, sub: str = a, proration: bool = False) -> dict[str, Any]:
+    def ln(
+        price: str, period: tuple[int, int], amount: int, sub: str = a, proration: bool = False
+    ) -> dict[str, Any]:
         return line(price, period, amount, sub=sub, proration=proration)
 
     return {
         # create creator -> immediate-proration upgrade to pro -> renewal at pro -> downgrade
         # (no clawback) -> renewal at creator
-        "upgrade_renew_downgrade": ([
-            inv("create", "subscription_create", [ln("price_creator", PERIOD, 900)]),
-            inv("up", "subscription_update", [ln("price_creator", (change, PERIOD[1]), -600, proration=True),
-                                              ln("price_pro", (change, PERIOD[1]), 1300, proration=True)]),
-            inv("renew", "subscription_cycle", [ln("price_pro", NEXT, 2900)]),
-            inv("down", "subscription_update", [ln("price_pro", (NEXT[0] + 5, NEXT[1]), -2000, proration=True),
-                                                ln("price_creator", (NEXT[0] + 5, NEXT[1]), 600, proration=True)]),
-            inv("renew2", "subscription_cycle", [ln("price_creator", third, 900)]),
-        ], [sub_obj("active", "price_creator", a), sub_obj("active", "price_pro", a, period=NEXT),
-            sub_obj("active", "price_creator", a, period=third)], CREATOR + (PRO - CREATOR) + PRO + CREATOR),
+        "upgrade_renew_downgrade": (
+            [
+                inv("create", "subscription_create", [ln("price_creator", PERIOD, 900)]),
+                inv(
+                    "up",
+                    "subscription_update",
+                    [
+                        ln("price_creator", (change, PERIOD[1]), -600, proration=True),
+                        ln("price_pro", (change, PERIOD[1]), 1300, proration=True),
+                    ],
+                ),
+                inv("renew", "subscription_cycle", [ln("price_pro", NEXT, 2900)]),
+                inv(
+                    "down",
+                    "subscription_update",
+                    [
+                        ln("price_pro", (NEXT[0] + 5, NEXT[1]), -2000, proration=True),
+                        ln("price_creator", (NEXT[0] + 5, NEXT[1]), 600, proration=True),
+                    ],
+                ),
+                inv("renew2", "subscription_cycle", [ln("price_creator", third, 900)]),
+            ],
+            [
+                sub_obj("active", "price_creator", a),
+                sub_obj("active", "price_pro", a, period=NEXT),
+                sub_obj("active", "price_creator", a, period=third),
+            ],
+            CREATOR + (PRO - CREATOR) + PRO + CREATOR,
+        ),
         # billing-date reset on upgrade: a new full pro period starts mid-period; then it renews
-        "anchor_reset": ([
-            inv("create", "subscription_create", [ln("price_creator", PERIOD, 900)]),
-            inv("reset", "subscription_update", [ln("price_creator", (change, PERIOD[1]), -600, proration=True),
-                                                 ln("price_pro", reset, 2900)]),
-            inv("renew", "subscription_cycle", [ln("price_pro", after_reset, 2900)]),
-        ], [sub_obj("active", "price_creator", a), sub_obj("active", "price_pro", a, period=reset)],
-            CREATOR + PRO + PRO),
+        "anchor_reset": (
+            [
+                inv("create", "subscription_create", [ln("price_creator", PERIOD, 900)]),
+                inv(
+                    "reset",
+                    "subscription_update",
+                    [
+                        ln("price_creator", (change, PERIOD[1]), -600, proration=True),
+                        ln("price_pro", reset, 2900),
+                    ],
+                ),
+                inv("renew", "subscription_cycle", [ln("price_pro", after_reset, 2900)]),
+            ],
+            [sub_obj("active", "price_creator", a), sub_obj("active", "price_pro", a, period=reset)],
+            CREATOR + PRO + PRO,
+        ),
         # deferred proration: the upgrade's prorations ride on the next cycle invoice
-        "deferred_proration": ([
-            inv("create", "subscription_create", [ln("price_creator", PERIOD, 900)]),
-            inv("cycle", "subscription_cycle", [ln("price_creator", (change, PERIOD[1]), -600, proration=True),
-                                                ln("price_pro", (change, PERIOD[1]), 1300, proration=True),
-                                                ln("price_pro", NEXT, 2900)]),
-        ], [sub_obj("active", "price_pro", a, period=NEXT)], CREATOR + (PRO - CREATOR) + PRO),
+        "deferred_proration": (
+            [
+                inv("create", "subscription_create", [ln("price_creator", PERIOD, 900)]),
+                inv(
+                    "cycle",
+                    "subscription_cycle",
+                    [
+                        ln("price_creator", (change, PERIOD[1]), -600, proration=True),
+                        ln("price_pro", (change, PERIOD[1]), 1300, proration=True),
+                        ln("price_pro", NEXT, 2900),
+                    ],
+                ),
+            ],
+            [sub_obj("active", "price_pro", a, period=NEXT)],
+            CREATOR + (PRO - CREATOR) + PRO,
+        ),
         # two live subscriptions on one customer: each paid period earns its own allowance
-        "two_subscriptions": ([
-            inv("a1", "subscription_create", [ln("price_creator", PERIOD, 900)]),
-            inv("b1", "subscription_create", [ln("price_pro", PERIOD, 2900, sub=b)], sub=b),
-            inv("a2", "subscription_cycle", [ln("price_creator", NEXT, 900)]),
-            inv("b2", "subscription_cycle", [ln("price_pro", NEXT, 2900, sub=b)], sub=b),
-        ], [sub_obj("active", "price_creator", a), sub_obj("active", "price_pro", b)], 2 * CREATOR + 2 * PRO),
+        "two_subscriptions": (
+            [
+                inv("a1", "subscription_create", [ln("price_creator", PERIOD, 900)]),
+                inv("b1", "subscription_create", [ln("price_pro", PERIOD, 2900, sub=b)], sub=b),
+                inv("a2", "subscription_cycle", [ln("price_creator", NEXT, 900)]),
+                inv("b2", "subscription_cycle", [ln("price_pro", NEXT, 2900, sub=b)], sub=b),
+            ],
+            [sub_obj("active", "price_creator", a), sub_obj("active", "price_pro", b)],
+            2 * CREATOR + 2 * PRO,
+        ),
         # a second qualifying invoice for an already-paid period (e.g. a manual invoice) grants nothing
-        "second_invoice_same_period": ([
-            inv("create", "subscription_create", [ln("price_pro", PERIOD, 2900)]),
-            inv("extra", "subscription_update", [ln("price_pro", PERIOD, 2900)]),
-        ], [], PRO),
+        "second_invoice_same_period": (
+            [
+                inv("create", "subscription_create", [ln("price_pro", PERIOD, 2900)]),
+                inv("extra", "subscription_update", [ln("price_pro", PERIOD, 2900)]),
+            ],
+            [],
+            PRO,
+        ),
     }
 
 

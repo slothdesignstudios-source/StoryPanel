@@ -83,7 +83,9 @@ async def test_structured_call_reserves_schema_and_labels_too(monkeypatch: pytes
     schema_bytes = len(json.dumps(ModerationVerdict.model_json_schema()).encode())
     in_bytes = len(system.encode()) + len(user.encode()) + len(label.encode()) + schema_bytes
     price = pricing.require("fake", "fake-vision")
-    assert seen == [pricing.text_estimate(price, input_bytes=in_bytes, images_wh=[(100, 30)], max_tokens=16_000)]
+    assert seen == [
+        pricing.text_estimate(price, input_bytes=in_bytes, images_wh=[(100, 30)], max_tokens=16_000)
+    ]
 
 
 # ------------------------------------------------------------------ compute-time billing
@@ -115,7 +117,9 @@ async def _rows(pid: str | None) -> list[ProviderAttempt]:
             ProviderAttempt.project_id == uuid.UUID(pid)).order_by(ProviderAttempt.attempt_no))).scalars())  # fmt: skip
 
 
-async def test_compute_billed_request_is_cancelled_once_its_reserved_time_is_used(compute_billed_upscale: Any) -> None:
+async def test_compute_billed_request_is_cancelled_once_its_reserved_time_is_used(
+    compute_billed_upscale: Any,
+) -> None:
     """ESRGAN is billed per compute second. The reservation holds rate x budget; once that much
     time has passed the request is cancelled and the attempt closed, instead of being resumed by
     activity retries for up to the 40-minute schedule-to-close window."""
@@ -138,7 +142,9 @@ async def test_compute_billed_request_is_cancelled_once_its_reserved_time_is_use
     assert len([s for s in fake.control.models_used if s == "fake-upscale"]) == 1  # never resubmitted
 
 
-async def test_reconciliation_cancels_an_abandoned_compute_billed_request(compute_billed_upscale: Any) -> None:
+async def test_reconciliation_cancels_an_abandoned_compute_billed_request(
+    compute_billed_upscale: Any,
+) -> None:
     ctx = await _ctx()
     fake.control.pending_upscale_fetches = 99
     with pytest.raises(AppError):

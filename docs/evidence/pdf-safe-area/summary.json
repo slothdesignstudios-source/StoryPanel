@@ -1,0 +1,18 @@
+{
+ "page-long-dialogue": {
+  "before": 0,
+  "after": 0
+ },
+ "page-nonascii-edges": {
+  "before": 0,
+  "after": 0
+ },
+ "strip-sfx-tails": {
+  "before": 0,
+  "after": 0
+ },
+ "strip-wide-last": {
+  "before": 95,
+  "after": 0
+ }
+}

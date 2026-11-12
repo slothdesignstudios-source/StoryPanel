@@ -263,7 +263,9 @@ async def _step_anonymising(job: AccountDeletion) -> None:
         # Retained cost records keep amounts, models, dates and provider request ids (needed to
         # reconcile and import provider charges) but not operation targets, which can be character
         # slugs derived from user text. Ledger reasons never contain user text (append-only table).
-        await db.execute(text("update provider_usage set target_id = null where user_id = :u"), {"u": job.user_id})
+        await db.execute(
+            text("update provider_usage set target_id = null where user_id = :u"), {"u": job.user_id}
+        )
         await db.execute(update(User).where(User.id == job.user_id).values(
             email=None, auth_subject=f"deleted:{job.user_id}", stripe_customer_id=None, subscription_id=None))  # fmt: skip
         await db.execute(update(AccountDeletion).where(AccountDeletion.user_id == job.user_id).values(

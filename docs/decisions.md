@@ -67,3 +67,13 @@ breaks for every balloon (`lettering.typeset`) and stores them with the geometry
 with the same font files and never re-wraps; a local fit is used only as a live preview while a balloon is being
 resized, and is replaced by the server's result on save. A visual regression test compares the two renderers per
 balloon. This replaces the earlier limitation where browser and server could break lines differently.
+
+**D-PANELS (2026-11-12): a strip's requested panel count is data, not prose.** `ComicBrief.panels` and
+`FormatSpec.panels` (optional, strip only, clamped to 3-4) carry "a 3 panel strip" from intake to the
+script rule ("exactly N panels") and validation, so the count is checked before any panel image is paid
+for. The v1 intake prompt was edited in place (one sentence) rather than versioned: no live run has used it.
+
+**D-SAFE (2026-11-12): lettering lives in a 0.125 in print safe area.** Every writer of balloon geometry
+(automatic lettering, editor moves, layout changes) clamps all ink (shape, text, rotated SFX with outline,
+tail tip) to it. Overlaps that cannot be avoided in an over-full panel are flagged and shown, not hidden.
+Characters outside the bundled fonts (Latin-1 + typographic punctuation) are a script error.

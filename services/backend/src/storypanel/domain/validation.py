@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from storypanel.domain.schemas import ComicFormat, ComicScript, ScriptIssue
+from storypanel.pipeline.lettering import unsupported_chars
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,10 @@ def validate_script(
                 dpath = f"{path}.dialogue[{di}]"
                 if not d.text.strip():
                     err("empty_text", f"{dpath}.text", "Dialogue text is empty.")
+                missing = unsupported_chars(d.text)
+                if missing:
+                    err("unsupported_characters", f"{dpath}.text",
+                        f"The lettering font can't draw: {missing}. Use other characters.")  # fmt: skip
                 if word_count(d.text) > lim.max_words_per_balloon:
                     err("balloon_too_long", f"{dpath}.text",
                         f"Balloon has {word_count(d.text)} words; the limit is "

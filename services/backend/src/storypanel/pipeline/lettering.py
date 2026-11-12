@@ -25,6 +25,91 @@ TARGET_ASPECT = 1.3
 ELLIPSE_INSET = 0.74  # share of an ellipse's width/height usable by a text block
 BOX_PAD = 10.0
 BORDER_BREAK = 0.12  # how far (of panel size) a balloon may cross the border
+# Print safe area: all lettering stays 0.125 in inside the trim. Exports print the page 6 in wide
+# (render.PDF_TRIM_WIDTH_PT = 432 pt), so the margin is 9/432 of the page width in page units.
+SAFE_MARGIN_FRACTION = 9.0 / 432.0
+SFX_STROKE = 3.0  # page units the SFX ink outline extends beyond the glyphs (render: 2 x 3 wide, centred)
+
+
+def safe_rect(page_size: tuple[float, float]) -> Rect:
+    m = page_size[0] * SAFE_MARGIN_FRACTION
+    return (m, m, page_size[0] - 2 * m, page_size[1] - 2 * m)
+
+
+def _sfx_half_extents(text: str, w: float, h: float, size: float, rotation: float) -> tuple[float, float]:
+    """Half width/height of a rotated SFX's ink: the box or the drawn text, whichever is wider,
+    rotated about its centre (as both renderers draw it), plus the outline."""
+    half_w = max(w, measure(text.upper(), "bangers", size)) / 2 + SFX_STROKE
+    half_h = h / 2 + SFX_STROKE
+    a = math.radians(rotation)
+    return (half_w * abs(math.cos(a)) + half_h * abs(math.sin(a)),
+            half_w * abs(math.sin(a)) + half_h * abs(math.cos(a)))  # fmt: skip
+
+
+def ink_bounds(kind: str, text: str, g: dict[str, Any]) -> Rect:
+    """Everything a balloon draws (shape, text, SFX outline, tail tip), in page units."""
+    x, y, w, h = float(g["x"]), float(g["y"]), float(g["w"]), float(g["h"])
+    if kind == "sfx":
+        ex, ey = _sfx_half_extents(
+            text, w, h, float(g.get("font_size", SFX_FONT)), float(g.get("rotation", 0.0))
+        )
+        cx, cy = x + w / 2, y + h / 2
+        return (cx - ex, cy - ey, 2 * ex, 2 * ey)
+    x0, y0, x1, y1 = x, y, x + w, y + h
+    if g.get("tail"):
+        tx, ty = float(g["tail"]["x"]), float(g["tail"]["y"])
+        x0, y0, x1, y1 = min(x0, tx), min(y0, ty), max(x1, tx), max(y1, ty)
+    return (x0, y0, x1 - x0, y1 - y0)
+
+
+def outside_safe_area(kind: str, text: str, g: dict[str, Any], page_size: tuple[float, float]) -> bool:
+    sx, sy, sw, sh = safe_rect(page_size)
+    bx, by, bw, bh = ink_bounds(kind, text, g)
+    eps = 0.5
+    return bx < sx - eps or by < sy - eps or bx + bw > sx + sw + eps or by + bh > sy + sh + eps
+
+
+def clamp_to_safe_area(
+    kind: str, text: str, g: dict[str, Any], page_size: tuple[float, float]
+) -> dict[str, Any]:
+    """Move (and if necessary shrink) a balloon so all of its ink is inside the safe area."""
+    sx, sy, sw, sh = safe_rect(page_size)
+    out = dict(g)
+    out["w"], out["h"] = min(float(g["w"]), sw), min(float(g["h"]), sh)
+    if kind == "sfx":
+        ex, ey = _sfx_half_extents(text, out["w"], out["h"], float(g.get("font_size", SFX_FONT)),
+                                   float(g.get("rotation", 0.0)))  # fmt: skip
+        if 2 * ex > sw or 2 * ey > sh:  # too big even when centred: scale it down
+            f = min(sw / (2 * ex), sh / (2 * ey))
+            out["w"], out["h"] = out["w"] * f, out["h"] * f
+            out["font_size"] = float(g.get("font_size", SFX_FONT)) * f
+            ex, ey = ex * f, ey * f
+        cx = min(max(float(g["x"]) + out["w"] / 2, sx + ex), sx + sw - ex)
+        cy = min(max(float(g["y"]) + out["h"] / 2, sy + ey), sy + sh - ey)
+        out["x"], out["y"] = cx - out["w"] / 2, cy - out["h"] / 2
+        return out
+    out["x"] = min(max(float(g["x"]), sx), sx + sw - out["w"])
+    out["y"] = min(max(float(g["y"]), sy), sy + sh - out["h"])
+    if g.get("tail"):
+        out["tail"] = {"x": min(max(float(g["tail"]["x"]), sx), sx + sw),
+                       "y": min(max(float(g["tail"]["y"]), sy), sy + sh)}  # fmt: skip
+    return out
+
+
+@lru_cache(maxsize=1)
+def _supported() -> frozenset[int]:
+    """Code points every bundled lettering face can draw (body regular/bold and the SFX face)."""
+    from fontTools.ttLib import TTFont  # type: ignore[import-untyped]
+
+    faces = [("comic_neue", False), ("comic_neue", True), ("bangers", False)]
+    sets = [set(TTFont(str(font_path(n, b))).getBestCmap()) for n, b in faces]
+    return frozenset(set.intersection(*sets))
+
+
+def unsupported_chars(text: str) -> str:
+    """Characters the lettering fonts cannot draw (they would print as empty boxes)."""
+    ok = _supported()
+    return "".join(sorted({c for c in text if not c.isspace() and ord(c) not in ok}))
 
 
 @lru_cache(maxsize=256)
@@ -133,6 +218,16 @@ class Placed:
         return typeset(self.type, self.text, g, font)[0]
 
 
+def _ink_rect(p: Placed) -> Rect:
+    g = {"x": p.x, "y": p.y, "w": p.w, "h": p.h, "font_size": p.font_size, "rotation": p.rotation}
+    return ink_bounds(p.type, p.text, g) if p.type == "sfx" else (p.x, p.y, p.w, p.h)
+
+
+def _segment_hits(a: tuple[float, float], b: tuple[float, float], r: Rect, steps: int = 24) -> bool:
+    return any(r[0] < a[0] + (b[0] - a[0]) * t / steps < r[0] + r[2] and r[1] < a[1] + (b[1] - a[1]) * t / steps < r[1] + r[3]
+               for t in range(1, steps))  # fmt: skip
+
+
 def overlap(a: Rect, b: Rect) -> float:
     w = min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])
     h = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
@@ -198,9 +293,31 @@ def layout_panel(
             w = min(pw * 0.8, measure(text.upper(), "bangers", size) + 24)
             h = size * 1.3
             target = action or (px + pw * 0.3, py + ph * 0.55, pw * 0.4, ph * 0.3)
-            x = min(max(px + pad, target[0] + target[2] / 2 - w / 2), px + pw - w - pad)
-            y = min(max(py + pad, target[1] - h * 0.9), py + ph - h - pad)
-            placed.append(Placed(index, kind, None, text, x, y, w, h, size, rotation=-8.0))
+            tx = min(max(px + pad, target[0] + target[2] / 2 - w / 2), px + pw - w - pad)
+            ty = min(max(py + pad, target[1] - h * 0.9), py + ph - h - pad)
+            best_g: dict[str, Any] | None = None
+            for scale in (1.0, 0.85, 0.7, 0.55):  # a crowded panel gets a smaller SFX, not one over text
+                sw_, sh_, ss_ = w * scale, h * scale, size * scale
+                best_cost = math.inf
+                for iy in range(9):  # near the action, but never over other lettering
+                    for ix in range(9):
+                        cx = px + pad + (pw - sw_ - 2 * pad) * ix / 8
+                        cy = py + pad + (ph - sh_ - 2 * pad) * iy / 8
+                        g = clamp_to_safe_area(kind, text, {"x": cx, "y": cy, "w": sw_, "h": sh_, "font_size": ss_,
+                                                            "rotation": -8.0}, page_size)  # fmt: skip
+                        ink = ink_bounds(kind, text, g)
+                        cost = sum(overlap(ink, _ink_rect(q)) for q in placed) / (ink[2] * ink[3]) * 40.0
+                        cost += math.hypot(g["x"] - tx, g["y"] - ty) / math.hypot(pw, ph)
+                        if cost < best_cost - 1e-9:
+                            best_cost, best_g = cost, g
+                if best_cost < 2.0:  # no overlap (distance alone costs < ~1.5)
+                    break
+            assert best_g is not None
+            sfx = Placed(index, kind, None, text, best_g["x"], best_g["y"], best_g["w"], best_g["h"],
+                         best_g["font_size"], rotation=-8.0)  # fmt: skip
+            if any(overlap(_ink_rect(sfx), _ink_rect(q)) > 0 for q in placed):
+                sfx.flags.append("overlaps_lettering")
+            placed.append(sfx)
             continue
 
         max_w = pw * (0.92 if kind == "caption" else 0.62)
@@ -221,8 +338,20 @@ def layout_panel(
                 w, h = min(w, pw * (1 + 2 * grow)), min(h, ph * 0.8)
 
         if kind == "caption":
-            x = px + pad if captions % 2 == 0 else px + pw - w - pad
-            y = py + pad if captions % 2 == 0 else py + ph - h - pad
+            # corners in the usual order (first caption top-left, next bottom-right, ...), but a
+            # corner already holding lettering is skipped
+            corners = [(px + pad, py + pad), (px + pw - w - pad, py + ph - h - pad),
+                       (px + pw - w - pad, py + pad), (px + pad, py + ph - h - pad)]  # fmt: skip
+            corners = corners[captions % 2 :] + corners[: captions % 2]
+            options = []
+            for n, (cx, cy) in enumerate(corners):
+                g = clamp_to_safe_area(kind, text, {"x": cx, "y": cy, "w": w, "h": h}, page_size)
+                r = (g["x"], g["y"], g["w"], g["h"])
+                options.append((sum(overlap(r, _ink_rect(q)) for q in placed), n, g))
+            hit, _, g = min(options, key=lambda o: (o[0], o[1]))
+            x, y, w, h = g["x"], g["y"], g["w"], g["h"]
+            if hit > 0:
+                flags.append("overlaps_lettering")
             captions += 1
             placed.append(Placed(index, kind, None, text, x, y, w, h, size, flags=flags))
             prev_key = max(prev_key, reading_key((x, y, w, h), panel_rect)) if captions == 1 else prev_key
@@ -231,8 +360,10 @@ def layout_panel(
         head = heads.get(speaker or "")
         x0, x1 = px + pad - grow * pw, px + pw - w - pad + grow * pw
         y0, y1 = py + pad - grow * ph, py + ph - h - pad
-        x0, x1 = max(2.0, x0), min(page_size[0] - w - 2.0, max(x0, x1))
-        y0, y1 = max(2.0, y0), min(page_size[1] - h - 2.0, max(y0, y1))
+        sx, sy, sw, sh = safe_rect(page_size)  # never into the print margin, even when breaking the border
+        w, h = min(w, sw), min(h, sh)
+        x0, x1 = max(sx, x0), min(sx + sw - w, max(x0, x1))
+        y0, y1 = max(sy, y0), min(sy + sh - h, max(y0, y1))
         steps = 14
         best: tuple[float, float, float] | None = None
         for iy in range(steps + 1):
@@ -243,7 +374,7 @@ def layout_panel(
                 cost = sum(overlap(rect, z) for z in no_go) / (w * h) * 12.0
                 if action:
                     cost += overlap(rect, action) / (w * h) * 3.0
-                cost += sum(overlap(rect, p.rect) for p in placed) / (w * h) * 40.0
+                cost += sum(overlap(rect, _ink_rect(p)) for p in placed) / (w * h) * 40.0
                 cost += (cy - py) / ph * 1.2  # prefer the top of the panel
                 if head:
                     hx, hy = head[0] + head[2] / 2, head[1]
@@ -261,9 +392,14 @@ def layout_panel(
         rect = (x, y, w, h)
         if any(overlap(rect, z) > 0.15 * z[2] * z[3] for z in heads.values()):
             flags.append("covers_face")
-        tail = _tail_tip(rect, head) if head and kind == "speech" else None
-        if kind == "thought" and head:
-            tail = _tail_tip(rect, head)
+        tail = _tail_tip(rect, head) if head and kind in ("speech", "thought") else None
+        if tail is not None:  # a tail aimed at a speaker near the page edge stops inside the safe area
+            sx, sy, sw, sh = safe_rect(page_size)
+            tail = (min(max(tail[0], sx), sx + sw), min(max(tail[1], sy), sy + sh))
+            if any(_segment_hits((x + w / 2, y + h / 2), tail, _ink_rect(q)) for q in placed):
+                flags.append("tail_crosses_lettering")
+        if any(overlap(rect, _ink_rect(q)) > 0 for q in placed):
+            flags.append("overlaps_lettering")  # the panel is too full: shown to the user to fix
         placed.append(Placed(index, kind, speaker, text, x, y, w, h, size, tail=tail, flags=flags))
         prev_key = reading_key(rect, panel_rect)
     return placed
@@ -285,17 +421,18 @@ def typeset(
     """
     g = dict(geometry)
     g.setdefault("font_size", FONT_MAX)
+    missing = ["unsupported_characters"] if unsupported_chars(text) else []
     if kind == "sfx":
         g.update(
             text_size=float(g["font_size"]), lines=[" ".join(text.split()).upper()], typeset=TYPESET_VERSION
         )
-        return g, []
+        return g, missing
     iw, ih = inner_box(kind, float(g["w"]), float(g["h"]))
     size, lines, fits = fit_text(
         " ".join(text.split()), font, iw, ih, float(g["font_size"]), min_size=FONT_MIN - 4
     )
     g.update(text_size=size, lines=lines, typeset=TYPESET_VERSION)
-    return g, [] if fits else ["overflow"]
+    return g, missing + ([] if fits else ["overflow"])
 
 
 def check_geometry(kind: str, text: str, geometry: dict[str, Any], font: str = "comic_neue") -> list[str]:

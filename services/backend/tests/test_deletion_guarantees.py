@@ -22,7 +22,9 @@ from storypanel.services import deletion
 
 async def _user() -> uuid.UUID:
     async with transaction() as db:
-        u = User(id=uuid.uuid4(), auth_subject=f"t:{uuid.uuid4().hex}", email=f"{uuid.uuid4().hex[:8]}@example.com")
+        u = User(
+            id=uuid.uuid4(), auth_subject=f"t:{uuid.uuid4().hex}", email=f"{uuid.uuid4().hex[:8]}@example.com"
+        )
         db.add(u)
     return u.id
 
@@ -92,7 +94,11 @@ async def test_deletion_completes_while_a_charge_is_still_unresolved_and_reconci
     out = await metering.reconcile_open_requests(older_than=timedelta(minutes=30))
     assert out["failed"] == 1
     (att,) = await _attempts(uid)
-    assert (att.status, att.cost_basis, att.error_code) == ("cancel_confirmed", "unresolved", "cancel_acknowledged")
+    assert (att.status, att.cost_basis, att.error_code) == (
+        "cancel_confirmed",
+        "unresolved",
+        "cancel_acknowledged",
+    )
 
 
 async def test_only_minimal_accounting_is_retained_after_deletion(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -107,11 +113,15 @@ async def test_only_minimal_accounting_is_retained_after_deletion(monkeypatch: p
     await deletion.request_deletion(uid, source="user")
     status = await deletion.advance(uid)
     async with transaction() as db:
-        err = (await db.execute(select(AccountDeletion.last_error).where(AccountDeletion.user_id == uid))).scalar_one()
+        err = (
+            await db.execute(select(AccountDeletion.last_error).where(AccountDeletion.user_id == uid))
+        ).scalar_one()
     assert status == "completed", err
     async with transaction() as db:
         user = (await db.execute(select(User).where(User.id == uid))).scalar_one()
-        reasons = list((await db.execute(select(CreditLedger.reason).where(CreditLedger.user_id == uid))).scalars())
+        reasons = list(
+            (await db.execute(select(CreditLedger.reason).where(CreditLedger.user_id == uid))).scalars()
+        )
         ops = list((await db.execute(select(ProviderUsage).where(ProviderUsage.user_id == uid))).scalars())
         job = (await db.execute(select(AccountDeletion).where(AccountDeletion.user_id == uid))).scalar_one()
     assert user.email is None and user.auth_subject == f"deleted:{uid}"
@@ -132,9 +142,17 @@ def test_ledger_reasons_never_contain_user_written_text() -> None:
     offenders = []
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text())):
-            if isinstance(node, ast.keyword) and node.arg == "reason" and isinstance(node.value, ast.JoinedStr):
-                names = {n.attr if isinstance(n, ast.Attribute) else getattr(n, "id", "")
-                         for v in node.value.values if isinstance(v, ast.FormattedValue) for n in ast.walk(v.value)}
+            if (
+                isinstance(node, ast.keyword)
+                and node.arg == "reason"
+                and isinstance(node.value, ast.JoinedStr)
+            ):
+                names = {
+                    n.attr if isinstance(n, ast.Attribute) else getattr(n, "id", "")
+                    for v in node.value.values
+                    if isinstance(v, ast.FormattedValue)
+                    for n in ast.walk(v.value)
+                }
                 if names & {"name", "title", "prompt", "text", "instruction", "email"}:
                     offenders.append(f"{path.name}:{node.lineno}")
     assert offenders == []

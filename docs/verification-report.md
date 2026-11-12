@@ -1,5 +1,24 @@
 # Verification report
 
+## Pre-spend verification round, 2026-11-12 (from 259342e)
+
+Findings and fixes: [`remediation-tracker.md`](remediation-tracker.md), section "Verification round". Cost
+model: [`smoke-test-cost.md`](smoke-test-cost.md). Handoff: [`first-live-comic.md`](first-live-comic.md).
+Simulated providers and local stubs only: **no paid call, no live integration.**
+
+| Check | Result |
+|---|---|
+| Backend `uv run pytest -q` (run alone) | **342 passed** (was 281). New: `test_cost_bounds` 7, `test_strip_panels` 3, `test_billing_properties` 5 (40 shuffled deliveries), `test_deletion_guarantees` 4, `test_print_safe_area` 42. New tests fail on the previous code (`evidence/remediation/*-before.txt`), except the deletion test for unresolved charges, which pins behaviour that already held, and the billing property test, which is checked by mutation instead |
+| `ruff format --check`, `ruff check`, `mypy` | clean |
+| Web `tsc`, `eslint`, `vitest` | clean (1 pre-existing lint warning); 8 unit tests |
+| Browser suite, rebuilt native stack | **11 passed, 1 skipped** (live Clerk spec, no credentials) |
+| `live-smoke.py run --simulated` (`evidence/smoke/sim5`) | 2 characters; script **3 panels** (checked before approval); 3 final panels; edit 202; PDF (vector text, all fonts embedded), PNG 2000×700 and CBZ valid. Simulated prices, so not a cost measurement |
+| `live-smoke.py estimate` | estimated ≈ USD 1.14; minimum cap for a clean run USD 2.21; USD 20.80 held if every retry ran. **Not a guaranteed upper bound** |
+| `live-smoke.py preflight` (no keys) | fails closed, naming the three missing keys |
+| Billing invariance mutation check | 2 of 2 deliberate entitlement bugs caught (`billing-properties-mutations.txt`) |
+| PDF safe area (`evidence/pdf-safe-area/`) | 0 lettering pixels outside the 0.125 in safe area on four representative pages (95 before, on one page); no hidden text on them; 0 unflagged overlaps across 518 maximum-load pairs |
+| Price verification | Anthropic prices verified on the official page (fetched; copies in `evidence/pricing-2026-11-12/`). fal and Voyage **unverified** (search summaries; their pages are blocked here) |
+
 ## Regression audit and live-integration preparation, 2026-11-12 (from dd0775a)
 
 Findings and fixes: [`remediation-tracker.md`](remediation-tracker.md) § Audit 2026-11-12. Setup:

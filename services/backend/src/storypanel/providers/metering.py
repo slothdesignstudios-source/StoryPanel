@@ -465,8 +465,12 @@ async def _over_budget(att: Attempt, request_id: str, cancel: Callable[[str, str
     metrics.provider_calls.labels(att.provider, att.operation, "time_budget").inc()
     log.warning("provider_time_budget_exceeded", model=att.model, provider_request_id=request_id,
                 budget_s=_time_budget(att))  # fmt: skip
-    return fail(ErrorCode.PROVIDER_ERROR, "This step took longer than its cost limit allows.", "time_budget",
-                retryable=False)
+    return fail(
+        ErrorCode.PROVIDER_ERROR,
+        "This step took longer than its cost limit allows.",
+        "time_budget",
+        retryable=False,
+    )
 
 
 async def _paid_request(
@@ -815,7 +819,9 @@ async def reconcile_open_requests(older_than: timedelta = timedelta(minutes=30))
             if budget is not None and att.status == "started" and _elapsed(att) >= budget:
                 # Abandoned compute-billed job past its reserved time: stop paying for it.
                 try:
-                    cancel = providers.upscale.cancel if att.operation == "upscale" else providers.image.cancel
+                    cancel = (
+                        providers.upscale.cancel if att.operation == "upscale" else providers.image.cancel
+                    )
                     await cancel(att.model, att.request_id)
                 except Exception:
                     log.warning("provider_cancel_failed", model=att.model, provider_request_id=att.request_id)

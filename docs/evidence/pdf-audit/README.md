@@ -21,9 +21,11 @@ with an 18 px tail overshoot at 1600 px width):
    stroke at twice the width underneath, fill on top, as the PNG renderer does.
 
 Remaining, harmless differences (residual differing pixels 0.8 % synthetic page, after fixes):
-anti-aliasing of glyph edges and curves (pdftoppm vs Pillow at 2x supersampling), sub-pixel font
-hinting, and lettering that crosses the trim edge continuing into the 0.125 in bleed (cut off in print;
-the PNG clips at the page edge). Text, line breaks, balloon geometry, tails, reading order (draw order
+anti-aliasing of glyph edges and curves (pdftoppm vs Pillow at 2x supersampling) and sub-pixel font
+hinting. **Correction (2026-11-12, second round):** this note previously also listed lettering that
+crosses the trim edge into the bleed as harmless. It is not: such lettering is cut off in print. All
+lettering is now kept inside a 0.125 in safe area; see [`../pdf-safe-area/`](../pdf-safe-area/README.md).
+Text, line breaks, balloon geometry, tails, reading order (draw order
 by `order_index` in both), fonts (embedded ComicNeue/Bangers subsets) and selectable text match.
 Editor (Konva) vs PNG export is covered separately by `e2e/lettering.spec.ts` (per-balloon ink overlap
 >= 0.997).

@@ -170,7 +170,7 @@ function BalloonTools({ balloon, geometry, pageSize, onGeometry, onText, onDelet
   const words = wordCount(textValue);
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2"><h3 className="text-lg font-bold capitalize">{balloon.type === "sfx" ? "Sound effect" : balloon.type}</h3>{balloon.flags.includes("overflow") && <Badge tone="warn">Text doesn&apos;t fit</Badge>}</div>
+      <div className="flex items-center gap-2"><h3 className="text-lg font-bold capitalize">{balloon.type === "sfx" ? "Sound effect" : balloon.type}</h3>{FLAG_LABELS.filter(([f]) => balloon.flags.includes(f)).map(([f, label]) => <Badge key={f} tone="warn">{label}</Badge>)}</div>
       <Field label="Text" hint={`${words} of 25 words`} error={words > 25 ? "Balloons hold at most 25 words. Shorten this line." : null}>
         {(ids) => <Textarea {...ids} className="min-h-20 font-comic text-base" maxLength={300} value={textValue} onChange={(e) => onText(e.target.value)} />}
       </Field>
@@ -195,6 +195,14 @@ function BalloonTools({ balloon, geometry, pageSize, onGeometry, onText, onDelet
 }
 
 // ------------------------------------------------------------------ editor
+/** Lettering problems the server flags; each needs the user to move or shorten the balloon. */
+const FLAG_LABELS: [string, string][] = [
+  ["overflow", "Text doesn't fit"],
+  ["overlaps_lettering", "Overlaps other lettering"],
+  ["tail_crosses_lettering", "Tail crosses other lettering"],
+  ["unsupported_characters", "Contains characters that can't be printed"],
+];
+
 export function Editor({ project }: { project: Project }) {
   const qc = useQueryClient();
   const { pageIndex, panelId, balloonId, drafts, texts, save, set } = useEditor();

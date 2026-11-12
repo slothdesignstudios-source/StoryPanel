@@ -205,7 +205,9 @@ def text_input_bound(*, input_bytes: int, images_wh: list[tuple[int, int]]) -> i
     return input_bytes + visual + TEXT_OVERHEAD_TOKENS
 
 
-def text_estimate(price: Price, *, input_bytes: int, images_wh: list[tuple[int, int]], max_tokens: int) -> Decimal:
+def text_estimate(
+    price: Price, *, input_bytes: int, images_wh: list[tuple[int, int]], max_tokens: int
+) -> Decimal:
     """Reservation for one call: the input bound plus the full output cap. `max_tokens` is a
     provider-enforced ceiling on output, thinking included."""
     return text_cost(price, text_input_bound(input_bytes=input_bytes, images_wh=images_wh), max_tokens)

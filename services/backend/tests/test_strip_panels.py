@@ -8,12 +8,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.conftest import wait_for
-from tests.test_unit import KIRO, LOC, MEI, script
-
 from storypanel.domain.schemas import ComicBrief, ComicFormat, FormatSpec, StoryBible
 from storypanel.domain.validation import validate_script
 from storypanel.pipeline import story
+from tests.conftest import wait_for
+from tests.test_unit import KIRO, LOC, MEI, script
 
 
 def _brief(panels: int | None, fmt: ComicFormat = ComicFormat.STRIP) -> ComicBrief:

@@ -1,14 +1,24 @@
 # Provider, model and API-version verification — 2026-11-12
 
-Official pages could not be loaded directly from the build sandbox (`docs.anthropic.com`, `fal.ai`,
-`docs.voyageai.com`, `docs.stripe.com` are outside its network policy, which was not changed).
-Values below come from web-search results restricted to each provider's official domains, plus
-Anthropic's own `claude-api` reference (model table cached 2026-11-03). **Before the first paid run,
-open each source and confirm**; `packages/pricing/pricing.2026-11-12.json` records the same values with
-their sources, and the app refuses prices older than `SP_PRICING_MAX_AGE_DAYS` (60).
+**Second pass, same day:** `platform.claude.com` is now reachable from the sandbox. The Anthropic rows
+below were re-checked against the official pages, fetched directly; copies are in
+`evidence/pricing-2026-11-12/`. `fal.ai`, `docs.fal.ai`, `docs.voyageai.com` and `docs.stripe.com` are
+still blocked by the network policy, which was not changed. Their values come only from web-search
+results restricted to each provider's own domain, and are **unverified** until someone opens the page.
 
-No provider or model was substituted: the configuration keeps the models the project already
-documented (`config/live-smoke.env`).
+Verified from official Anthropic pages (fetched 2026-11-12):
+- **Prices:** Sonnet 5.5 $2 in / $10 out per MTok. Haiku 5.5 $0.10 / $0.50 (prompts ≤ 100K tokens).
+  Sonnet 5 (Sonnet 5.5's only server-side fallback target) $2 / $10. `inference_geo: "us"` costs ×1.1
+  (the app does not set it).
+- **Output cap:** `max_tokens` is "a hard cap on total output for the request, thinking and response text
+  combined" (adaptive thinking page). Thinking is billed as output tokens.
+- **Images:** an image costs ⌈w/28⌉ × ⌈h/28⌉ visual tokens, at most 4,784 on Claude 4.7+ models (vision page).
+- **Refusals:** refused requests are billed for tokens generated. With server-side fallback, the refusal
+  is billed in addition to the fallback request when it arrives mid-stream or is in a billed category.
+  Haiku 5.5 has no server-side fallback (refusals-and-fallback page).
+- **Token counting** is free (token-counting page).
+- **Spend limits:** organisations and workspaces can set monthly spend limits in the Console. Requests then
+  return HTTP 400 (rate-limits page). Nothing there says requests already in flight are stopped.
 
 ## Models and capabilities
 

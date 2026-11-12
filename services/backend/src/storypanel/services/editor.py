@@ -154,15 +154,10 @@ async def feedback(db: AsyncSession, panel_id: uuid.UUID, owner_id: uuid.UUID, r
 
 
 # ------------------------------------------------------------------ balloons
-def _clamp_geometry(g: dict[str, Any], page_size: tuple[int, int]) -> dict[str, Any]:
-    w = min(float(g["w"]), page_size[0])
-    h = min(float(g["h"]), page_size[1])
-    out = {**g, "w": w, "h": h, "x": min(max(0.0, float(g["x"])), page_size[0] - w),
-           "y": min(max(0.0, float(g["y"])), page_size[1] - h)}  # fmt: skip
-    if g.get("tail"):
-        out["tail"] = {"x": min(max(0.0, float(g["tail"]["x"])), page_size[0]),
-                       "y": min(max(0.0, float(g["tail"]["y"])), page_size[1])}  # fmt: skip
-    return out
+def _clamp_geometry(g: dict[str, Any], page_size: tuple[int, int], kind: str, text: str) -> dict[str, Any]:
+    """All lettering ink (shape, text, SFX outline, tail) inside the print safe area, never the
+    trim edge or bleed, where it would be cut off."""
+    return lettering.clamp_to_safe_area(kind, text, g, (float(page_size[0]), float(page_size[1])))
 
 
 def _check_text(text: str) -> None:
@@ -170,6 +165,10 @@ def _check_text(text: str) -> None:
     if word_count(text) > s.max_words_per_balloon:
         raise AppError(ErrorCode.VALIDATION, f"Balloons hold at most {s.max_words_per_balloon} words.",
                        fields=[{"field": "text", "message": "Shorten this line or split it."}])  # fmt: skip
+    missing = lettering.unsupported_chars(text)
+    if missing:
+        raise AppError(ErrorCode.VALIDATION, f"The lettering font can't draw these characters: {missing}",
+                       fields=[{"field": "text", "message": f"Remove or replace: {missing}"}])  # fmt: skip
     verdict = moderation.rule_check(text)
     if verdict is not None:
         raise AppError(ErrorCode.MODERATION_BLOCKED, verdict.user_message)
@@ -194,10 +193,10 @@ async def patch_balloon(db: AsyncSession, balloon_id: uuid.UUID, owner_id: uuid.
     if body.text is not None:
         _check_text(body.text)
         b.text = " ".join(body.text.split())
-    if body.geometry is not None:
-        # Typesetting fields are server-owned: whatever the client sent is recomputed.
-        b.geometry = _clamp_geometry(body.geometry.model_dump(), page_size)
-    b.geometry, b.flags = lettering.typeset(b.type, b.text, b.geometry)
+    # Typesetting fields are server-owned: whatever the client sent is recomputed. Lettering is
+    # kept inside the print safe area whether the box moved or its text (e.g. a wider SFX) changed.
+    g = body.geometry.model_dump() if body.geometry is not None else dict(b.geometry)
+    b.geometry, b.flags = lettering.typeset(b.type, b.text, _clamp_geometry(g, page_size, b.type, b.text))
     b.user_edited = True
     b.version += 1
     await _touch(db, project, "balloon.updated", {"balloon_id": str(b.id), "panel_id": str(b.panel_id),
@@ -269,7 +268,7 @@ async def _move_balloons(db: AsyncSession, panel: Panel, old: tuple[float, ...],
                          page_size: tuple[int, int]) -> None:  # fmt: skip
     for b in (await db.execute(select(Balloon).where(Balloon.panel_id == panel.id))).scalars():
         b.geometry, b.flags = lettering.typeset(
-            b.type, b.text, _clamp_geometry(_remap(b.geometry, old, new), page_size)
+            b.type, b.text, _clamp_geometry(_remap(b.geometry, old, new), page_size, b.type, b.text)
         )
         b.version += 1
 
