@@ -83,7 +83,10 @@ Postgres/Redis/S3-simulation/Temporal), **Fixed, unit-verified** (isolated doubl
 The archived SIGKILL drill recorded `succeeded|2|actual` because the fake provider kept jobs in
 process memory. A Redis-backed durable fake queue (`SP_FAKE_DURABLE_QUEUE=1`) now outlives the
 worker like a provider queue and counts provider-side submissions; `scripts/verify-release.py`
-asserts one attempt, one submission, and provider submissions = recorded attempts.
+asserts one attempt, one submission, and provider submissions = recorded attempts. Result 2026-11-12: PASS —
+`succeeded|1|calculated`, 1 attempt for the in-flight operation, 8 provider-side submissions = 8 recorded attempts.
+(The first run failed: the durable fake queue stored raw pickle bytes that the shared text-decoding Redis client could
+not read back; fixed and covered by `test_durable_fake_queue_survives_a_new_provider_instance`.)
 
 ## P0 — Account deletion and privacy
 

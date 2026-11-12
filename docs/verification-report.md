@@ -20,7 +20,8 @@ Per-finding reproduction, fix and tests: [`remediation-tracker.md`](remediation-
 | Terraform | `terraform fmt -check` (container) | passes after fixing a syntax error the earlier static check missed; `init/validate` blocked: `registry.terraform.io` Forbidden (B6) |
 | Infra static checks | `python scripts/validate-infra.py` | 0 problems |
 | Dependency audit | `pnpm audit --prod`; `pip-audit` | no known vulnerabilities |
-| Release drill | `python scripts/verify-release.py` | see `evidence/release-verification.json` |
+| Release drill | `python scripts/verify-release.py` | **3/3 PASS** (`evidence/release-verification.json`): SIGKILL mid-request → resumed, `succeeded|1|calculated`, 1 attempt, provider-side submissions 8 = recorded attempts 8, 64.5 s to the gate; load 20 users / 1,588 requests, 0 errors, p95 0.153 s, zero ledger/hold drift, 0 provider rows left open; restore 33 tables / 4,177 rows identical at head 0009 |
+| Client bundle secrets | `scripts/check-bundle-secrets.sh` | PASS (41 files) |
 
 ### Limits of this evidence
 - Provider behaviour (404 vs expiry, cancellation after completion, billing of failed jobs) is modelled by the
