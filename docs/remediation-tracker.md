@@ -315,3 +315,47 @@ The owner has no fal or Voyage account. Simulated providers and mocked HTTP tran
 | Configuration | `.env.example`, `config/live-smoke.env`, `render.yaml`, nightly eval workflow, `stack-env.sh`, `native-stack.sh` (web started without any provider key), PostgreSQL version auto-detected | blueprint test; shell syntax | Done |
 | Smoke tooling | Preflight checks the three hosts and uses free model lookups for each key. `--image-provider`. The cost model is rebuilt for token-billed images and Gemini QA | Simulated runs for both providers (`evidence/smoke/sim-*-20261114`) | Done |
 | Prices | OpenAI and Gemini rows **unverified** (search summaries; official pages blocked). Higher rate used where sources conflicted | `provider-verification.md` | Open (B5) |
+
+## Approved scope 2026-11-14: credits, approvals, story fidelity, QA wording, layout (from c6a45b1)
+
+Approved by the owner after the Phase 1 diagnosis and Phase 2 plan. **No paid calls, no deployment.**
+Results are labelled code-confirmed, simulated-test-confirmed, visually verified (screenshots) or
+live-provider-verified; nothing in this round is live-provider-verified.
+
+**Product decisions (owner):**
+- Prices and chargeable outcomes unchanged, including needs-attention panels and superseded
+  regenerates/edits. Those policies are stated explicitly in the UI.
+- Editable structured continuity rules, backwards compatible. Existing world rules are offered for
+  review and classification. Their original text is kept, and no details are invented.
+- Character-sheet QA flags problems for review. No automatic paid redraws.
+- Story-consistency uncertainty or an unavailable check can be overridden explicitly. The approved
+  version and the exception are recorded. Safety and moderation failures stay blocking.
+- Strip layouts are preserved. The UI explains that the wide slot is last; panels are not reordered
+  and old comics are not changed.
+- Unsupported lettering characters are allowed in planning-only input, with a warning. Font coverage
+  is still enforced on rendered text. Nothing is transliterated silently.
+- No paid A/B tests or live red-team evaluations yet.
+- Lettering placement is improved deterministically, using fixtures. Real-image visual validation is
+  marked pending where there is no evidence.
+
+**Corrections to the plan (owner):**
+- Credit history comes from immutable events. An append-only reservation-event log is added for future
+  operations; older detail is marked unavailable or approximate. Settlements are never counted twice.
+- The 12-credit drop stays unresolved until the account evidence arrives (`scripts/sql/reconcile-comic.sql`).
+- Approvals are bound to the exact persisted versions on the server, and stale approvals are rejected
+  transactionally. Tests cover concurrent tabs and a save racing an approval.
+- Beat tags are validated deterministically, and the consistency check also judges whether each panel
+  expresses its beat.
+- QA concurrency is deferred until the identity-input contract, regression outcomes, cost and
+  cancellation behaviour are demonstrated. A measurement report comes first.
+- Lettering insets of 66% and 58% are starting values. They are tested against rendered shapes, and
+  geometry tests are not counted as visual verification.
+
+| Group | Scope | Status |
+|---|---|---|
+| A | Stale/rejected panel-hold leak; credit-path regressions; append-only reservation events; credit activity view; header refresh; explicit charging-policy text; scoped reconciliation SQL file | In progress |
+| B | Approve disabled while edits or saves are pending; server-side version binding and stale rejection; Themes and World rules editing; server length and nonblank validation; planning-input glyph warnings | Pending |
+| C | Continuity rules plus legacy world-rule classification; propagation into sheet, panel and edit prompts (prompt v2); beat tags plus a semantic beat check; script consistency check with recorded overrides; character-sheet QA flags; panel required-element QA | Pending |
+| D | QA reason categories; "not checked" kept distinct from defects; completion wording | Pending |
+| E | Preview alignment, clipped controls, text inputs, turnaround display, strip "Large" explanation, lettering inset and subject/SFX avoidance with bounds tests | Pending |
+| F | Read-only performance measurement report; speculative optimisations and paid experiments left pending | Pending |
