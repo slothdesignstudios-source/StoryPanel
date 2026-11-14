@@ -354,12 +354,19 @@ async def stage_check_approval(project_id: uuid.UUID, kind: str, version: int) -
         return {"valid": await repo.approval_is_current(db, project_id, kind, version)}
 
 
-async def stage_begin_scripting(project_id: uuid.UUID) -> None:
+async def stage_begin_scripting(project_id: uuid.UUID, version: int | None = None) -> dict[str, Any]:
+    """Leave the cast gate only if the approved cast version is still the current one, checked
+    under the same lock that Story Bible saves and revisions take: a save that landed after the
+    approval check sends the workflow back to the gate instead of scripting from an unapproved
+    Bible. (`version` is absent only in workflow histories recorded before this check existed.)"""
     async with transaction() as db:
         project = await repo.get_project(db, project_id, lock=True)
         if project.status == S.AWAITING_CAST_APPROVAL.value:
+            if version is not None and not await repo.approval_is_current(db, project_id, "cast", version):
+                return {"stale": True}
             await repo.set_status(db, project, S.SCRIPTING)
             await events.notify_after_commit(db)
+        return {"stale": False}
 
 
 async def stage_script(project_id: uuid.UUID) -> dict[str, Any]:
@@ -405,7 +412,7 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
     full moderation gate on the edited text before any image is paid for."""
     async with transaction() as db:
         if not await repo.approval_is_current(db, project_id, "script", version):
-            await _release_panel_hold(db, project_id, version)
+            await release_panel_hold(db, project_id, version)
             return {"outcome": "stale"}
         project = await repo.get_project(db, project_id)
         row = await repo.script_row(db, project_id, version)
@@ -414,7 +421,7 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
     assert row is not None and bible is not None
     if has_errors([_issue(i) for i in row.issues]):
         async with transaction() as db:
-            await _release_panel_hold(db, project_id, version)
+            await release_panel_hold(db, project_id, version)
         return {"outcome": "stale"}
     if row.source == "user":
         script = repo.parse_script(row)
@@ -431,7 +438,7 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
                 await db.execute(update(Approval).where(
                     Approval.project_id == project_id, Approval.kind == "script",
                     Approval.content_version == version).values(status="rejected"))  # fmt: skip
-                await _release_panel_hold(db, project_id, version)
+                await release_panel_hold(db, project_id, version)
                 await events.emit(db, project_id, "script.rejected",
                                   {"message": verdict.user_message, "version": version})  # fmt: skip
                 await events.notify_after_commit(db)
@@ -439,7 +446,7 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
     return {"outcome": "ok"}
 
 
-async def _release_panel_hold(db: Any, project_id: uuid.UUID, version: int) -> None:
+async def release_panel_hold(db: Any, project_id: uuid.UUID, version: int) -> None:
     """An approval that will not be drawn must not keep its illustration hold: the next approval
     holds again under its own key, and both would count against the available balance."""
     from storypanel.db.models import CreditReservation

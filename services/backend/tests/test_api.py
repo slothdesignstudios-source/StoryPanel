@@ -208,6 +208,12 @@ async def test_editor_layout_reorder_and_balloon_rules(client: Any, headers: dic
     blocked = await client.patch(f"/v1/balloons/{b['id']}", headers=headers,
                                  json={"version": b["version"] + 1, "text": "Batman says hi"})  # fmt: skip
     assert blocked.json()["error"]["code"] == "moderation_blocked"
+    # Rendered text keeps enforcing font coverage (planning input does not): edit and create.
+    for call in (client.patch(f"/v1/balloons/{b['id']}", headers=headers, json={"version": b["version"] + 1, "text": "Cześć Łukasz"}),
+                 client.post(f"/v1/panels/{moved['id']}/balloons", headers=headers, json={"type": "caption", "text": "Łódź"}),
+                 client.patch(f"/v1/balloons/{b['id']}", headers=headers, json={"version": b["version"] + 1, "text": "   "})):  # fmt: skip
+        r = await call
+        assert r.status_code == 422, r.text
     for n in range(2):
         ok = await client.post(f"/v1/panels/{moved['id']}/balloons", headers=headers,
                                json={"type": "caption", "text": f"Extra {n}"})  # fmt: skip

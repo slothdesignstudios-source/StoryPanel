@@ -47,6 +47,14 @@ async def stage_plan_pages(project_id: uuid.UUID, script_version: int) -> dict[s
     Returns the work plan: per page, chains of panels that must be drawn in order."""
     async with transaction() as db:
         project = await repo.get_project(db, project_id, lock=True)
+        if (project.status == S.AWAITING_SCRIPT_APPROVAL.value
+                and not await repo.approval_is_current(db, project_id, "script", script_version)):  # fmt: skip
+            # A newer save (or a rejection) landed after the approval was checked: never draw a
+            # version that is no longer the approved one. Release its hold; back to the gate.
+            from storypanel.pipeline.stages_plan import release_panel_hold
+
+            await release_panel_hold(db, project_id, script_version)
+            return {"stale": True, "pages": []}
         existing = await repo.pages_with_panels(db, project_id)
         if not existing:
             row = await repo.script_row(db, project_id, script_version)

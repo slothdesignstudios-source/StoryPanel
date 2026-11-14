@@ -224,9 +224,13 @@ class ComicWorkflow:
 
         if start <= 2:
             self._stage = "cast_gate"
-            if await self._gate(pid, "cast", inp["approval_ttl_days"]) is None:
-                return await self._expire(pid, "cast_gate")
-            await act("begin_scripting", {"project_id": pid}, DB)
+            while True:
+                cast_version = await self._gate(pid, "cast", inp["approval_ttl_days"])
+                if cast_version is None:
+                    return await self._expire(pid, "cast_gate")
+                began = await act("begin_scripting", {"project_id": pid, "version": cast_version}, DB)
+                if not began.get("stale"):
+                    break  # a save that raced the approval leaves the comic at the gate
 
         if start <= 3:
             self._stage = "scripting"
@@ -234,15 +238,22 @@ class ComicWorkflow:
             if res["outcome"] == "blocked":
                 return {"status": "blocked"}
 
+        plan: dict[str, Any] | None = None
         if start <= 4:
-            self._stage = "script_gate"
-            approved = await self._gate(pid, "script", inp["approval_ttl_days"])
-            if approved is None:
-                return await self._expire(pid, "script_gate")
-            script_version = approved
+            while True:
+                self._stage = "script_gate"
+                approved = await self._gate(pid, "script", inp["approval_ttl_days"])
+                if approved is None:
+                    return await self._expire(pid, "script_gate")
+                script_version = approved
+                self._stage = "illustrating"
+                plan = await act("plan_pages", {"project_id": pid, "script_version": script_version}, DB)
+                if not plan.get("stale"):
+                    break  # stale: a newer save landed after the check; wait for a new approval
 
         self._stage = "illustrating"
-        plan = await act("plan_pages", {"project_id": pid, "script_version": script_version}, DB)
+        if plan is None:  # resumed while illustrating: no gate
+            plan = await act("plan_pages", {"project_id": pid, "script_version": script_version}, DB)
         retries = int(inp["max_qa_retries"])
         run_key = inp.get("run_key") or "initial"  # a resumed run gets fresh attempts
 

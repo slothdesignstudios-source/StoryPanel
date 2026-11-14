@@ -1224,7 +1224,10 @@ export interface components {
             /** Version */
             version: number;
         };
-        /** PatchBible */
+        /**
+         * PatchBible
+         * @description Whitespace is stripped first, so blank values are refused, not stored.
+         */
         PatchBible: {
             /** Cast Version */
             cast_version: number;

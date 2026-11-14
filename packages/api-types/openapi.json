@@ -1937,6 +1937,7 @@
    },
    "PatchBible": {
     "additionalProperties": false,
+    "description": "Whitespace is stripped first, so blank values are refused, not stored.",
     "properties": {
      "cast_version": {
       "minimum": 1.0,
@@ -1947,6 +1948,7 @@
       "anyOf": [
        {
         "maxLength": 600,
+        "minLength": 1,
         "type": "string"
        },
        {
@@ -1959,6 +1961,7 @@
       "anyOf": [
        {
         "maxLength": 600,
+        "minLength": 1,
         "type": "string"
        },
        {
@@ -1971,6 +1974,8 @@
       "anyOf": [
        {
         "items": {
+         "maxLength": 300,
+         "minLength": 1,
          "type": "string"
         },
         "maxItems": 8,
@@ -1999,6 +2004,7 @@
       "anyOf": [
        {
         "maxLength": 200,
+        "minLength": 1,
         "type": "string"
        },
        {
@@ -2011,6 +2017,8 @@
       "anyOf": [
        {
         "items": {
+         "maxLength": 300,
+         "minLength": 1,
          "type": "string"
         },
         "maxItems": 8,

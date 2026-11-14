@@ -36,7 +36,7 @@ from storypanel.domain.states import ProjectStatus as S
 from storypanel.domain.validation import has_errors, validate_script
 from storypanel.errors import AppError, ErrorCode, invalid_state, not_found, version_conflict
 from storypanel.obs import metrics
-from storypanel.pipeline import lettering, moderation, story
+from storypanel.pipeline import moderation, story
 from storypanel.pipeline.stages_art import panel_rect
 from storypanel.pipeline.stages_plan import record_approval
 from storypanel.services import credits, events, outbox, repo
@@ -77,12 +77,9 @@ async def create_project(db: AsyncSession, *, user_id: uuid.UUID, plan: str, bod
         raise AppError(ErrorCode.MODERATION_BLOCKED, verdict.user_message,
                        fields=[{"field": "prompt", "message": verdict.suggested_rewrite or
                                 "Please change the idea and try again."}])  # fmt: skip
-    missing = lettering.unsupported_chars(body.prompt)
-    if missing:
-        # Refused before any paid call: a story in characters the fonts cannot draw could not be
-        # lettered, and we never rewrite the user's words for them.
-        raise AppError(ErrorCode.VALIDATION, lettering.unsupported_message(missing),
-                       fields=[{"field": "prompt", "message": lettering.unsupported_message(missing)}])  # fmt: skip
+    # The idea is planning input: it is never lettered itself, so characters the fonts cannot draw
+    # are allowed here (the page shows a warning). Font coverage is enforced where text is
+    # rendered: script dialogue (validate_script) and balloon edits. Nothing is transliterated.
     answers: dict[str, str] = {}
     if body.style_preset:
         if body.style_preset not in styles().allowed_for_plan(plan):

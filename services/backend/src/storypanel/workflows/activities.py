@@ -137,8 +137,8 @@ async def check_approval(arg: dict[str, Any]) -> dict[str, Any]:
 
 
 @stage_activity("begin_scripting")
-async def begin_scripting(arg: dict[str, Any]) -> None:
-    await plan.stage_begin_scripting(_id(arg, "project_id"))
+async def begin_scripting(arg: dict[str, Any]) -> dict[str, Any]:
+    return await plan.stage_begin_scripting(_id(arg, "project_id"), arg.get("version"))
 
 
 @stage_activity("script")

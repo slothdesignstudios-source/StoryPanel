@@ -7,7 +7,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Card, Field, Notice, Select, Textarea, cn } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
 import { pk } from "@/lib/session";
-import { LETTERING_SUPPORTED_SUMMARY, unsupportedLetteringChars, unsupportedLetteringMessage } from "@/lib/lettering-charset";
+import { LETTERING_SUPPORTED_SUMMARY, unsupportedLetteringChars } from "@/lib/lettering-charset";
 
 const STARTERS = [
   { label: "Birthday comic", prompt: "A birthday comic for my friend who loves hiking and terrible puns. 2 pages, warm and funny." },
@@ -49,8 +49,12 @@ export default function NewComic() {
   });
   const err = create.error instanceof ApiError ? create.error : null;
   const unsupported = unsupportedLetteringChars(prompt);
-  const promptError = (unsupported.length ? unsupportedLetteringMessage(unsupported) : null)
-    ?? err?.fields.find((f) => f.field === "prompt")?.message ?? (err?.code === "moderation_blocked" ? err.message : null);
+  const promptError = err?.fields.find((f) => f.field === "prompt")?.message ?? (err?.code === "moderation_blocked" ? err.message : null);
+  // The idea itself is never lettered, so these characters are allowed here; only the script's
+  // speech, captions and sound effects must use characters the fonts can print.
+  const planningWarning = unsupported.length
+    ? `Your idea can use ${unsupported.slice(0, 8).join(", ")}${unsupported.length > 8 ? "…" : ""}, but those characters can't be printed in speech, captions or sound effects. If any end up in the script, you'll be asked to change them there; nothing is changed for you.`
+    : null;
   const tooShort = prompt.trim().length < 10;
   const providers = (meta.data?.image_providers ?? []).filter((p) => p.available || p.id !== "fal");
   const chosenProvider = provider ?? meta.data?.default_image_provider ?? null;
@@ -58,7 +62,7 @@ export default function NewComic() {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!tooShort && !unsupported.length) create.mutate();
+    if (!tooShort) create.mutate();
   }
 
   return (
@@ -72,6 +76,7 @@ export default function NewComic() {
           <Field label="Your idea" hint={`${prompt.trim().length}/2000 characters. Original characters only: no real people or existing franchises. ${LETTERING_SUPPORTED_SUMMARY}`} error={promptError}>
             {(ids) => <Textarea {...ids} rows={5} maxLength={2000} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="A shy robot who runs a night-time noodle stall in a rainy city learns to make friends." />}
           </Field>
+          {planningWarning && <p role="note" className="-mt-2 text-sm font-semibold text-warn">{planningWarning}</p>}
           <div>
             <p className="mb-2 text-sm font-semibold">Need a starting point?</p>
             <div className="flex flex-wrap gap-2">

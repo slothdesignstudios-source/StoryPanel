@@ -244,22 +244,19 @@ def test_unsupported_characters_message_is_actionable_and_honest() -> None:
     assert "unicode" not in m.lower()  # accented Latin is not described as full Unicode support
 
 
-async def test_a_prompt_the_fonts_cannot_letter_is_refused_before_any_paid_call(
+async def test_planning_input_may_use_characters_the_fonts_cannot_letter(
     client: Any, headers: dict[str, str]
 ) -> None:
+    """Owner decision 2026-11-14: the idea is planning-only input, never lettered itself, so it may
+    contain Ł; it is stored exactly as typed. Rendered text (dialogue, balloons) stays enforced."""
     from storypanel.providers import fake
 
     fake.control.reset()
     r = await client.post(
         "/v1/projects", json={"prompt": "Łukasz and his cat explore Kraków at night"}, headers=headers
     )
-    assert r.status_code == 422, r.text
-    body = r.json()["error"]
-    assert body["code"] == "validation_error"
-    field = next(f for f in body["fields"] if f["field"] == "prompt")
-    assert "Ł" in field["message"] and "Replace or remove them" in field["message"]
-    assert fake.control.calls == []  # nothing was sent to any provider
-    r = await client.get("/v1/projects", headers=headers)
-    assert all(
-        "Łukasz" not in p["title"] for p in r.json()["projects"]
-    )  # and nothing was created or rewritten
+    assert r.status_code == 201, r.text
+    p = (await client.get(f"/v1/projects/{r.json()['id']}", headers=headers)).json()
+    assert p["prompt"] == "Łukasz and his cat explore Kraków at night"  # never transliterated
+    panel = await client.post("/v1/projects", json={"prompt": "x"}, headers=headers)
+    assert panel.status_code == 422  # ordinary validation still applies

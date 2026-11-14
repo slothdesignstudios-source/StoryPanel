@@ -79,6 +79,42 @@ def test_script_rule_violations(over: dict[str, object], code: str) -> None:
     assert code in check(script(**over))
 
 
+@pytest.mark.parametrize(("over", "code"), [
+    ({"action": "   "}, "empty_action"),
+    ({"action": "x" * 501}, "text_too_long"),
+    ({"mood": "x" * 121}, "text_too_long"),
+    ({"angle": "x" * 121}, "text_too_long"),
+    ({"characters": [{"id": "kiro", "position": "left", "pose": "p" * 121, "expression": "e"}], "dialogue": []},
+     "text_too_long"),
+    ({"dialogue": [{"type": "caption", "text": "a " * 151}]}, "text_too_long"),
+    ({"dialogue": [{"type": "caption", "text": "Supercalifragilisticexpialidocious!"}]}, "word_too_long"),
+    ({"dialogue": [{"type": "caption", "text": "   "}]}, "empty_text"),
+    ({"dialogue": [{"type": "caption", "text": "Łukasz waves."}]}, "unsupported_characters"),
+])  # fmt: skip
+def test_server_side_text_limits_on_script_fields(over: dict[str, object], code: str) -> None:
+    """The browser limits these too, but the server does not trust it: an edited script that
+    breaks a limit is saved with the issue listed and cannot be approved."""
+    assert code in check(script(**over))
+    assert check(script(action="x" * 500, mood="m" * 120)) == set()  # limits are inclusive
+
+
+def test_story_bible_patch_refuses_blank_values_and_items() -> None:
+    from pydantic import ValidationError
+
+    from storypanel.api.schemas import PatchBible
+
+    for bad in ({"logline": "   "}, {"tone": ""}, {"themes": ["ok", "  "]}, {"world_rules": ["x" * 301]},
+                {"world_rules": ["r"] * 9}):  # fmt: skip
+        with pytest.raises(ValidationError):
+            PatchBible.model_validate({"cast_version": 1, **bad})
+    ok = PatchBible.model_validate(
+        {"cast_version": 1, "themes": ["  friendship "], "world_rules": ["Łódź is cold"]}
+    )
+    assert ok.themes == ["friendship"] and ok.world_rules == [
+        "Łódź is cold"
+    ]  # planning text: not glyph-limited
+
+
 def test_panel_counts_and_page_limits() -> None:
     assert "panel_count" in check(script(panels=7))
     assert "panel_count" in check(script(panels=3))

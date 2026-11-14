@@ -9,7 +9,17 @@ import { Badge, Button, Card, Dialog, DialogClose, DialogContent, DialogTrigger,
 import { ApiError, api, describeError } from "@/lib/api";
 import { wordCount } from "@/lib/text";
 import { STATUS_LABEL, type Character, type DialogueItem, type PanelSpec, type Project, type Script } from "@/lib/types";
-import { pk } from "@/lib/session";
+import { onIdentityReset, pk } from "@/lib/session";
+import { create } from "zustand";
+
+/** Unsaved or in-flight Story Bible edits. The cast cannot be approved while either is true:
+ *  approval must cover exactly what is saved (the server also checks the version). */
+const useBibleDraft = create<{ dirty: boolean; saving: boolean; set: (p: { dirty?: boolean; saving?: boolean }) => void }>((set) => ({
+  dirty: false, saving: false, set: (p) => set(p),
+}));
+onIdentityReset(() => useBibleDraft.setState({ dirty: false, saving: false }));
+
+const lines = (v: string) => v.split("\n").map((x) => x.trim()).filter(Boolean);
 
 const path = (id: string) => ({ params: { path: { project_id: id } } });
 
@@ -171,14 +181,31 @@ function CharacterCard({ project, c }: { project: Project; c: Character }) {
 function BibleEditor({ project }: { project: Project }) {
   const refresh = useRefresh(project.id);
   const b = project.bible!;
-  const [form, setForm] = useState({ title: b.title, logline: b.logline, setting: b.setting, tone: b.tone });
-  useEffect(() => setForm({ title: b.title, logline: b.logline, setting: b.setting, tone: b.tone }), [b.title, b.logline, b.setting, b.tone]);
-  const dirty = form.title !== b.title || form.logline !== b.logline || form.setting !== b.setting || form.tone !== b.tone;
+  const fromServer = () => ({ title: b.title, logline: b.logline, setting: b.setting, tone: b.tone, themes: b.themes.join("\n"), world_rules: b.world_rules.join("\n") });
+  const [form, setForm] = useState(fromServer);
+  useEffect(() => setForm(fromServer()), [project.cast_version]); // eslint-disable-line react-hooks/exhaustive-deps -- reset when the saved version changes
+  const saved = fromServer();
+  const changed = (Object.keys(form) as (keyof typeof form)[]).filter((k) => (k === "themes" || k === "world_rules" ? lines(form[k]).join("\n") !== lines(saved[k]).join("\n") : form[k] !== saved[k]));
+  const dirty = changed.length > 0;
+  const setDraft = useBibleDraft((d) => d.set);
   const save = useMutation({
-    mutationFn: async () => (await api.PATCH("/v1/projects/{project_id}/bible", { ...path(project.id), body: { cast_version: project.cast_version, ...form } })).data,
+    mutationFn: async () => {
+      const body: Record<string, unknown> = { cast_version: project.cast_version };
+      for (const k of changed) body[k] = k === "themes" || k === "world_rules" ? lines(form[k]) : form[k].trim();
+      return (await api.PATCH("/v1/projects/{project_id}/bible", { ...path(project.id), body: body as { cast_version: number } })).data;
+    },
     onSuccess: () => { refresh(); toast.success("Story Bible saved"); },
     onError: (e) => { if (e instanceof ApiError && e.code === "version_conflict") refresh(); },
   });
+  useEffect(() => { setDraft({ dirty, saving: save.isPending }); }, [dirty, save.isPending, setDraft]);
+  useEffect(() => () => setDraft({ dirty: false, saving: false }), [setDraft]);
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => { if (useBibleDraft.getState().dirty) e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+  const fieldError = (name: string) => (save.error instanceof ApiError ? save.error.fields.find((f) => f.field === name || f.field.startsWith(`${name}.`))?.message ?? null : null);
+  const blank = (["title", "logline", "setting", "tone"] as const).filter((k) => !form[k].trim());
   return (
     <Card className="space-y-4 p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -186,17 +213,19 @@ function BibleEditor({ project }: { project: Project }) {
         <span className="text-sm text-muted" role="status">{save.isPending ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}</span>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Title">{(ids) => <Input {...ids} maxLength={200} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />}</Field>
-        <Field label="Tone">{(ids) => <Input {...ids} maxLength={200} value={form.tone} onChange={(e) => setForm({ ...form, tone: e.target.value })} />}</Field>
-        <Field label="Logline">{(ids) => <Textarea {...ids} maxLength={600} value={form.logline} onChange={(e) => setForm({ ...form, logline: e.target.value })} />}</Field>
-        <Field label="Setting">{(ids) => <Textarea {...ids} maxLength={600} value={form.setting} onChange={(e) => setForm({ ...form, setting: e.target.value })} />}</Field>
+        <Field label="Title" error={fieldError("title")}>{(ids) => <Input {...ids} maxLength={200} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />}</Field>
+        <Field label="Tone" error={fieldError("tone")}>{(ids) => <Input {...ids} maxLength={200} value={form.tone} onChange={(e) => setForm({ ...form, tone: e.target.value })} />}</Field>
+        <Field label="Logline" error={fieldError("logline")}>{(ids) => <Textarea {...ids} maxLength={600} value={form.logline} onChange={(e) => setForm({ ...form, logline: e.target.value })} />}</Field>
+        <Field label="Setting" error={fieldError("setting")}>{(ids) => <Textarea {...ids} maxLength={600} value={form.setting} onChange={(e) => setForm({ ...form, setting: e.target.value })} />}</Field>
+        <Field label="Themes" hint="One per line, up to 8." error={fieldError("themes")}>{(ids) => <Textarea {...ids} value={form.themes} onChange={(e) => setForm({ ...form, themes: e.target.value })} />}</Field>
+        <Field label="World rules" hint="One rule per line, up to 8. Rules that must be visible in pictures are reviewed under Continuity rules." error={fieldError("world_rules")}>{(ids) => <Textarea {...ids} value={form.world_rules} onChange={(e) => setForm({ ...form, world_rules: e.target.value })} />}</Field>
       </div>
-      <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-        <div><dt className="font-semibold">Themes</dt><dd className="text-muted">{b.themes.join(", ") || "—"}</dd></div>
-        <div><dt className="font-semibold">World rules</dt><dd className="text-muted">{b.world_rules.join("; ") || "—"}</dd></div>
-      </dl>
+      {blank.length > 0 && <p className="text-sm text-danger" role="alert">{blank.map((k) => k[0]!.toUpperCase() + k.slice(1)).join(", ")} can&apos;t be empty.</p>}
       {save.isError && <Notice tone="danger" title={save.error instanceof ApiError && save.error.code === "version_conflict" ? "This was changed in another window" : "Couldn't save"}>{save.error instanceof ApiError && save.error.code === "version_conflict" ? "We reloaded the latest version. Re-apply your change and save again." : describeError(save.error)}</Notice>}
-      <Button busy={save.isPending} disabled={!dirty || !form.title.trim()} onClick={() => save.mutate()}>Save Story Bible</Button>
+      <div className="flex flex-wrap gap-3">
+        <Button busy={save.isPending} disabled={!dirty || blank.length > 0} onClick={() => save.mutate()}>Save Story Bible</Button>
+        <Button variant="ghost" disabled={!dirty || save.isPending} onClick={() => setForm(fromServer())}>Discard changes</Button>
+      </div>
     </Card>
   );
 }
@@ -210,6 +239,8 @@ export function Cast({ project }: { project: Project }) {
   });
   const updating = project.characters.some((c) => c.revising || c.sheet_status !== "ready");
   const waiting = project.approved_cast_version === project.cast_version;
+  const draft = useBibleDraft();
+  const unsaved = draft.dirty || draft.saving;
   const meta = useQuery({ queryKey: ["meta"], staleTime: Infinity, queryFn: async () => (await api.GET("/v1/meta")).data! });
   const price = meta.data?.credit_prices;
   return (
@@ -220,8 +251,8 @@ export function Cast({ project }: { project: Project }) {
           <p className="max-w-2xl text-sm text-muted">These reference sheets lock each character&apos;s look for every panel. Tweak anything now: it&apos;s much cheaper than fixing pages later.</p>
         </div>
         <div className="text-right">
-          <Button variant="primary" size="lg" busy={approve.isPending || waiting} disabled={updating} onClick={() => approve.mutate()}>{waiting ? "Starting the script" : "Approve cast and write the script"}</Button>
-          <p className="mt-1 text-xs text-muted">{updating ? "Wait for the sheet to finish updating." : price ? `The cast (${price.cast} credits) has been charged; ${price.script} stay held for the script. A revision holds ${price.character_revision} and is charged only if the new sheet is delivered.` : "The script is already covered by the credits held at the start."}</p>
+          <Button variant="primary" size="lg" busy={approve.isPending || waiting} disabled={updating || unsaved} onClick={() => approve.mutate()}>{waiting ? "Starting the script" : "Approve cast and write the script"}</Button>
+          <p className="mt-1 text-xs text-muted">{updating ? "Wait for the sheet to finish updating." : unsaved ? (draft.saving ? "Saving the Story Bible…" : "Save or discard your Story Bible changes first. Approval covers only what is saved.") : price ? `The cast (${price.cast} credits) has been charged; ${price.script} stay held for the script. A revision holds ${price.character_revision} and is charged only if the new sheet is delivered.` : "The script is already covered by the credits held at the start."}</p>
         </div>
       </div>
       {approve.isError && <Notice tone="danger" title={approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "The cast changed since you opened this page" : "Couldn't approve the cast"}>{approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "We've loaded the latest version. Review it and approve again." : describeError(approve.error)}</Notice>}
@@ -353,7 +384,7 @@ export function ScriptReview({ project }: { project: Project }) {
           <div className="flex gap-3">
             <Button busy={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>Save changes</Button>
             <Dialog>
-              <DialogTrigger asChild><Button variant="primary" disabled={dirty || script.has_errors || waiting || estimate.data?.sufficient === false} busy={waiting}>{waiting ? "Starting illustration" : "Approve and draw"}</Button></DialogTrigger>
+              <DialogTrigger asChild><Button variant="primary" disabled={dirty || save.isPending || script.has_errors || waiting || estimate.data?.sufficient === false} busy={waiting}>{waiting ? "Starting illustration" : "Approve and draw"}</Button></DialogTrigger>
               <DialogContent title="Start drawing?" description={`This approves script version ${script.version} and holds ${estimate.data?.credits ?? "the"} credits. ${estimate.data?.note ?? ""}`}>
                 {approve.isError && <Notice tone="danger" title="Couldn't start">{approve.error instanceof ApiError && approve.error.code === "insufficient_credits" ? <>You don&apos;t have enough credits. <Link className="underline" href="/billing">Add credits</Link></> : describeError(approve.error)}</Notice>}
                 <div className="mt-4 flex justify-end gap-3">

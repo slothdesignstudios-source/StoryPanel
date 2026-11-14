@@ -4,9 +4,9 @@ OpenAPI document these produce (packages/api-types), and CI fails on drift."""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from storypanel.domain.schemas import (
     BeatSheet,
@@ -73,14 +73,19 @@ class PatchScript(In):
     script: ComicScript
 
 
+BibleItem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+
+
 class PatchBible(In):
+    """Whitespace is stripped first, so blank values are refused, not stored."""
+
     cast_version: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    logline: str | None = Field(default=None, max_length=600)
-    setting: str | None = Field(default=None, max_length=600)
-    tone: str | None = Field(default=None, max_length=200)
-    themes: list[str] | None = Field(default=None, max_length=8)
-    world_rules: list[str] | None = Field(default=None, max_length=8)
+    logline: str | None = Field(default=None, min_length=1, max_length=600)
+    setting: str | None = Field(default=None, min_length=1, max_length=600)
+    tone: str | None = Field(default=None, min_length=1, max_length=200)
+    themes: list[BibleItem] | None = Field(default=None, max_length=8)
+    world_rules: list[BibleItem] | None = Field(default=None, max_length=8)
 
 
 class EditPanel(In):

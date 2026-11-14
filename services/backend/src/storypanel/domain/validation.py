@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from storypanel.domain.schemas import ComicFormat, ComicScript, ScriptIssue
 from storypanel.pipeline.lettering import unsupported_chars, unsupported_message
 
+# Server-side text limits for script fields (the browser enforces the same, but is not trusted).
+FIELD_LIMITS = {"action": 500, "angle": 120, "mood": 120, "time_of_day": 120}
+CHARACTER_FIELD_LIMITS = {"pose": 120, "expression": 120}
+MAX_BALLOON_CHARS = 300
+MAX_WORD_CHARS = 24  # a longer unbroken word cannot be wrapped inside a balloon
+
 
 @dataclass(frozen=True)
 class ScriptLimits:
@@ -67,6 +73,16 @@ def validate_script(
             err("emphasis", ppath, f"Page {pi + 1} has more than one large panel.")
         for ni, panel in enumerate(page.panels):
             path = f"{ppath}.panels[{ni}]"
+            if not panel.action.strip():
+                err("empty_action", f"{path}.action", "Describe what we see in this panel.")
+            for name, limit in FIELD_LIMITS.items():
+                if len(getattr(panel, name)) > limit:
+                    err("text_too_long", f"{path}.{name}", f"Use at most {limit} characters here.")
+            for ci, ch in enumerate(panel.characters):
+                for name, limit in CHARACTER_FIELD_LIMITS.items():
+                    if len(getattr(ch, name)) > limit:
+                        err("text_too_long", f"{path}.characters[{ci}].{name}",
+                            f"Use at most {limit} characters here.")  # fmt: skip
             if panel.location_id not in location_ids:
                 err("unknown_location", f"{path}.location_id",
                     f"Location '{panel.location_id}' is not defined in the Story Bible.")  # fmt: skip
@@ -89,6 +105,17 @@ def validate_script(
                 dpath = f"{path}.dialogue[{di}]"
                 if not d.text.strip():
                     err("empty_text", f"{dpath}.text", "Dialogue text is empty.")
+                if len(d.text) > MAX_BALLOON_CHARS:
+                    err(
+                        "text_too_long",
+                        f"{dpath}.text",
+                        f"Use at most {MAX_BALLOON_CHARS} characters in a balloon.",
+                    )
+                long_words = [w for w in d.text.split() if len(w) > MAX_WORD_CHARS]
+                if long_words:
+                    err("word_too_long", f"{dpath}.text",
+                        f"“{long_words[0][:30]}” is too long to fit on one line of a balloon. "
+                        "Split it or use a shorter word.")  # fmt: skip
                 missing = unsupported_chars(d.text)
                 if missing:
                     err("unsupported_characters", f"{dpath}.text", unsupported_message(missing))
