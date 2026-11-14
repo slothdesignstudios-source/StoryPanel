@@ -225,6 +225,8 @@ const FLAG_LABELS: [string, string][] = [
   ["overlaps_lettering", "Overlaps other lettering"],
   ["tail_crosses_lettering", "Tail crosses other lettering"],
   ["unsupported_characters", "Contains characters that can't be printed"],
+  ["covers_face", "Covers a face"],
+  ["covers_subject", "Covers a character"],
 ];
 
 
@@ -344,7 +346,7 @@ export function Editor({ project }: { project: Project }) {
           <Exports project={project} />
         </div>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <Card className="overflow-hidden p-2 sm:p-4">
           <div ref={ref} className="mx-auto w-full max-w-3xl">
             {width > 0 && <PageCanvas page={page} width={width} editable selectedPanel={panelId} selectedBalloon={balloonId} drafts={drafts} onSelectPanel={(id) => set({ panelId: id })} onSelectBalloon={(id) => set({ balloonId: id })} onBalloonChange={changeGeometry} />}

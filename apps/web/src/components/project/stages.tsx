@@ -147,10 +147,15 @@ function CharacterCard({ project, c }: { project: Project; c: Character }) {
   return (
     <Card className="overflow-hidden">
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] border-b-2 border-ink">
-        <Img src={c.images.portrait} alt={`${c.name}, hero portrait`} className="aspect-[3/4] h-full w-full border-r-2 border-ink object-cover" />
+        <Img src={c.images.portrait} alt={`${c.name}, hero portrait`} className="aspect-[3/4] h-full w-full border-r-2 border-ink bg-paper object-contain" />
         <div className="grid grid-rows-2">
-          <Img src={c.images.turnaround_sheet} alt={`${c.name}, turnaround: front, three-quarter, side and back views`} className="h-full w-full border-b-2 border-ink object-cover" />
-          <Img src={c.images.expression_sheet} alt={`${c.name}, expressions: happy, angry, sad, surprised`} className="h-full w-full object-cover" />
+          {/* contain, not cover: the turnaround holds four full views; cropping hides the outer ones */}
+          <a href={c.images.turnaround_sheet} target="_blank" rel="noreferrer" className="block min-h-0 border-b-2 border-ink bg-paper" aria-label={`Open ${c.name}'s full turnaround sheet`}>
+            <Img src={c.images.turnaround_sheet} alt={`${c.name}, turnaround: front, three-quarter, side and back views`} className="h-full w-full object-contain" />
+          </a>
+          <a href={c.images.expression_sheet} target="_blank" rel="noreferrer" className="block min-h-0 bg-paper" aria-label={`Open ${c.name}'s full expression sheet`}>
+            <Img src={c.images.expression_sheet} alt={`${c.name}, expressions: happy, angry, sad, surprised`} className="h-full w-full object-contain" />
+          </a>
         </div>
       </div>
       <div className="space-y-3 p-4">
@@ -344,7 +349,7 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
   return (
     <fieldset className={cn("space-y-3 rounded-md border-2 p-4", errors.length ? "border-danger" : "border-line")}>
       <legend className="px-1 text-sm font-bold">{label}{panel.emphasis === "large" && <Badge tone="action" className="ml-2">Large panel</Badge>}</legend>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)] md:grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)_minmax(10rem,1.4fr)]">
         <Field label="Shot">{(ids) => <Select {...ids} value={panel.shot} onChange={(e) => onChange({ ...panel, shot: e.target.value as PanelSpec["shot"] })}><option value="wide">Wide</option><option value="medium">Medium</option><option value="close_up">Close-up</option></Select>}</Field>
         <Field label="Location">{(ids) => <Select {...ids} value={panel.location_id} onChange={(e) => onChange({ ...panel, location_id: e.target.value })}>{locations.map((l) => <option key={l.slug} value={l.slug}>{l.name}</option>)}</Select>}</Field>
         <Field label="Size" hint={strip ? "In a strip, only the last panel has the wide slot." : undefined}>{(ids) => <Select {...ids} value={panel.emphasis ?? "normal"} onChange={(e) => onChange({ ...panel, emphasis: e.target.value as "normal" | "large" })}><option value="normal">Normal</option><option value="large" disabled={strip && !last && panel.emphasis !== "large"}>{strip ? "Large (wide slot, last panel only)" : "Large (climax)"}</option></Select>}</Field>
@@ -357,7 +362,7 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
         {dialogue.map((d, i) => {
           const words = wordCount(d.text);
           return (
-            <div key={i} className="grid grid-cols-[7rem_8rem_1fr_auto] items-start gap-2 max-sm:grid-cols-2">
+            <div key={i} className="grid grid-cols-[minmax(9.5rem,max-content)_minmax(9rem,max-content)_minmax(0,1fr)_auto] items-start gap-2 max-md:grid-cols-2">
               <Select aria-label={`Line ${i + 1} type`} value={d.type} onChange={(e) => { const type = e.target.value as DialogueItem["type"]; setLine(i, { type, speaker: type === "speech" || type === "thought" ? d.speaker ?? present[0] ?? null : null }); }}>
                 {DIALOGUE_TYPES.map((t) => <option key={t} value={t}>{t === "sfx" ? "Sound effect" : t[0]!.toUpperCase() + t.slice(1)}</option>)}
               </Select>
@@ -365,8 +370,8 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
                 <option value="">—</option>
                 {characters.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
               </Select>
-              <div className="max-sm:col-span-2">
-                <Input aria-label={`Line ${i + 1} text`} aria-invalid={words > maxWords || undefined} value={d.text} maxLength={300} onChange={(e) => setLine(i, { text: e.target.value })} />
+              <div className="max-md:col-span-2">
+                <Textarea aria-label={`Line ${i + 1} text`} aria-invalid={words > maxWords || undefined} rows={2} className="min-h-0 resize-y [field-sizing:content]" value={d.text} maxLength={300} onChange={(e) => setLine(i, { text: e.target.value })} />
                 <p className={cn("mt-0.5 text-xs", words > maxWords ? "font-semibold text-danger" : "text-muted")}>{words} of {maxWords} words</p>
               </div>
               <Button type="button" variant="ghost" size="icon" aria-label={`Remove line ${i + 1}`} onClick={() => onChange({ ...panel, dialogue: dialogue.filter((_, n) => n !== i) })}><Trash2 className="h-4 w-4" aria-hidden /></Button>
@@ -463,7 +468,7 @@ export function ScriptReview({ project }: { project: Project }) {
       {draft.pages.map((page, pi) => (
         <section key={pi} aria-labelledby={`page-${pi}`} className="space-y-3">
           <h3 id={`page-${pi}`} className="text-lg font-bold">Page {pi + 1} <span className="text-sm font-normal text-muted">· {page.panels.length} panels</span></h3>
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid items-start gap-4 xl:grid-cols-2">
             {page.panels.map((panel, ni) => <PanelEditor key={ni} label={`Panel ${ni + 1}`} panel={panel} onChange={(p) => setPanel(pi, ni, p)} characters={project.characters} locations={project.locations} limits={meta.data?.limits ?? {}} errors={dirty ? [] : issuesFor(pi, ni)} reviews={dirty ? [] : issuesFor(pi, ni, "review")} beatNames={beatNames} rules={rulesFor(panel, rules)} strip={strip} last={ni === page.panels.length - 1} />)}
           </div>
         </section>

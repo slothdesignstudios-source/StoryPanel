@@ -43,8 +43,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <Link href="/billing" className="hidden rounded-full border-2 border-ink bg-sun px-3 py-1 text-sm font-bold md:block" aria-label={me.data ? `${me.data.available} credits available${me.data.reserved ? `, ${me.data.reserved} held for work in progress` : ""}` : "Credits loading"}>
-            {me.data ? <>{me.data.available} credits{me.data.reserved ? <span className="font-normal"> · {me.data.reserved} held</span> : null}</> : "…"}
+          <Link href="/billing" className="hidden rounded-full border-2 border-ink bg-sun px-3 py-1 text-sm font-bold md:block">
+            {me.data ? <>{me.data.available} credits<span className="sr-only"> available</span>{me.data.reserved ? <span className="font-normal"> · {me.data.reserved} held<span className="sr-only"> for work in progress</span></span> : null}</> : <span aria-label="Credits loading">…</span>}
           </Link>
           <Button asChild variant="primary" size="sm"><Link href="/new"><Plus className="h-4 w-4" aria-hidden />New comic</Link></Button>
           <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}><LogOut className="h-4 w-4" aria-hidden /></Button>
