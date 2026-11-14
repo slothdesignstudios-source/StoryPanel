@@ -257,6 +257,12 @@ async def approve_script(db: AsyncSession, project: Project, version: int, user_
         raise invalid_state("The script isn't waiting for approval.")
     if version != project.script_version:
         raise version_conflict("The script", project.script_version)
+    rejected = (await db.execute(select(Approval.id).where(
+        Approval.project_id == project.id, Approval.kind == "script", Approval.content_version == version,
+        Approval.status == "rejected"))).scalar_one_or_none()  # fmt: skip
+    if rejected is not None:
+        raise AppError(ErrorCode.VALIDATION, "This version didn't pass the content check. Edit the script "
+                       "and save it as a new version before approving.")  # fmt: skip
     row = await repo.script_row(db, project.id, version)
     assert row is not None
     script = ComicScript.model_validate(row.content)

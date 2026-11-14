@@ -10,7 +10,7 @@ import asyncio
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from storypanel import storage
 from storypanel.catalog import PROMPT_VERSION, styles
@@ -405,6 +405,7 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
     full moderation gate on the edited text before any image is paid for."""
     async with transaction() as db:
         if not await repo.approval_is_current(db, project_id, "script", version):
+            await _release_panel_hold(db, project_id, version)
             return {"outcome": "stale"}
         project = await repo.get_project(db, project_id)
         row = await repo.script_row(db, project_id, version)
@@ -412,6 +413,8 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
         owner = project.owner_id
     assert row is not None and bible is not None
     if has_errors([_issue(i) for i in row.issues]):
+        async with transaction() as db:
+            await _release_panel_hold(db, project_id, version)
         return {"outcome": "stale"}
     if row.source == "user":
         script = repo.parse_script(row)
@@ -423,11 +426,28 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
         if not verdict.allowed:
             async with transaction() as db:
                 await repo.invalidate_approvals(db, project_id, "script")
+                # Recorded as rejected: this exact version can never be approved again (its hold
+                # key and workflow signal are spent), only a newly saved version can.
+                await db.execute(update(Approval).where(
+                    Approval.project_id == project_id, Approval.kind == "script",
+                    Approval.content_version == version).values(status="rejected"))  # fmt: skip
+                await _release_panel_hold(db, project_id, version)
                 await events.emit(db, project_id, "script.rejected",
                                   {"message": verdict.user_message, "version": version})  # fmt: skip
                 await events.notify_after_commit(db)
             return {"outcome": "rejected"}
     return {"outcome": "ok"}
+
+
+async def _release_panel_hold(db: Any, project_id: uuid.UUID, version: int) -> None:
+    """An approval that will not be drawn must not keep its illustration hold: the next approval
+    holds again under its own key, and both would count against the available balance."""
+    from storypanel.db.models import CreditReservation
+
+    rid = (await db.execute(select(CreditReservation.id).where(
+        CreditReservation.idempotency_key == f"panels:{project_id}:{version}"))).scalar_one_or_none()  # fmt: skip
+    if rid is not None:
+        await credits.close(db, rid)
 
 
 def _issue(raw: dict[str, Any]) -> Any:
