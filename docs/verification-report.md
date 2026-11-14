@@ -1,5 +1,26 @@
 # Verification report
 
+## Credits, approvals and story fidelity, 2026-11-14 (from c6a45b1)
+
+Simulated providers only. **No paid call was made and nothing was deployed.**
+
+| Check | Result | Kind |
+|---|---|---|
+| Backend suite (`uv run pytest -q`, run alone) | **503 passed**, 0 failed (9 min 48 s) | simulated-test-confirmed |
+| ruff format/check, mypy, `alembic check` (0012, 0013; 0012 downgrade/upgrade tried) | clean | code-confirmed |
+| Web: tsc / lint / vitest | clean / 1 existing warning / 11 passed | code-confirmed |
+| Browser e2e (native stack) | 12 passed, 1 skipped (live Clerk); includes the new `controls.spec.ts` (failed on the old UI) and axe on the new screens | browser-measured |
+| Simulated 3-panel smoke, OpenAI and Gemini (`evidence/smoke/sim-*-r2`) | both complete: edit, PDF/PNG/CBZ; 2 sheet reviews and 1 script check each | simulated |
+| Hold leak | reproduced (4 credits stayed held after a rejected approval), then fixed | simulated-test-confirmed |
+| Balloon text bounds | rendered-pixel test: 21 of 54 cases failed at 0.74; 0 of 54 fail at 0.66/0.58 | pixel-tested; not reviewed on real art |
+| Screenshots | `evidence/ux-2026-11-14/before` and `after`; `lettering-before-after.png` | visually checked (simulated images) |
+| Reconciliation SQL | runs read-only on databases before and after 0012 | code-confirmed |
+
+Not verified:
+- live model judgments (script check, sheet review, required elements);
+- lettering on real generated art;
+- live latency and cost of the new checks: estimated at about USD 0.002 per comic at unverified prices.
+
 ## Provider change, 2026-11-14 (from de239a8): Anthropic + OpenAI + Gemini; fal and Voyage disabled
 
 **Everything here is simulated or uses mocked HTTP transports behind the real SDK clients. No paid call was

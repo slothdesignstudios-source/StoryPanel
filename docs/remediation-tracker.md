@@ -351,11 +351,18 @@ live-provider-verified; nothing in this round is live-provider-verified.
 - Lettering insets of 66% and 58% are starting values. They are tested against rendered shapes, and
   geometry tests are not counted as visual verification.
 
-| Group | Scope | Status |
+| Group | Scope | Status (2026-11-14) |
 |---|---|---|
-| A | Stale/rejected panel-hold leak; credit-path regressions; append-only reservation events; credit activity view; header refresh; explicit charging-policy text; scoped reconciliation SQL file | In progress |
-| B | Approve disabled while edits or saves are pending; server-side version binding and stale rejection; Themes and World rules editing; server length and nonblank validation; planning-input glyph warnings | Pending |
-| C | Continuity rules plus legacy world-rule classification; propagation into sheet, panel and edit prompts (prompt v2); beat tags plus a semantic beat check; script consistency check with recorded overrides; character-sheet QA flags; panel required-element QA | Pending |
-| D | QA reason categories; "not checked" kept distinct from defects; completion wording | Pending |
-| E | Preview alignment, clipped controls, text inputs, turnaround display, strip "Large" explanation, lettering inset and subject/SFX avoidance with bounds tests | Pending |
-| F | Read-only performance measurement report; speculative optimisations and paid experiments left pending | Pending |
+| A | Stale/rejected panel-hold leak (reproduced, then fixed); credit-path regressions; append-only hold events (0012); holds and activity view; header and Credits page refresh from live events; charging policy stated at each step; `scripts/sql/reconcile-comic.sql` | Done: simulated-test-confirmed |
+| B | Approval re-checked under lock at stage transitions; UI blocks approval with unsaved or saving edits; Themes and World rules editable; server length and nonblank limits; planning input may use unprintable characters (warning); printed text still enforced | Done: simulated-test-confirmed |
+| C | Continuity rules plus verbatim world-rule classification; prompt v2 propagation; beat tags; script consistency check with recorded overrides; sheet review flags; required elements in panel QA; patch markers for in-flight workflows; 0013 | Done: simulated-test-confirmed. Judgment quality not measured (live models) |
+| D | QA reason categories; "not checked" kept apart from defects; "Drawn · N panels to review" | Done: simulated-test-confirmed; screenshots |
+| E | Top-aligned preview, unclipped selects, multi-line lettering inputs, whole sheets on cast cards, text inside drawn balloons (rendered-pixel test), body and SFX avoidance (fixtures) | Done: browser-measured and pixel-tested; real-art visual validation pending |
+| F | `scripts/stage-report.py` and `docs/performance.md` | Done (structure only; live timing pending). QA concurrency and paid experiments deferred |
+
+Also found and fixed: local Postgres was created as SQL_ASCII under a C locale, which rejected non-ASCII text in JSON columns. `native-services.sh` now creates UTF-8 databases and warns otherwise.
+
+Still open:
+- The 12-credit drop: needs the owner's `reconcile-comic.sql` output.
+- "Wide last" showing equal panels: needs the layout id from that output.
+- Live verification of every check's judgment quality and of lettering on real art.

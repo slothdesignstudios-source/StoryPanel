@@ -64,6 +64,20 @@ Evidence keys: `U` test_unit · `A` test_api · `F` test_flow · `R` test_resili
 | – | Image provider per comic (OpenAI default, Gemini optional), never switched mid-comic, refusals never rerouted | Locally verified | PP: persistence across restart and config change; unavailable provider refused; IP refusal not rerouted. fal fallback routing retained behind `SP_FAL_ENABLED` (P breaker test, opt-in) |
 | – | Provenance labelling | Locally verified (IPTC `trainedAlgorithmicMedia` in PNG XMP, PDF, CBZ) | R provenance test. Signed C2PA manifests: Deferred, see decisions.md D-PROV |
 
+## 2b. Credits, approvals and story fidelity (2026-11-14 round)
+| Requirement | Status | Evidence |
+|---|---|---|
+| Every credit path reconciles (balance = ledger, held = open holds) | Locally verified | `test_credit_paths.py` (9): completion, rejected approval, needs attention, cancel at the gate and while drawing, regenerate/edit, revision rejected, activity view, legacy holds |
+| Hold history from immutable events only; legacy holds marked unavailable | Locally verified | migration 0012 (append-only trigger); `test_credit_paths` activity tests |
+| Approvals bound to persisted versions; stale approvals rejected transactionally | Locally verified | `test_approval_binding.py` (5): stage-level stale transitions, two tabs, save racing approval for cast and script |
+| Continuity rules reach sheet, panel and edit prompts | Locally verified (prompt text) | `test_story_fidelity.py` prompt tests; effect on real images not measured |
+| Beat coverage (declared) and Story Bible consistency (judged) before paid drawing; recorded overrides | Locally verified with simulated judgments | `test_story_fidelity.py` end-to-end cases; judgment quality Blocked (live models) |
+| Reference-sheet review flags; no automatic redraw | Locally verified (simulated) | `test_story_fidelity.py`; screenshots `evidence/ux-2026-11-14/after/03, 05c` |
+| QA reasons; "not checked" kept apart from defects; drawn vs passed | Locally verified | `test_qa_reasons.py` (10); screenshots `after/09, 10` |
+| Balloon text inside the drawn shape | Locally verified on rendered pixels (fixtures) | `test_balloon_text_bounds.py` (55: 21 failed before); real-art review pending |
+| Balloons/SFX avoid characters; unavoidable overlap flagged | Locally verified (fixtures) | `test_lettering_placement.py` (4); real-art review pending |
+| Controls not clipped | Locally verified (browser measurement) | `e2e/controls.spec.ts` (failed on the old UI) |
+
 ## 3. Provider correctness and cost enforcement
 | Requirement | Status | Evidence |
 |---|---|---|

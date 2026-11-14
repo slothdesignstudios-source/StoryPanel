@@ -93,3 +93,21 @@ no fal or Voyage account.
 - Gemini QA outcomes are categorical. An uncertain or invalid answer means manual review, never a
   silent pass.
 
+**D-CHECKS (2026-11-14): review, don't redraw; acknowledge, don't silently pass.** These checks are
+separate metered steps:
+- the script check against the Story Bible;
+- the reference-sheet review;
+- required elements in the panel checks.
+
+A failure is retried a bounded number of times and then recorded as "not checked". It never
+silently passes, and it never re-runs paid generation.
+- **Violations** block approval until the panel is edited or the user records that the rule doesn't
+  apply there.
+- **Uncertain or unavailable checks** can be approved only with a recorded acknowledgement
+  (`approvals.overrides`).
+- **Moderation and safety** stay blocking.
+- **Flagged sheets** are shown to the user; nothing is redrawn automatically.
+
+Credit history uses append-only hold events from now on. Older holds are not reconstructed. New
+workflow steps are behind Temporal patch markers, so comics paused at a gate keep working.
+

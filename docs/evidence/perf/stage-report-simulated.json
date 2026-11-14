@@ -1,0 +1,264 @@
+{
+ "comic": "88764940-1c57-4d30-ae7a-7ad65fa30fe9",
+ "status": "completed",
+ "format": "strip",
+ "image_provider": "openai",
+ "calls": 85,
+ "summed_call_ms": 938,
+ "wall_clock_ms": 16332,
+ "parallelism": 0.06,
+ "panel_chains": [
+  3,
+  1
+ ],
+ "longest_sequential_chain": 3,
+ "panel_attempts": [
+  3,
+  3,
+  3,
+  6
+ ],
+ "stages": [
+  {
+   "stage": "image_safety|text_vision",
+   "provider": "fake",
+   "model": "fake-vision",
+   "calls": 23,
+   "statuses": {
+    "succeeded": 23
+   },
+   "latency_ms": {
+    "min": 3,
+    "median": 7,
+    "max": 105,
+    "total": 315
+   },
+   "cost_counted_usd": "0.002691"
+  },
+  {
+   "stage": "panel_generate|image_sync_edit",
+   "provider": "fake",
+   "model": "fake-openai-image",
+   "calls": 15,
+   "statuses": {
+    "succeeded": 15
+   },
+   "latency_ms": {
+    "min": 11,
+    "median": 13,
+    "max": 22,
+    "total": 211
+   },
+   "cost_counted_usd": "2.088250"
+  },
+  {
+   "stage": "character_sheet|image_sync_edit",
+   "provider": "fake",
+   "model": "fake-openai-image",
+   "calls": 4,
+   "statuses": {
+    "succeeded": 4
+   },
+   "latency_ms": {
+    "min": 18,
+    "median": 25,
+    "max": 49,
+    "total": 118
+   },
+   "cost_counted_usd": "0.515405"
+  },
+  {
+   "stage": "vision_qa|text_vision",
+   "provider": "fake",
+   "model": "fake-vision",
+   "calls": 15,
+   "statuses": {
+    "succeeded": 15
+   },
+   "latency_ms": {
+    "min": 4,
+    "median": 5,
+    "max": 10,
+    "total": 82
+   },
+   "cost_counted_usd": "0.002217"
+  },
+  {
+   "stage": "identity_visual|text_vision",
+   "provider": "fake",
+   "model": "fake-gemini-qa",
+   "calls": 15,
+   "statuses": {
+    "succeeded": 15
+   },
+   "latency_ms": {
+    "min": 3,
+    "median": 5,
+    "max": 9,
+    "total": 80
+   },
+   "cost_counted_usd": "0.032472"
+  },
+  {
+   "stage": "character_sheet|image_sync_generate",
+   "provider": "fake",
+   "model": "fake-openai-image",
+   "calls": 2,
+   "statuses": {
+    "succeeded": 2
+   },
+   "latency_ms": {
+    "min": 22,
+    "median": 25,
+    "max": 29,
+    "total": 51
+   },
+   "cost_counted_usd": "0.241395"
+  },
+  {
+   "stage": "location_ref|image_sync_generate",
+   "provider": "fake",
+   "model": "fake-openai-image",
+   "calls": 2,
+   "statuses": {
+    "succeeded": 2
+   },
+   "latency_ms": {
+    "min": 15,
+    "median": 16,
+    "max": 17,
+    "total": 32
+   },
+   "cost_counted_usd": "0.240840"
+  },
+  {
+   "stage": "sheet_check|text_vision",
+   "provider": "fake",
+   "model": "fake-vision",
+   "calls": 2,
+   "statuses": {
+    "succeeded": 2
+   },
+   "latency_ms": {
+    "min": 4,
+    "median": 5,
+    "max": 7,
+    "total": 11
+   },
+   "cost_counted_usd": "0.000249"
+  },
+  {
+   "stage": "intake|text_light",
+   "provider": "fake",
+   "model": "fake-light",
+   "calls": 1,
+   "statuses": {
+    "succeeded": 1
+   },
+   "latency_ms": {
+    "min": 10,
+    "median": 10,
+    "max": 10,
+    "total": 10
+   },
+   "cost_counted_usd": "0.000136"
+  },
+  {
+   "stage": "moderation.prompt|text_light",
+   "provider": "fake",
+   "model": "fake-light",
+   "calls": 1,
+   "statuses": {
+    "succeeded": 1
+   },
+   "latency_ms": {
+    "min": 5,
+    "median": 5,
+    "max": 5,
+    "total": 5
+   },
+   "cost_counted_usd": "0.000138"
+  },
+  {
+   "stage": "script|text_story",
+   "provider": "fake",
+   "model": "fake-story",
+   "calls": 1,
+   "statuses": {
+    "succeeded": 1
+   },
+   "latency_ms": {
+    "min": 5,
+    "median": 5,
+    "max": 5,
+    "total": 5
+   },
+   "cost_counted_usd": "0.004550"
+  },
+  {
+   "stage": "moderation.script|text_light",
+   "provider": "fake",
+   "model": "fake-light",
+   "calls": 1,
+   "statuses": {
+    "succeeded": 1
+   },
+   "latency_ms": {
+    "min": 5,
+    "median": 5,
+    "max": 5,
+    "total": 5
+   },
+   "cost_counted_usd": "0.000143"
+  },
+  {
+   "stage": "script_consistency|text_light",
+   "provider": "fake",
+   "model": "fake-light",
+   "calls": 1,
+   "statuses": {
+    "succeeded": 1
+   },
+   "latency_ms": {
+    "min": 5,
+    "median": 5,
+    "max": 5,
+    "total": 5
+   },
+   "cost_counted_usd": "0.000161"
+  },
+  {
+   "stage": "bible|text_story",
+   "provider": "fake",
+   "model": "fake-story",
+   "calls": 1,
+   "statuses": {
+    "succeeded": 1
+   },
+   "latency_ms": {
+    "min": 4,
+    "median": 4,
+    "max": 4,
+    "total": 4
+   },
+   "cost_counted_usd": "0.003318"
+  },
+  {
+   "stage": "moderation.bible|text_light",
+   "provider": "fake",
+   "model": "fake-light",
+   "calls": 1,
+   "statuses": {
+    "succeeded": 1
+   },
+   "latency_ms": {
+    "min": 4,
+    "median": 4,
+    "max": 4,
+    "total": 4
+   },
+   "cost_counted_usd": "0.000153"
+  }
+ ],
+ "note": "wall clock includes time waiting for you at the approval gates"
+}

@@ -9,7 +9,41 @@
 - The image provider is chosen when a comic is created and kept for every image in that comic.
 - Comics created earlier with fal remain readable and exportable.
 
+### Credits, approvals and story fidelity (2026-11-14)
+- **Credits page:** lists holds in progress and every hold, charge and release, recorded as
+  append-only events. Holds made before this version show as "history unavailable"; nothing is
+  reconstructed. The header shows "N credits · M held" and refreshes as work finishes in the
+  background.
+- **Charging policy, stated in full before each step:** the cast is charged when its sheets are
+  drawn and the script when it is written; each delivered panel is charged, including panels
+  flagged for review; failed and safety-blocked panels are not. Prices are unchanged.
+- **Fixed:** an approved script that failed the content check kept its illustration hold, so the next
+  approval held the same credits again.
+- **Approvals are bound to the saved version** on the server: a save that lands while an approval
+  is being processed sends the comic back for approval. Approve is disabled while Story Bible or
+  rule edits are unsaved.
+- **Continuity rules:** Must and Prefer rules go into the prompts for sheets, panels and edits, and
+  are checked in the script and in each panel. Existing world rules can be classified into rules,
+  keeping their wording.
+- **Script check:** each script is checked against the Story Bible and its beat sheet before
+  approval. Uncertain or unavailable checks need an explicit, recorded confirmation; content-safety
+  refusals cannot be overridden.
+- **Reference-sheet review:** flags sheets that miss a feature or rule, or have a cropped view. The
+  user confirms before approving. Nothing is redrawn automatically.
+- **Panel review reasons:** each flagged panel says why: problems found, couldn't confirm, or not
+  checked. A finished comic with flagged panels reads "Drawn · N panels to review".
+- **Lettering:** text sits further inside speech and thought balloons. Balloons and sound effects
+  avoid characters where the check located them, and the overlap is flagged where they can't.
+  Applies to new and edited balloons.
+- **Planning text** (the idea) may use characters the lettering fonts can't print, with a warning.
+  Printed text is still checked.
+
 ### Known limitations
+- **Checks are model judgments.** The script check, the sheet review and the panel checks can be
+  wrong in both directions. Prompts make continuity rules likelier, not certain. Their accuracy has
+  not been measured on live models.
+- **Lettering placement** is verified on fixtures and rendered test pages, not yet on real generated
+  art.
 - **Repairs and edits are instruction edits, not masked inpainting.** OpenAI and Gemini repaint the
   whole panel from an instruction. StoryPanel then keeps only the repaired region by compositing locally.
   Small changes outside the region can be lost by design, and fine detail inside it can drift.

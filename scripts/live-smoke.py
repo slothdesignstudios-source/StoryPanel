@@ -277,8 +277,8 @@ async def _storage(check: Any) -> None:
 # ------------------------------------------------------------------ estimate
 # Expected output tokens per text call: an ASSUMPTION for the expected-cost column only (reservations
 # always hold the full max_tokens). Replaced by measured usage after the first live run.
-EXPECTED_OUTPUT = {"intake": 600, "moderation": 250, "bible": 5000, "script": 7000, "image_safety": 250,
-                   "vision_qa": 900, "identity_visual": 700}  # fmt: skip
+EXPECTED_OUTPUT = {"intake": 600, "moderation": 250, "bible": 5000, "script_consistency": 1200, "script": 7000,
+                   "image_safety": 250, "vision_qa": 900, "identity_visual": 700, "sheet_check": 600}  # fmt: skip
 LIVE_IMAGE_TOKENS_EXPECTED = 1369  # Claude: a 1K (1024x1024) image is ceil(1024/28)^2 tokens (official vision rule)
 GEMINI_IMAGE_TOKENS_EXPECTED = 1120  # ASSUMPTION (unverified): Gemini 3 default media resolution per image
 # Live image prompts carry the Story Bible, style and panel spec: longer than the simulated ones.
@@ -376,8 +376,12 @@ def cost_model(image_provider: str = "openai") -> dict[str, Any]:
                  (3 * C + L) * IA, f"every reference image; locations nominal {L_NOM}, max {L}"),
         image_row("location_ref", "location_ref|image_sync_generate", 0, L_NOM, L * IA,
                   f"locations: nominal {L_NOM}, code cap {L}"),
+        text_row("sheet_check", "sheet_check|text_vision", "text_vision", 2, C, C * TA,
+                 "reference-sheet review: portrait + turnaround per character (flags only, no redraw)"),
         text_row("script", "script|text_story", "text_story", 0, 1, SR * TA, f"draft + {SR - 1} repairs, x TEXT attempts"),
         text_row("moderation.script", "moderation.script|text_light", "text_light", 0, 1, TA, "same activity as the script"),
+        text_row("script_consistency", "script_consistency|text_light", "text_light", 0, 1, TA,
+                 "Story Bible check of the script (again for every user edit; none in the smoke test)"),
         image_row("panel_generate", ED, REFS, P, P * QA * IA,
                   f"{P} panels x {QA} QA rounds x IMAGE attempts; up to {REFS} reference images"),
         text_row("image_safety (panels)", "image_safety|text_vision", "text_vision", 1, P, P * QA * IA, "safety per candidate"),

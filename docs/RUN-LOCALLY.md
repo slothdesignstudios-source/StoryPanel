@@ -181,8 +181,8 @@ scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py esti
 
 | Images from | Expected cost | Smallest cap for a clean run | Suggested cap |
 |---|---|---|---|
-| OpenAI | about USD 3.32 | USD 4.52 | USD 8.00 |
-| Gemini | about USD 1.19 | USD 1.72 | USD 4.00 |
+| OpenAI | about USD 3.32 | USD 4.53 | USD 8.00 |
+| Gemini | about USD 1.20 | USD 1.73 | USD 4.00 |
 
 Prices are unverified. The suggested cap covers every panel using both repair rounds. Details and the
 itemised tables are in `docs/smoke-test-cost.md`.
@@ -241,6 +241,26 @@ key values without printing them:
 grep -rlFf <(cut -d= -f2- .env | sed '/^$/d') preflight.txt smoke-1.txt docs/evidence/smoke/smoke-1/ || echo "no keys found"
 ```
 Also note your own totals from each provider's usage page for the same time window.
+
+## 6g. After pulling a new version
+- `scripts/native-stack.sh start` applies database migrations itself (`alembic upgrade head`).
+  The 2026-11-14 round adds migrations 0012 (hold history) and 0013 (review results). Both are
+  additive: existing comics keep working.
+- The database must be UTF-8. Check it with:
+```bash
+psql -h 127.0.0.1 -U storypanel -d storypanel -Atc "show server_encoding"
+```
+  It should print `UTF8`. `scripts/native-services.sh start` now creates UTF-8 databases and warns
+  if one is not UTF-8. A non-UTF-8 database (SQL_ASCII) rejects non-ASCII text in comics. To start
+  over with an empty database: stop everything, rename the folder in `$SP_DATA`, start again.
+- To reconcile one comic's credits (read-only; this owner and time window only):
+```bash
+psql -h 127.0.0.1 -U storypanel -d storypanel -v pid=<comic-id> -f scripts/sql/reconcile-comic.sql
+```
+- Time and cost per stage for one comic (read-only):
+```bash
+scripts/live-env.sh services/backend/.venv/bin/python scripts/stage-report.py <comic-id>
+```
 
 ## 7. Good to know
 - **Ports:** web 3000, API 8000, local S3 9000, Temporal 7233, Postgres 5432, Redis 6379.

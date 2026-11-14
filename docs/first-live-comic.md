@@ -69,8 +69,8 @@ Check the three unverified prices on the providers' pages before approving. If o
 
 | Images from | Estimated clean run | Smallest cap that can finish | Suggested approval |
 |---|---|---|---|
-| OpenAI | about USD 3.32 | USD 4.52 | USD 8.00 |
-| Gemini | about USD 1.19 | USD 1.72 | USD 4.00 |
+| OpenAI | about USD 3.32 | USD 4.53 | USD 8.00 |
+| Gemini | about USD 1.20 | USD 1.73 | USD 4.00 |
 
 Details, worst cases and what can be billed beyond the cap: [`smoke-test-cost.md`](smoke-test-cost.md).
 
