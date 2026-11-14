@@ -437,6 +437,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project_id}/continuity-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Continuity Rules
+         * @description Replace the comic's continuity rules (classify world rules, add, edit or remove rules).
+         */
+        put: operations["put_continuity_rules_v1_projects__project_id__continuity_rules_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project_id}/estimate": {
         parameters: {
             query?: never;
@@ -587,11 +607,15 @@ export interface components {
         };
         /** ApproveCast */
         ApproveCast: {
+            /** Acknowledged */
+            acknowledged?: string[];
             /** Cast Version */
             cast_version: number;
         };
         /** ApproveScript */
         ApproveScript: {
+            /** Acknowledged */
+            acknowledged?: string[];
             /** Script Version */
             script_version: number;
         };
@@ -647,8 +671,13 @@ export interface components {
             };
             /** Name */
             name: string;
+            review: components["schemas"]["ReviewItem"] | null;
             /** Revising */
             revising: boolean;
+            /** Sheet Check */
+            sheet_check: {
+                [key: string]: unknown;
+            } | null;
             /** Sheet Status */
             sheet_status: string;
             /** Sheet Version */
@@ -744,6 +773,80 @@ export interface components {
         ComicScript: {
             /** Pages */
             pages: components["schemas"]["PageSpec"][];
+        };
+        /**
+         * ContinuityRule
+         * @description A rule the pictures (or the story) must keep. `must` rules are required wherever they apply;
+         *     `prefer` rules are stylistic and only requested where natural. `visual` rules go into image
+         *     prompts and image checks; non-visual ones only into the script check.
+         *
+         *     `source` says where the wording came from: the Bible writer ("model"), a classified world
+         *     rule ("world_rule": `text` is that rule's original wording, unchanged) or the user.
+         */
+        ContinuityRule: {
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "every_panel" | "character" | "location";
+            /** Id */
+            id: string;
+            /**
+             * Source
+             * @default model
+             * @enum {string}
+             */
+            source: "model" | "world_rule" | "user";
+            /**
+             * Strength
+             * @default must
+             * @enum {string}
+             */
+            strength: "must" | "prefer";
+            /** Target */
+            target?: string | null;
+            /** Text */
+            text: string;
+            /**
+             * Visual
+             * @default true
+             */
+            visual: boolean;
+            /** World Rule Index */
+            world_rule_index?: number | null;
+        };
+        /** ContinuityRuleIn */
+        ContinuityRuleIn: {
+            /**
+             * Applies To
+             * @enum {string}
+             */
+            applies_to: "every_panel" | "character" | "location";
+            /** Id */
+            id?: string | null;
+            /**
+             * Source
+             * @default user
+             * @enum {string}
+             */
+            source: "model" | "world_rule" | "user";
+            /**
+             * Strength
+             * @default must
+             * @enum {string}
+             */
+            strength: "must" | "prefer";
+            /** Target */
+            target?: string | null;
+            /** Text */
+            text: string;
+            /**
+             * Visual
+             * @default true
+             */
+            visual: boolean;
+            /** World Rule Index */
+            world_rule_index?: number | null;
         };
         /** CreateBalloon */
         CreateBalloon: {
@@ -1194,6 +1297,8 @@ export interface components {
             action: string;
             /** Angle */
             angle: string;
+            /** Beats */
+            beats?: string[];
             /** Characters */
             characters: components["schemas"]["PanelCharacter"][];
             /** Dialogue */
@@ -1208,6 +1313,8 @@ export interface components {
             location_id: string;
             /** Mood */
             mood: string;
+            /** Rule Exceptions */
+            rule_exceptions?: string[];
             /**
              * Shot
              * @enum {string}
@@ -1378,10 +1485,24 @@ export interface components {
              */
             updated_at: string;
         };
+        /** PutContinuityRules */
+        PutContinuityRules: {
+            /** Cast Version */
+            cast_version: number;
+            /** Rules */
+            rules: components["schemas"]["ContinuityRuleIn"][];
+        };
         /** ReorderPanels */
         ReorderPanels: {
             /** Panel Ids */
             panel_ids: string[];
+        };
+        /** ReviewItem */
+        ReviewItem: {
+            /** Key */
+            key: string;
+            /** Message */
+            message: string;
         };
         /** ReviseCharacter */
         ReviseCharacter: {
@@ -1401,16 +1522,22 @@ export interface components {
              * @default error
              * @enum {string}
              */
-            severity: "error" | "warning";
+            severity: "error" | "warning" | "review";
         };
         /** ScriptOut */
         ScriptOut: {
             beats: components["schemas"]["BeatSheet"];
+            /** Consistency */
+            consistency: {
+                [key: string]: unknown;
+            } | null;
             content: components["schemas"]["ComicScript"];
             /** Has Errors */
             has_errors: boolean;
             /** Issues */
             issues: components["schemas"]["ScriptIssue"][];
+            /** Review Required */
+            review_required: components["schemas"]["ReviewItem"][];
             /** Source */
             source: string;
             /** Version */
@@ -1421,6 +1548,8 @@ export interface components {
             audience: components["schemas"]["AgeRating"];
             /** Cast */
             cast: string[];
+            /** Continuity Rules */
+            continuity_rules?: components["schemas"]["ContinuityRule"][];
             format: components["schemas"]["FormatSpec"];
             /** Genre */
             genre: string[];
@@ -3693,6 +3822,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Accepted"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_continuity_rules_v1_projects__project_id__continuity_rules_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutContinuityRules"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
                 };
             };
             /** @description Bad Request */

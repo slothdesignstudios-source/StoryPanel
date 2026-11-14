@@ -30,7 +30,7 @@ from storypanel.db.models import (
     Script,
     StoryBibleRow,
 )  # fmt: skip
-from storypanel.domain.schemas import ComicFormat, ComicScript, StoryBible
+from storypanel.domain.schemas import BeatSheet, ComicFormat, ComicScript, ContinuityRule, StoryBible, slugify
 from storypanel.domain.states import ACTIVE, PanelStatus
 from storypanel.domain.states import ProjectStatus as S
 from storypanel.domain.validation import has_errors, validate_script
@@ -38,7 +38,7 @@ from storypanel.errors import AppError, ErrorCode, invalid_state, not_found, ver
 from storypanel.obs import metrics
 from storypanel.pipeline import moderation, story
 from storypanel.pipeline.stages_art import panel_rect
-from storypanel.pipeline.stages_plan import record_approval
+from storypanel.pipeline.stages_plan import initial_consistency, record_approval
 from storypanel.services import credits, events, outbox, repo
 
 
@@ -208,7 +208,117 @@ async def patch_bible(db: AsyncSession, project: Project, body: api.PatchBible) 
     await events.emit(db, project.id, "bible.updated", {"cast_version": project.cast_version})
 
 
-async def approve_cast(db: AsyncSession, project: Project, version: int, user_id: uuid.UUID) -> None:
+def script_out_of(row: Script) -> api.ScriptOut:
+    return api.ScriptOut(version=row.version, source=row.source, beats=row.beats,  # type: ignore[arg-type]
+                         content=row.content, issues=row.issues,  # type: ignore[arg-type]
+                         has_errors=any(i.get("severity") == "error" for i in row.issues),
+                         consistency=row.consistency, review_required=script_review(row))  # fmt: skip
+
+
+def sheet_review(c: Character) -> api.ReviewItem | None:
+    """What approving the cast acknowledges for this character's current sheet, if anything."""
+    check = c.sheet_check or {}
+    if check.get("sheet_version") != c.sheet_version or check.get("status") not in ("flagged", "unavailable"):
+        return None
+    if check["status"] == "unavailable":
+        msg = f"{c.name}'s reference sheet wasn't reviewed (the checking service didn't answer)."
+    else:
+        bits = [
+            f"{p['item']}: {p.get('note') or 'not drawn as described'}" for p in check.get("problems", [])
+        ][:3]
+        bits += [f"{u['item']}: uncertain" for u in check.get("uncertain", [])][:2]
+        if check.get("whole_figures") == "no" or check.get("layout_unverified"):
+            bits.append("a turnaround view may be cut off")
+        msg = f"{c.name}'s reference sheet was flagged: " + "; ".join(bits or ["see the sheet review"]) + "."
+    return api.ReviewItem(key=f"sheet:{c.slug}:v{c.sheet_version}", message=msg)
+
+
+def script_review(row: Script) -> list[api.ReviewItem]:
+    """Review-level items of one script version that approval must acknowledge explicitly."""
+    items = [api.ReviewItem(key=f"{i['code']}@{i['path']}", message=i["message"])
+             for i in row.issues if i.get("severity") == "review"]  # fmt: skip
+    if row.consistency is None:  # written before the check existed: not checked
+        items.append(api.ReviewItem(key="consistency_unavailable@script",
+                                    message="This version wasn't checked against the Story Bible."))  # fmt: skip
+    return items
+
+
+def _acknowledge(required: list[api.ReviewItem], acknowledged: list[str], what: str) -> list[dict[str, str]]:
+    missing = [r for r in required if r.key not in set(acknowledged)]
+    if missing:
+        raise AppError(ErrorCode.VALIDATION, f"Review the flagged items and confirm to approve {what} anyway.",
+                       fields=[{"field": "acknowledged", "message": r.message} for r in missing][:20])  # fmt: skip
+    return [{"key": r.key, "message": r.message} for r in required]
+
+
+RULE_EDIT_STATUSES = (S.AWAITING_CAST_APPROVAL.value, S.COMPLETED.value, S.PARTIALLY_COMPLETED.value)
+
+
+async def put_continuity_rules(db: AsyncSession, project: Project, body: api.PutContinuityRules) -> None:
+    """Replace the comic's continuity rules (a new Story Bible version).
+
+    Allowed before the cast is approved (approvals are bound to the new version) and after the
+    comic is drawn (rules then apply to later redraws and edits). A rule classified from a world
+    rule keeps that rule's exact wording: the server refuses a changed text, so nothing is invented.
+    """
+    if project.status not in RULE_EDIT_STATUSES:
+        raise invalid_state(
+            "Continuity rules can be changed before the cast is approved, or once the comic is drawn."
+        )
+    if body.cast_version != project.cast_version:
+        raise version_conflict("The cast", project.cast_version)
+    bible = await repo.latest_bible(db, project.id)
+    assert bible is not None
+    cast_ids = set(bible.cast)
+    loc_ids = {loc.id for loc in bible.locations}
+    existing = {r.id: r for r in bible.continuity_rules}
+    rules: list[ContinuityRule] = []
+    used: set[str] = set()
+    problems: list[dict[str, str]] = []
+    for n, r in enumerate(body.rules):
+        field = f"rules.{n}"
+        if r.applies_to == "every_panel" and r.target:
+            problems.append({"field": f"{field}.target", "message": "A rule for every panel has no target."})
+        if r.applies_to == "character" and r.target not in cast_ids:
+            problems.append({"field": f"{field}.target", "message": "Choose a character from the cast."})
+        if r.applies_to == "location" and r.target not in loc_ids:
+            problems.append({"field": f"{field}.target", "message": "Choose one of the comic's locations."})
+        source = r.source
+        if source == "world_rule":
+            idx = r.world_rule_index
+            if idx is None or idx >= len(bible.world_rules) or bible.world_rules[idx] != r.text:
+                problems.append({"field": f"{field}.text",
+                                 "message": "A classified world rule keeps its original wording. Add a new rule to "
+                                            "word it differently."})  # fmt: skip
+        elif source == "model" and (r.id not in existing or existing[r.id].text != r.text):
+            source = "user"  # edited by the user
+        base = slugify(r.id or r.text)[:34]
+        rid, k = base, 2
+        while rid in used:
+            rid, k = f"{base}_{k}", k + 1
+        used.add(rid)
+        rules.append(ContinuityRule(id=rid, text=r.text, applies_to=r.applies_to,
+                                    target=r.target if r.applies_to != "every_panel" else None,
+                                    strength=r.strength, visual=r.visual, source=source,
+                                    world_rule_index=r.world_rule_index if source == "world_rule" else None))  # fmt: skip
+    if problems:
+        raise AppError(ErrorCode.VALIDATION, "Some continuity rules need changes.", fields=problems[:25])
+    verdict = moderation.rule_check(" ".join(r.text for r in rules))
+    if verdict is not None:
+        raise AppError(ErrorCode.MODERATION_BLOCKED, verdict.user_message)
+    updated = bible.model_copy(update={"continuity_rules": rules})
+    version = (await db.execute(select(func.max(StoryBibleRow.version)).where(
+        StoryBibleRow.project_id == project.id))).scalar_one()  # fmt: skip
+    db.add(StoryBibleRow(project_id=project.id, version=version + 1,
+                         content=updated.model_dump(mode="json"), source="user"))  # fmt: skip
+    if project.status == S.AWAITING_CAST_APPROVAL.value:
+        project.cast_version += 1  # approval covers the rules too
+        await repo.invalidate_approvals(db, project.id, "cast")
+    await events.emit(db, project.id, "bible.updated", {"cast_version": project.cast_version})
+
+
+async def approve_cast(db: AsyncSession, project: Project, version: int, user_id: uuid.UUID,
+                       acknowledged: list[str] | None = None) -> None:  # fmt: skip
     if project.status != S.AWAITING_CAST_APPROVAL.value:
         if await repo.approval_is_current(db, project.id, "cast", version):
             return  # duplicate approval of an already-approved version: idempotent success
@@ -218,7 +328,11 @@ async def approve_cast(db: AsyncSession, project: Project, version: int, user_id
     cast = await repo.cast_rows(db, project.id)
     if any(c.sheet_status != "ready" or c.pending_revision for c in cast):
         raise AppError(ErrorCode.CONFLICT, "Wait for all character sheets to finish first.")
-    await record_approval(db, project.id, "cast", version, user_id)
+    if any((c.sheet_check or {}).get("status") == "pending" and (c.sheet_check or {}).get("sheet_version")
+           == c.sheet_version for c in cast):  # fmt: skip
+        raise AppError(ErrorCode.CONFLICT, "Still reviewing the reference sheets. Try again in a moment.")
+    overrides = _acknowledge([r for c in cast if (r := sheet_review(c))], acknowledged or [], "the cast")
+    await record_approval(db, project.id, "cast", version, user_id, overrides=overrides or None)
     await events.emit(db, project.id, "cast.approved", {"cast_version": version})
     await outbox.enqueue(db, "signal", f"approve:cast:{project.id}:{version}", {
         "workflow_id": project.workflow_id, "signal": "approve",
@@ -242,19 +356,28 @@ async def patch_script(db: AsyncSession, project: Project, body: api.PatchScript
         body.script, fmt=bible.format.type, expected_pages=len(body.script.pages)
         if bible.format.type is ComicFormat.WESTERN_PAGE else 1,
         character_ids=set((await repo.cast_specs(db, project.id)).keys()),
-        location_ids={loc.id for loc in bible.locations}, limits=story.script_limits(bible))  # fmt: skip
+        location_ids={loc.id for loc in bible.locations}, limits=story.script_limits(bible),
+        beats=BeatSheet.model_validate(current.beats) if current.beats else None)  # fmt: skip
     project.script_version += 1
     row = Script(project_id=project.id, version=project.script_version, beats=current.beats,
                  content=body.script.model_dump(), issues=[i.model_dump() for i in issues],
-                 source="user")  # fmt: skip
+                 source="user", consistency=initial_consistency(body.script, bible))  # fmt: skip
     db.add(row)
     await repo.invalidate_approvals(db, project.id, "script")
+    if row.consistency["status"] == "pending" and not has_errors(issues):  # type: ignore[index]
+        # Checked against the Story Bible by the workflow (metered, retried); approval waits for it.
+        await outbox.enqueue(db, "signal", f"check:{project.id}:{project.script_version}", {
+            "workflow_id": project.workflow_id, "signal": "check_script",
+            "input": {"id": f"check:{project.id}:{project.script_version}", "version": project.script_version}})  # fmt: skip
+    elif row.consistency["status"] == "pending":  # type: ignore[index]
+        row.consistency = {"status": "skipped", "reason": "fix the listed errors first"}
     await events.emit(db, project.id, "script.updated", {
         "script_version": project.script_version, "has_errors": has_errors(issues)})  # fmt: skip
     return row
 
 
-async def approve_script(db: AsyncSession, project: Project, version: int, user_id: uuid.UUID) -> None:
+async def approve_script(db: AsyncSession, project: Project, version: int, user_id: uuid.UUID,
+                         acknowledged: list[str] | None = None) -> None:  # fmt: skip
     s = get_settings()
     if project.status != S.AWAITING_SCRIPT_APPROVAL.value:
         if await repo.approval_is_current(db, project.id, "script", version):
@@ -275,12 +398,17 @@ async def approve_script(db: AsyncSession, project: Project, version: int, user_
         raise AppError(ErrorCode.VALIDATION, "Fix the highlighted script problems before approving.",
                        fields=[{"field": i["path"], "message": i["message"]} for i in row.issues
                                if i.get("severity") == "error"][:20])  # fmt: skip
+    if (row.consistency or {}).get("status") == "pending":
+        raise AppError(
+            ErrorCode.CONFLICT, "Still checking this version against the Story Bible. Try again in a moment."
+        )
+    overrides = _acknowledge(script_review(row), acknowledged or [], "this script")
     panels = sum(len(p.panels) for p in script.pages)
     # Spending gate: the full illustration price is held now, charged per delivered panel.
     await credits.reserve(db, project.owner_id, panels * s.credits_per_panel, purpose="panels",
                           project_id=project.id,
                           idempotency_key=f"panels:{project.id}:{version}")  # fmt: skip
-    await record_approval(db, project.id, "script", version, user_id)
+    await record_approval(db, project.id, "script", version, user_id, overrides=overrides or None)
     await events.emit(db, project.id, "script.approved", {"script_version": version})
     await outbox.enqueue(db, "signal", f"approve:script:{project.id}:{version}", {
         "workflow_id": project.workflow_id, "signal": "approve",
@@ -427,7 +555,9 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
     characters = [
         api.CharacterOut(slug=c.slug, name=c.name, spec=c.spec, sheet_status=c.sheet_status,  # type: ignore[arg-type]
                          sheet_version=c.sheet_version, revising=bool(c.pending_revision),
-                         images=images.get(c.slug, {}))
+                         images=images.get(c.slug, {}),
+                         sheet_check=c.sheet_check if (c.sheet_check or {}).get("sheet_version") == c.sheet_version else None,
+                         review=sheet_review(c))
         for c in await repo.cast_rows(db, pid)]  # fmt: skip
     loc_rows = (await db.execute(
         select(Location, Asset.storage_key).outerjoin(Asset, Asset.id == Location.reference_asset_id)
@@ -438,9 +568,7 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
     script_out = None
     row = await repo.script_row(db, pid, project.script_version or None)
     if row is not None:
-        script_out = api.ScriptOut(version=row.version, source=row.source, beats=row.beats,  # type: ignore[arg-type]
-                                   content=row.content, issues=row.issues,  # type: ignore[arg-type]
-                                   has_errors=any(i.get("severity") == "error" for i in row.issues))  # fmt: skip
+        script_out = script_out_of(row)
     approved = dict((await db.execute(
         select(Approval.kind, func.max(Approval.content_version))
         .where(Approval.project_id == pid, Approval.status == "approved").group_by(Approval.kind))).all())  # fmt: skip

@@ -19,7 +19,7 @@ from storypanel.db.models import CreditReservation, Page, User
 from storypanel.db.session import transaction
 from storypanel.pipeline import stages_art, stages_plan
 from storypanel.services import credits
-from tests.conftest import wait_for
+from tests.conftest import wait_checked, wait_for
 
 pytestmark = pytest.mark.workflow
 STRIP = "A robot and a girl share noodles in the rain, as a 4 panel strip"
@@ -158,6 +158,7 @@ async def test_script_save_right_after_approval_holds_once_and_draws_the_new_ver
     p = (await client.get(f"/v1/projects/{pid}", headers=headers)).json()
     if p["status"] == "awaiting_script_approval":  # the save made the approval stale
         assert await held() == 0  # its hold was released
+        p = await wait_checked(client, pid, headers)
         r = await client.post(f"/v1/projects/{pid}/script/approve",
                               json={"script_version": p["script_version"]}, headers=headers)  # fmt: skip
         assert r.status_code == 200

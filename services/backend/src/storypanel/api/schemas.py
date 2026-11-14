@@ -62,10 +62,31 @@ class ReviseCharacter(In):
 
 class ApproveCast(In):
     cast_version: int = Field(ge=1)
+    # Review items (flagged or unchecked reference sheets) the user explicitly accepts; recorded.
+    acknowledged: list[str] = Field(default_factory=list, max_length=50)
 
 
 class ApproveScript(In):
     script_version: int = Field(ge=1)
+    # Review items (uncertain or unavailable Story Bible checks) the user explicitly accepts;
+    # recorded with the approval. Errors and safety/moderation refusals cannot be acknowledged.
+    acknowledged: list[str] = Field(default_factory=list, max_length=50)
+
+
+class ContinuityRuleIn(In):
+    id: str | None = Field(default=None, max_length=40)
+    text: str = Field(min_length=1, max_length=300)
+    applies_to: Literal["every_panel", "character", "location"]
+    target: str | None = Field(default=None, max_length=40)
+    strength: Literal["must", "prefer"] = "must"
+    visual: bool = True
+    source: Literal["model", "world_rule", "user"] = "user"
+    world_rule_index: int | None = Field(default=None, ge=0, le=7)
+
+
+class PutContinuityRules(In):
+    cast_version: int = Field(ge=1)
+    rules: list[ContinuityRuleIn] = Field(max_length=12)
 
 
 class PatchScript(In):
@@ -197,6 +218,11 @@ class EstimateOut(Out):
     note: str
 
 
+class ReviewItem(Out):
+    key: str
+    message: str
+
+
 class CharacterOut(Out):
     slug: str
     name: str
@@ -205,6 +231,10 @@ class CharacterOut(Out):
     sheet_version: int
     revising: bool
     images: dict[str, str]
+    # Review of the current sheet (NULL for sheets made before reviews existed): status
+    # pending | ok | flagged | unavailable, with problems and uncertain items.
+    sheet_check: dict[str, Any] | None
+    review: ReviewItem | None  # what approving the cast would acknowledge for this character
 
 
 class LocationOut(Out):
@@ -221,6 +251,10 @@ class ScriptOut(Out):
     content: ComicScript
     issues: list[ScriptIssue]
     has_errors: bool
+    # Story Bible check of this version: pending | done | unavailable; NULL = written before the
+    # check existed (treated as not checked).
+    consistency: dict[str, Any] | None
+    review_required: list[ReviewItem]  # must be acknowledged to approve this version
 
 
 class BalloonOut(Out):

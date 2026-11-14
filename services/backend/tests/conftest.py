@@ -197,3 +197,10 @@ def fal_voyage(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.undo()
     get_settings.cache_clear()
     set_providers(None)
+
+
+async def wait_checked(client: httpx.AsyncClient, project_id: str, headers: dict[str, str]) -> dict[str, Any]:
+    """After a script save: wait until the Story Bible check of the current version has finished
+    (approval is refused while it is pending)."""
+    return await wait_for(client, project_id, headers, lambda p: (p.get("script") or {}).get("consistency") is None
+                          or p["script"]["consistency"].get("status") != "pending")  # fmt: skip

@@ -52,6 +52,14 @@
    "ApproveCast": {
     "additionalProperties": false,
     "properties": {
+     "acknowledged": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Acknowledged",
+      "type": "array"
+     },
      "cast_version": {
       "minimum": 1.0,
       "title": "Cast Version",
@@ -67,6 +75,14 @@
    "ApproveScript": {
     "additionalProperties": false,
     "properties": {
+     "acknowledged": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Acknowledged",
+      "type": "array"
+     },
      "script_version": {
       "minimum": 1.0,
       "title": "Script Version",
@@ -214,9 +230,31 @@
       "title": "Name",
       "type": "string"
      },
+     "review": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ReviewItem"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "revising": {
       "title": "Revising",
       "type": "boolean"
+     },
+     "sheet_check": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sheet Check"
      },
      "sheet_status": {
       "title": "Sheet Status",
@@ -241,7 +279,9 @@
      "sheet_status",
      "sheet_version",
      "revising",
-     "images"
+     "images",
+     "sheet_check",
+     "review"
     ],
     "title": "CharacterOut",
     "type": "object"
@@ -490,6 +530,169 @@
      "pages"
     ],
     "title": "ComicScript",
+    "type": "object"
+   },
+   "ContinuityRule": {
+    "additionalProperties": false,
+    "description": "A rule the pictures (or the story) must keep. `must` rules are required wherever they apply;\n`prefer` rules are stylistic and only requested where natural. `visual` rules go into image\nprompts and image checks; non-visual ones only into the script check.\n\n`source` says where the wording came from: the Bible writer (\"model\"), a classified world\nrule (\"world_rule\": `text` is that rule's original wording, unchanged) or the user.",
+    "properties": {
+     "applies_to": {
+      "enum": [
+       "every_panel",
+       "character",
+       "location"
+      ],
+      "title": "Applies To",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "source": {
+      "default": "model",
+      "enum": [
+       "model",
+       "world_rule",
+       "user"
+      ],
+      "title": "Source",
+      "type": "string"
+     },
+     "strength": {
+      "default": "must",
+      "enum": [
+       "must",
+       "prefer"
+      ],
+      "title": "Strength",
+      "type": "string"
+     },
+     "target": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Target"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     },
+     "visual": {
+      "default": true,
+      "title": "Visual",
+      "type": "boolean"
+     },
+     "world_rule_index": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "World Rule Index"
+     }
+    },
+    "required": [
+     "id",
+     "text",
+     "applies_to"
+    ],
+    "title": "ContinuityRule",
+    "type": "object"
+   },
+   "ContinuityRuleIn": {
+    "additionalProperties": false,
+    "properties": {
+     "applies_to": {
+      "enum": [
+       "every_panel",
+       "character",
+       "location"
+      ],
+      "title": "Applies To",
+      "type": "string"
+     },
+     "id": {
+      "anyOf": [
+       {
+        "maxLength": 40,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Id"
+     },
+     "source": {
+      "default": "user",
+      "enum": [
+       "model",
+       "world_rule",
+       "user"
+      ],
+      "title": "Source",
+      "type": "string"
+     },
+     "strength": {
+      "default": "must",
+      "enum": [
+       "must",
+       "prefer"
+      ],
+      "title": "Strength",
+      "type": "string"
+     },
+     "target": {
+      "anyOf": [
+       {
+        "maxLength": 40,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Target"
+     },
+     "text": {
+      "maxLength": 300,
+      "minLength": 1,
+      "title": "Text",
+      "type": "string"
+     },
+     "visual": {
+      "default": true,
+      "title": "Visual",
+      "type": "boolean"
+     },
+     "world_rule_index": {
+      "anyOf": [
+       {
+        "maximum": 7.0,
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "World Rule Index"
+     }
+    },
+    "required": [
+     "text",
+     "applies_to"
+    ],
+    "title": "ContinuityRuleIn",
     "type": "object"
    },
    "CreateBalloon": {
@@ -1840,6 +2043,13 @@
       "title": "Angle",
       "type": "string"
      },
+     "beats": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Beats",
+      "type": "array"
+     },
      "characters": {
       "items": {
        "$ref": "#/components/schemas/PanelCharacter"
@@ -1870,6 +2080,13 @@
      "mood": {
       "title": "Mood",
       "type": "string"
+     },
+     "rule_exceptions": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Rule Exceptions",
+      "type": "array"
      },
      "shot": {
       "enum": [
@@ -2476,6 +2693,30 @@
     "title": "ProjectSummary",
     "type": "object"
    },
+   "PutContinuityRules": {
+    "additionalProperties": false,
+    "properties": {
+     "cast_version": {
+      "minimum": 1.0,
+      "title": "Cast Version",
+      "type": "integer"
+     },
+     "rules": {
+      "items": {
+       "$ref": "#/components/schemas/ContinuityRuleIn"
+      },
+      "maxItems": 12,
+      "title": "Rules",
+      "type": "array"
+     }
+    },
+    "required": [
+     "cast_version",
+     "rules"
+    ],
+    "title": "PutContinuityRules",
+    "type": "object"
+   },
    "ReorderPanels": {
     "additionalProperties": false,
     "properties": {
@@ -2493,6 +2734,24 @@
      "panel_ids"
     ],
     "title": "ReorderPanels",
+    "type": "object"
+   },
+   "ReviewItem": {
+    "properties": {
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "message"
+    ],
+    "title": "ReviewItem",
     "type": "object"
    },
    "ReviseCharacter": {
@@ -2530,7 +2789,8 @@
       "default": "error",
       "enum": [
        "error",
-       "warning"
+       "warning",
+       "review"
       ],
       "title": "Severity",
       "type": "string"
@@ -2549,6 +2809,18 @@
      "beats": {
       "$ref": "#/components/schemas/BeatSheet"
      },
+     "consistency": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Consistency"
+     },
      "content": {
       "$ref": "#/components/schemas/ComicScript"
      },
@@ -2561,6 +2833,13 @@
        "$ref": "#/components/schemas/ScriptIssue"
       },
       "title": "Issues",
+      "type": "array"
+     },
+     "review_required": {
+      "items": {
+       "$ref": "#/components/schemas/ReviewItem"
+      },
+      "title": "Review Required",
       "type": "array"
      },
      "source": {
@@ -2578,7 +2857,9 @@
      "beats",
      "content",
      "issues",
-     "has_errors"
+     "has_errors",
+     "consistency",
+     "review_required"
     ],
     "title": "ScriptOut",
     "type": "object"
@@ -2594,6 +2875,13 @@
        "type": "string"
       },
       "title": "Cast",
+      "type": "array"
+     },
+     "continuity_rules": {
+      "items": {
+       "$ref": "#/components/schemas/ContinuityRule"
+      },
+      "title": "Continuity Rules",
       "type": "array"
      },
      "format": {
@@ -5571,6 +5859,120 @@
      }
     },
     "summary": "Revise Character",
+    "tags": [
+     "projects"
+    ]
+   }
+  },
+  "/v1/projects/{project_id}/continuity-rules": {
+   "put": {
+    "description": "Replace the comic's continuity rules (classify world rules, add, edit or remove rules).",
+    "operationId": "put_continuity_rules_v1_projects__project_id__continuity_rules_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PutContinuityRules"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectOut"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "402": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Payment Required"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unprocessable Content"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Put Continuity Rules",
     "tags": [
      "projects"
     ]

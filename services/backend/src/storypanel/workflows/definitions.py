@@ -109,6 +109,7 @@ class ComicWorkflow:
         self._answers = False
         self._approvals: dict[str, list[int]] = {"cast": [], "script": []}
         self._revisions: list[str] = []
+        self._checks: list[int] = []  # script versions saved by the user, to check against the Bible
         self._stage = "queued"
 
     def _fresh(self, signal_id: str) -> bool:
@@ -132,6 +133,30 @@ class ComicWorkflow:
     def revise_character(self, arg: dict[str, Any]) -> None:
         if self._fresh(arg["id"]):
             self._revisions.append(arg["slug"])
+
+    @workflow.signal
+    def check_script(self, arg: dict[str, Any]) -> None:
+        if self._fresh(arg["id"]):
+            self._checks.append(int(arg["version"]))
+
+    async def _check_script(self, pid: str, version: int) -> None:
+        """Metered Story Bible check of one script version; bounded retries, then "not checked"."""
+        try:
+            await act("check_script", {"project_id": pid, "version": version}, TEXT)
+        except ActivityError as exc:
+            if classify(exc)[0] in ("spend_limit_reached", "insufficient_credits"):
+                raise
+            await act("script_unchecked", {"project_id": pid, "version": version}, DB)
+
+    async def _sheet(self, pid: str, slug: str, revision: bool) -> None:
+        await act("character_sheet", {"project_id": pid, "slug": slug, "revision": revision}, IMAGE)
+        if workflow.patched("sheet-check-2026-11"):
+            try:
+                await act("check_sheet", {"project_id": pid, "slug": slug}, TEXT)
+            except ActivityError as exc:
+                if classify(exc)[0] in ("spend_limit_reached", "insufficient_credits"):
+                    raise
+                await act("sheet_unchecked", {"project_id": pid, "slug": slug}, DB)
 
     @workflow.query
     def stage(self) -> str:
@@ -161,14 +186,16 @@ class ComicWorkflow:
             pending = self._approvals[kind]
             try:
                 await workflow.wait_condition(
-                    lambda pending=pending: bool(pending) or (kind == "cast" and bool(self._revisions)),  # type: ignore[misc]
+                    lambda pending=pending: bool(pending) or (kind == "cast" and bool(self._revisions))  # type: ignore[misc]
+                    or (kind == "script" and bool(self._checks)),
                     timeout=timedelta(days=days))  # fmt: skip
             except TimeoutError:
                 return None
             while kind == "cast" and self._revisions:
                 slug = self._revisions.pop(0)
-                await act("character_sheet", {"project_id": pid, "slug": slug,
-                                              "revision": True}, IMAGE)  # fmt: skip
+                await self._sheet(pid, slug, revision=True)
+            while kind == "script" and self._checks:
+                await self._check_script(pid, self._checks.pop(0))
             if pending:
                 version = pending.pop(0)
                 if kind == "script":
@@ -215,8 +242,7 @@ class ComicWorkflow:
                 return {"status": "blocked"}
             # Characters and locations are independent of each other: draw them in parallel.
             await asyncio.gather(
-                *[act("character_sheet", {"project_id": pid, "slug": s, "revision": False}, IMAGE)
-                  for s in bible["characters"]],
+                *[self._sheet(pid, s, revision=False) for s in bible["characters"]],
                 *[act("location_ref", {"project_id": pid, "slug": s}, IMAGE)
                   for s in bible["locations"]],
             )  # fmt: skip
@@ -234,9 +260,13 @@ class ComicWorkflow:
 
         if start <= 3:
             self._stage = "scripting"
-            res = await act("script", {"project_id": pid}, TEXT)
+            checked = workflow.patched("script-consistency-2026-11")
+            res = await act("script", {"project_id": pid, "defer_gate": checked}, TEXT)
             if res["outcome"] == "blocked":
                 return {"status": "blocked"}
+            if checked:  # the review screen opens once the Story Bible check has an answer
+                await self._check_script(pid, int(res["script_version"]))
+                await act("open_script_gate", {"project_id": pid}, DB)
 
         plan: dict[str, Any] | None = None
         if start <= 4:

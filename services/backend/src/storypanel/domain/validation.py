@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from storypanel.domain.schemas import ComicFormat, ComicScript, ScriptIssue
+from storypanel.domain.schemas import BeatSheet, ComicFormat, ComicScript, ScriptIssue
 from storypanel.pipeline.lettering import unsupported_chars, unsupported_message
 
 # Server-side text limits for script fields (the browser enforces the same, but is not trusted).
@@ -38,6 +38,7 @@ def validate_script(
     character_ids: set[str],
     location_ids: set[str],
     limits: ScriptLimits | None = None,
+    beats: BeatSheet | None = None,
 ) -> list[ScriptIssue]:
     lim = limits or ScriptLimits()
     issues: list[ScriptIssue] = []
@@ -134,6 +135,51 @@ def validate_script(
                             f"Speaker '{d.speaker}' is not drawn in this panel.", "warning")  # fmt: skip
     if fmt is ComicFormat.WESTERN_PAGE and n_pages >= 2 and large_panels == 0:
         err("no_climax_panel", "pages", "Mark one panel as large for the climax.", "warning")
+    if fmt is ComicFormat.STRIP:
+        for pi, page in enumerate(script.pages):
+            for ni, panel in enumerate(page.panels[:-1]):
+                if panel.emphasis == "large":
+                    err("strip_large_not_last", f"pages[{pi}].panels[{ni}].emphasis",
+                        "In a strip the wide slot is the last panel. This panel will be drawn at normal "
+                        "size; mark the last panel as large instead, or leave both normal.", "warning")  # fmt: skip
+    if beats is not None:
+        issues += beat_coverage(script, beats)
+    return issues
+
+
+def _norm(name: str) -> str:
+    return " ".join(name.lower().split())
+
+
+def beat_coverage(script: ComicScript, beats: BeatSheet) -> list[ScriptIssue]:
+    """Declared coverage, checked deterministically: every beat is claimed by at least one panel,
+    in order. Whether a panel really shows its beat is judged by the consistency check."""
+    names = [_norm(b.name) for b in beats.beats]
+    panels = [(pi, ni, p) for pi, page in enumerate(script.pages) for ni, p in enumerate(page.panels)]
+    issues: list[ScriptIssue] = []
+    if not any(p.beats for _, _, p in panels):
+        return [ScriptIssue(code="beat_coverage_unchecked", path="beats", severity="warning",
+                            message="Panels aren't tagged with beats, so beat coverage wasn't checked.")]  # fmt: skip
+    claimed: set[str] = set()
+    last = -1
+    for pi, ni, p in panels:
+        idx = []
+        for tag in p.beats:
+            if _norm(tag) in names:
+                claimed.add(_norm(tag))
+                idx.append(names.index(_norm(tag)))
+            else:
+                issues.append(ScriptIssue(code="unknown_beat", path=f"pages[{pi}].panels[{ni}].beats", severity="warning",
+                                          message=f"“{tag}” isn't a beat in the beat sheet."))  # fmt: skip
+        if idx and min(idx) < last:
+            issues.append(ScriptIssue(code="beat_order", path=f"pages[{pi}].panels[{ni}].beats", severity="warning",
+                                      message="This panel shows an earlier beat after a later one."))  # fmt: skip
+        last = max([last, *idx])
+    for b in beats.beats:
+        if _norm(b.name) not in claimed:
+            issues.append(ScriptIssue(code="beat_uncovered", path="beats",
+                                      message=f"No panel shows the “{b.name}” beat. Tag a panel with it, or change the "
+                                              "script so a panel shows it."))  # fmt: skip
     return issues
 
 

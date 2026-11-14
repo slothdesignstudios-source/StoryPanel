@@ -78,6 +78,29 @@ class LocationSpec(Strict):
         return v if SLUG.match(v) else slugify(v)
 
 
+class ContinuityRule(Strict):
+    """A rule the pictures (or the story) must keep. `must` rules are required wherever they apply;
+    `prefer` rules are stylistic and only requested where natural. `visual` rules go into image
+    prompts and image checks; non-visual ones only into the script check.
+
+    `source` says where the wording came from: the Bible writer ("model"), a classified world
+    rule ("world_rule": `text` is that rule's original wording, unchanged) or the user."""
+
+    id: str
+    text: str
+    applies_to: Literal["every_panel", "character", "location"]
+    target: str | None = None  # character id or location id; None for every_panel
+    strength: Literal["must", "prefer"] = "must"
+    visual: bool = True
+    source: Literal["model", "world_rule", "user"] = "model"
+    world_rule_index: int | None = None
+
+    @field_validator("id")
+    @classmethod
+    def _slug(cls, v: str) -> str:
+        return v if SLUG.match(v) else slugify(v)
+
+
 class FormatSpec(Strict):
     type: ComicFormat
     pages: int
@@ -99,6 +122,9 @@ class StoryBible(Strict):
     palette: list[str]
     locations: list[LocationSpec]
     cast: list[str]
+    # Absent from Bibles written before 2026-11-14: their world rules are offered for review and
+    # classification instead (never converted silently).
+    continuity_rules: list[ContinuityRule] = Field(default_factory=list)
 
 
 class CharacterVisual(Strict):
@@ -180,6 +206,10 @@ class PanelSpec(Strict):
     mood: str
     emphasis: Literal["normal", "large"] = "normal"
     dialogue: list[DialogueItem] = Field(default_factory=list)
+    # Beat-sheet beats this panel expresses (a panel may carry two in a 3-panel strip).
+    beats: list[str] = Field(default_factory=list)
+    # Continuity rules the user decided do not apply to this panel (recorded, versioned).
+    rule_exceptions: list[str] = Field(default_factory=list)
 
 
 class PageSpec(Strict):
@@ -199,7 +229,58 @@ class ScriptIssue(Strict):
     code: str
     path: str
     message: str
-    severity: Literal["error", "warning"] = "error"
+    # error: blocks approval until fixed; review: needs an explicit, recorded acknowledgement to
+    # approve (uncertain or unavailable consistency checks); warning: informational.
+    severity: Literal["error", "warning", "review"] = "error"
+
+    @property
+    def key(self) -> str:
+        return f"{self.code}@{self.path}"
+
+
+# ---------------------------------------------------------------- consistency checks
+class RuleVerdict(Strict):
+    rule_id: str
+    verdict: Literal["satisfied", "violated", "not_applicable", "uncertain"]
+    reason: str
+
+
+class BeatVerdict(Strict):
+    beat: str
+    expressed: Literal["yes", "no", "uncertain"]
+    reason: str
+
+
+class PanelConsistency(Strict):
+    page: int  # 1-based
+    panel: int  # 1-based
+    rules: list[RuleVerdict]
+    beats: list[BeatVerdict]
+
+
+class ConsistencyConflict(Strict):
+    kind: Literal["rule_vs_rule", "rule_vs_beat", "impossible"]
+    rule_ids: list[str]
+    description: str
+
+
+class ScriptConsistencyReport(Strict):
+    panels: list[PanelConsistency]
+    conflicts: list[ConsistencyConflict]
+
+
+class SheetCheckItem(Strict):
+    item: str
+    kind: Literal["signature_feature", "rule"]
+    visible: Literal["yes", "no", "uncertain"]
+    depicted_correctly: Literal["yes", "no", "uncertain"]
+    note: str
+
+
+class SheetCheckReport(Strict):
+    items: list[SheetCheckItem]
+    whole_figures: Literal["yes", "no", "uncertain"]  # turnaround: every view complete, none cut off
+    notes: list[str]
 
 
 # ---------------------------------------------------------------- QA
@@ -221,6 +302,11 @@ class CharacterObservation(Strict):
     identity_rating: int  # 1..5 against the supplied reference
 
 
+class RequiredElement(Strict):
+    rule_id: str
+    visible: Literal["yes", "no", "uncertain"]
+
+
 class VisionQAReport(Strict):
     character_count: int
     characters: list[CharacterObservation]
@@ -229,6 +315,8 @@ class VisionQAReport(Strict):
     anatomy_defects: list[str]
     action_box: Box | None = None
     fix_notes: list[str]
+    # one entry per required visual continuity rule listed in the request
+    required_elements: list[RequiredElement] = Field(default_factory=list)
 
 
 # Gemini visual identity QA: a categorical judgment from comparing the panel with the approved

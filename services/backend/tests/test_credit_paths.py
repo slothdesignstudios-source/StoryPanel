@@ -17,7 +17,7 @@ from storypanel.db.models import CreditLedger, User
 from storypanel.db.session import transaction
 from storypanel.providers import fake
 from storypanel.services import credits
-from tests.conftest import wait_for
+from tests.conftest import wait_checked, wait_for
 
 pytestmark = pytest.mark.workflow
 STRIP = "A robot and a girl share noodles in the rain, as a 4 panel strip"
@@ -53,6 +53,7 @@ async def patch(client: Any, headers: dict[str, str], pid: str, p: dict[str, Any
     r = await client.patch(f"/v1/projects/{pid}/script", headers=headers,
                            json={"base_version": p["script_version"], "script": script})  # fmt: skip
     assert r.status_code == 200, r.text
+    await wait_checked(client, headers=headers, project_id=pid)
     return int(r.json()["version"])
 
 

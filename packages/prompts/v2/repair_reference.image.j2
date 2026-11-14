@@ -1,0 +1,5 @@
+{{ style_token }}. Image 1 is a finished comic panel. Image 2 is the approved reference for {{ name }}: {{ canonical_description }}.
+Redraw only {{ name }}, who occupies the region from {{ left }}% to {{ right }}% across and {{ top }}% to {{ bottom }}% down, so that they match Image 2 exactly: same face, hair, outfit, colours and signature features. Keep their pose and position.
+{% for note in fix_notes %}Correction: {{ note }}
+{% endfor %}Leave everything else in Image 1 unchanged. Match its lighting, line weight and colours.
+No text, letters, speech bubbles, captions or watermarks.

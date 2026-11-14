@@ -143,12 +143,37 @@ async def begin_scripting(arg: dict[str, Any]) -> dict[str, Any]:
 
 @stage_activity("script")
 async def script(arg: dict[str, Any]) -> dict[str, Any]:
-    return await plan.stage_script(_id(arg, "project_id"))
+    return await plan.stage_script(_id(arg, "project_id"), defer_gate=bool(arg.get("defer_gate")))
 
 
 @stage_activity("precheck_script")
 async def precheck_script(arg: dict[str, Any]) -> dict[str, Any]:
     return await plan.stage_precheck_script(_id(arg, "project_id"), arg["version"])
+
+
+@stage_activity("check_script")
+async def check_script(arg: dict[str, Any]) -> dict[str, Any]:
+    return await plan.stage_check_script(_id(arg, "project_id"), int(arg["version"]))
+
+
+@stage_activity("open_script_gate")
+async def open_script_gate(arg: dict[str, Any]) -> None:
+    await plan.stage_open_script_gate(_id(arg, "project_id"))
+
+
+@stage_activity("script_unchecked")
+async def script_unchecked(arg: dict[str, Any]) -> None:
+    await plan.stage_script_unchecked(_id(arg, "project_id"), int(arg["version"]))
+
+
+@stage_activity("check_sheet")
+async def check_sheet(arg: dict[str, Any]) -> dict[str, Any]:
+    return await plan.stage_check_sheet(_id(arg, "project_id"), arg["slug"])
+
+
+@stage_activity("sheet_unchecked")
+async def sheet_unchecked(arg: dict[str, Any]) -> None:
+    await plan.stage_sheet_unchecked(_id(arg, "project_id"), arg["slug"])
 
 
 @stage_activity("plan_pages")
@@ -229,5 +254,6 @@ ACTIVITIES = [
     intake, bible, character_sheet, location_ref, cast_ready, check_approval, begin_scripting,
     script, precheck_script, plan_pages, generate_panel, qa_panel, finalize_panel, panel_failed,
     letter_page, finish, end_project, close_reservation, export_begin, export_page,
-    export_assemble, export_failed,
+    export_assemble, export_failed, check_script, script_unchecked, check_sheet, sheet_unchecked,
+    open_script_gate,
 ]  # fmt: skip

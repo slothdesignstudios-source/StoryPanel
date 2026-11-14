@@ -40,6 +40,20 @@ class FakeControl:
     """Failure injection. Tests mutate `control`; processes can seed it via SP_FAKE_SCENARIO."""
 
     script_violations: int = 0  # first N scripts break the 25-word rule
+    script_untagged_beat: str = ""  # no panel claims this beat (repair loop sees beat_uncovered)
+    # Story Bible consistency check (script) and reference-sheet review: judgments come from here
+    consistency_violated: set[str] = field(
+        default_factory=set
+    )  # rule ids judged "violated" wherever they apply
+    consistency_uncertain: set[str] = field(default_factory=set)  # rule ids judged "uncertain"
+    beats_not_expressed: set[str] = field(default_factory=set)  # beat names judged "no"
+    consistency_conflict: bool = False  # report one rule_vs_beat conflict
+    consistency_errors: int = 0  # the next N consistency calls fail (retryable provider error)
+    sheet_flags: set[str] = field(default_factory=set)  # character ids whose first item is "no"
+    sheet_check_errors: int = 0  # the next N sheet reviews fail (retryable provider error)
+    rule_missing_attempts: int = 0  # required elements are judged "no" on the first N panel attempts
+    rule_uncertain_targets: set[str] = field(default_factory=set)  # panel ids: required elements "uncertain"
+    no_continuity_rules: bool = False  # the fake Bible writes no continuity rules (legacy-like)
     qa_fail_attempts: int = 0  # each panel fails QA on its first N attempts
     qa_fail_targets: set[str] = field(default_factory=set)  # these targets always fail QA
     unsafe_targets: set[str] = field(default_factory=set)  # image safety blocks these
@@ -126,7 +140,8 @@ class FakeTextProvider:
             "IntakeResult": self._intake, "BibleAndCast": self._bible, "ScriptDraft": self._script,
             "ModerationVerdict": self._moderation, "VisionQAReport": self._vision,
             "SafetyVerdict": self._safety, "CharacterSpec": self._revise_spec,
-            "IdentityVisualReport": self._identity,
+            "IdentityVisualReport": self._identity, "ScriptConsistencyReport": self._consistency,
+            "SheetCheckReport": self._sheet_check,
         }[schema.__name__]  # fmt: skip
         out = schema.model_validate(builder(ctx, user))
         usage = Usage(provider=self.name, model=self.model_for(role), operation=f"text_{role}",
@@ -209,7 +224,15 @@ class FakeTextProvider:
                            "panels_per_page": "3-4" if fmt == "strip" else "4-6"},
                 "style_preset": b["style_preset"], "setting": b["setting"], "tone": b["tone"],
                 "themes": ["loneliness", "small kindnesses"],
-                "world_rules": ["robots are common but rarely befriended"],
+                "world_rules": ["robots are common but rarely befriended",
+                                f"{chars[0]['name']} always wears the red apron"],
+                "continuity_rules": [] if control.no_continuity_rules else [
+                    {"id": "apron_always", "text": f"{chars[0]['name']} wears the red apron with a noodle-bowl patch",
+                     "applies_to": "character", "target": chars[0]["id"], "strength": "must", "visual": True,
+                     "source": "model"},
+                    {"id": "light_rain", "text": "light rain in the air", "applies_to": "location",
+                     "target": "noodle_stall_night", "strength": "prefer", "visual": True, "source": "model"},
+                ],
                 "palette": ["#F4E9D8", "#D94F30", "#2B2B2B"],
                 "locations": [
                     {"id": "noodle_stall_night", "name": "Noodle stall",
@@ -266,6 +289,12 @@ class FakeTextProvider:
             out_pages.append({"panels": panels})
         beats = (["setup", "development", "twist", "payoff"] if strip
                  else ["hook", "setup", "rising conflict", "climax", "resolution"])  # fmt: skip
+        flat = [pn for pg in out_pages for pn in pg["panels"]]
+        for n, pn in enumerate(flat):  # every beat claimed by a panel, in order (two per panel if needed)
+            pn["beats"] = [b for m, b in enumerate(beats) if m * len(flat) // len(beats) == n]
+        if control.script_untagged_beat:
+            for pn in flat:
+                pn["beats"] = [b for b in pn["beats"] if b != control.script_untagged_beat]
         return {
             "beat_sheet": {
                 "structure": "kishotenketsu" if strip else "three_act",
@@ -309,7 +338,39 @@ class FakeTextProvider:
             "action_box": {"x": 0.3, "y": 0.5, "w": 0.4, "h": 0.3},
             "fix_notes": (["Draw the missing signature feature clearly."] if fail else [])
             + (["Remove all lettering from the art."] if text else []),
+            "required_elements": [
+                {"rule_id": r, "visible": "uncertain" if target in control.rule_uncertain_targets
+                 else "no" if ctx.attempt < control.rule_missing_attempts else "yes"}
+                for r in ctx.inputs.get("required_rules", [])],
         }  # fmt: skip
+
+    def _consistency(self, ctx: CallContext, user: str) -> dict[str, Any]:
+        if control.consistency_errors > 0:
+            control.consistency_errors -= 1
+            raise AppError(ErrorCode.PROVIDER_ERROR, "Fake consistency check failure.", retryable=True)
+        panels = []
+        for p in ctx.inputs["panels"]:
+            rules = [{"rule_id": r, "reason": "Simulated judgment.",
+                      "verdict": "violated" if r in control.consistency_violated
+                      else "uncertain" if r in control.consistency_uncertain else "satisfied"}
+                     for r in p["rules"]]  # fmt: skip
+            beats = [{"beat": b, "reason": "Simulated judgment.",
+                      "expressed": "no" if b in control.beats_not_expressed else "yes"} for b in p["beats"]]  # fmt: skip
+            panels.append({"page": p["page"], "panel": p["panel"], "rules": rules, "beats": beats})
+        conflicts = ([{"kind": "rule_vs_beat", "rule_ids": ctx.inputs["rules"][:1],
+                       "description": "Simulated conflict."}] if control.consistency_conflict else [])  # fmt: skip
+        return {"panels": panels, "conflicts": conflicts}
+
+    def _sheet_check(self, ctx: CallContext, user: str) -> dict[str, Any]:
+        if control.sheet_check_errors > 0:
+            control.sheet_check_errors -= 1
+            raise AppError(ErrorCode.PROVIDER_ERROR, "Fake sheet review failure.", retryable=True)
+        flagged = ctx.inputs["character"] in control.sheet_flags
+        items = [{"item": t, "kind": "signature_feature", "visible": "yes",
+                  "depicted_correctly": "no" if flagged and n == 0 else "yes",
+                  "note": "reads as a pencil held sideways" if flagged and n == 0 else ""}
+                 for n, t in enumerate(ctx.inputs["items"])]  # fmt: skip
+        return {"items": items, "whole_figures": "yes", "notes": []}
 
     def _identity(self, ctx: CallContext, user: str) -> dict[str, Any]:
         """Simulated Gemini visual comparison: judgments come only from FakeControl, never from

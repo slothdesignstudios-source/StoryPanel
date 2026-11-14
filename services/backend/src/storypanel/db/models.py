@@ -132,6 +132,9 @@ class Character(Base, Timestamps):
     sheet_version: Mapped[int] = mapped_column(Integer, default=0)
     lora_id: Mapped[str | None] = mapped_column(String(120))  # v2 extension point
     pending_revision: Mapped[JSON | None] = mapped_column(JSONB)
+    # Review of the current reference sheet: {"sheet_version": n, "status": ok|flagged|unavailable,
+    # "items": [...], "layout": {...}}. Flags are for the user to review; nothing is redrawn.
+    sheet_check: Mapped[JSON | None] = mapped_column(JSONB)
     __table_args__ = (UniqueConstraint("project_id", "slug"),)
 
 
@@ -172,6 +175,9 @@ class Script(Base):
     content: Mapped[JSON] = mapped_column(JSONB)
     issues: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     source: Mapped[str] = mapped_column(String(10), default="ai")
+    # Story Bible consistency check of this exact version: {"status": pending|done|unavailable,
+    # "bible_version": n, "checked_at": iso}. NULL for scripts written before the check existed.
+    consistency: Mapped[JSON | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __table_args__ = (UniqueConstraint("project_id", "version"),)
 
@@ -186,6 +192,8 @@ class Approval(Base):
     content_version: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(15), default="approved")
     approved_by: Mapped[uuid.UUID] = fk("users.id")
+    # Review-level issues the user explicitly accepted with this approval (issue keys + messages).
+    overrides: Mapped[JSON | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     __table_args__ = (UniqueConstraint("project_id", "kind", "content_version"),)
 

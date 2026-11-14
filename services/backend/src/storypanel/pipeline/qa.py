@@ -21,6 +21,7 @@ from storypanel.config import get_settings
 from storypanel.domain.schemas import (
     AgeRating,
     CharacterSpec,
+    ContinuityRule,
     IdentityVisualReport,
     PanelSpec,
     SafetyVerdict,
@@ -79,7 +80,7 @@ async def check_safety(image: bytes, audience: AgeRating, ctx: CallContext) -> S
 
 IDENTITY_SEVERITY = {"pass": 0, "manual_review": 1, "repair": 2}
 REVIEW_ONLY = frozenset({"identity_uncertain", "identity_unverified", "identity_check_invalid",
-                         "identity_flagged_manual_review"})  # fmt: skip
+                         "identity_flagged_manual_review", "rule_uncertain"})  # fmt: skip
 
 
 def assess_identity(report: IdentityVisualReport, expected: list[str]) -> tuple[str, list[str]]:
@@ -146,8 +147,10 @@ async def evaluate_panel(
     *, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec], audience: AgeRating,
     reference_images: dict[str, bytes], reference_embeddings: dict[str, list[list[float]]],
     ctx: CallContext, identity_references: dict[str, list[bytes]] | None = None,
+    required: list[ContinuityRule] | None = None,
 ) -> QAOutcome:  # fmt: skip
     s = get_settings()
+    required = required or []
     safety = await check_safety(image, audience, ctx)
     if not safety.allowed:
         return QAOutcome("blocked", {"safety": safety.model_dump()})
@@ -163,6 +166,9 @@ async def evaluate_panel(
         feats = ", ".join(cast[ch.id].visual.signature_features)
         spec_lines.append(f"- id '{ch.id}' ({cast[ch.id].name}), {ch.position}, {ch.pose}, "
                           f"{ch.expression}. Signature features: {feats}")  # fmt: skip
+    if required:
+        spec_lines.append("Required elements (report each by rule id):")
+        spec_lines += [f"- {r.id}: {r.text}" for r in required]
     report = await metering.structured(
         role="vision",
         system=render_prompt("vision_qa"),
@@ -184,7 +190,8 @@ async def evaluate_panel(
                         "signature_features": cast[c.id].visual.signature_features,
                     }
                     for c in expected
-                ]
+                ],
+                "required_rules": [r.id for r in required],
             },
         ),  # fmt: skip
     )
@@ -199,6 +206,15 @@ async def evaluate_panel(
         problems.append("stray_text")
     if report.anatomy_defects:
         problems.append("anatomy")
+    # Required visual elements (must-have continuity rules). No answer for a requested rule is
+    # not evidence that it is there: it is treated as uncertain, never as a pass.
+    seen_rules = {e.rule_id: e.visible for e in report.required_elements}
+    for r in required:
+        verdict = seen_rules.get(r.id, "uncertain")
+        if verdict == "no":
+            problems.append(f"rule_missing:{r.id}")
+        elif verdict == "uncertain":
+            problems.append(f"rule_uncertain:{r.id}")
     ratings: list[int] = []
     for ch in expected:
         o = observed.get(ch.id)
@@ -257,6 +273,10 @@ async def evaluate_panel(
     metrics.qa_results.labels("vision", status).inc()
     metrics.qa_results.labels("stray_text", "fail" if report.visible_text else "pass").inc()
     notes = list(report.fix_notes)
+    by_rule = {r.id: r for r in required}
+    for p in problems:
+        if p.startswith("rule_missing:") and p.split(":", 1)[1] in by_rule:
+            notes.append(f"Draw this clearly: {by_rule[p.split(':', 1)[1]].text}")
     for p in problems:
         if p.startswith("identity_embedding:") and not notes:
             notes.append(f"Match {cast[p.split(':')[1]].name} to the reference image exactly.")

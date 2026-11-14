@@ -124,6 +124,8 @@ async def stage_generate_panel(
         cast = await repo.cast_specs(db, project.id)
         locations = await repo.location_specs(db, project.id)
         char_refs = await repo.character_ref_assets(db, project.id)
+        bible_now = await repo.latest_bible(db, project.id)
+        rules = bible_now.continuity_rules if bible_now else []
         loc_refs = {r.slug: str(r.reference_asset_id) for r in await repo.location_rows(db, project.id)
                     if r.reference_asset_id}  # fmt: skip
         template = layouts()[page.layout_template_id]
@@ -216,7 +218,7 @@ async def stage_generate_panel(
                     names.append((cast[ch.id].name, len(refs)))
                     used.append({"role": "character", "key": ch.id, "view": "portrait",
                                  "asset_id": asset})  # fmt: skip
-        prompt = art.compile_edit_prompt(instruction, preset, names)
+        prompt = art.compile_edit_prompt(instruction, preset, names, art.rules_for_panel(rules, spec)[0])
         prompt_sha = hashlib.sha256(prompt.encode()).hexdigest()
         req = ImageRequest(prompt, aspect, tuple(refs), mode="edit", seed=seed,
                            inputs={"kind": "panel", "characters": [
@@ -226,7 +228,7 @@ async def stage_generate_panel(
         compiled = art.compile_panel(
             panel=spec, aspect=aspect, style_preset=preset, cast=cast, locations=locations,
             character_refs=char_refs, location_refs=loc_refs, continuity=continuity,
-            max_references=s.image_max_references, fix_notes=tuple(fix_notes or ()),
+            max_references=s.image_max_references, fix_notes=tuple(fix_notes or ()), rules=rules,
         )  # fmt: skip
         async with transaction() as db:
             refs = [ImageInput(await repo.asset_bytes(db, uuid.UUID(slot.asset_id)))
@@ -274,6 +276,8 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
             .where(Character.project_id == project.id,
                    CharacterRef.sheet_version == Character.sheet_version,
                    Character.slug.in_([ch.id for ch in spec.characters])))).all()  # fmt: skip
+        bible_now = await repo.latest_bible(db, project.id)
+        required = art.rules_for_panel(bible_now.continuity_rules if bible_now else [], spec)[0]
         ref_images: dict[str, bytes] = {}
         ref_vectors: dict[str, list[list[float]]] = {}
         identity_refs: dict[str, list[bytes]] = {}  # approved portrait + front view, for visual QA
@@ -286,7 +290,7 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
                 ref_vectors.setdefault(slug, []).append([float(x) for x in embedding])
     ctx = CallContext("panel_qa", str(project.owner_id), str(project.id),
                       target_id=str(version.panel_id), attempt=attempt)  # fmt: skip
-    outcome = await qa.evaluate_panel(image=image, panel=spec, cast=cast, audience=c["audience"],
+    outcome = await qa.evaluate_panel(image=image, panel=spec, cast=cast, audience=c["audience"], required=required,
                                       reference_images=ref_images,
                                       reference_embeddings=ref_vectors, identity_references=identity_refs,
                                       ctx=ctx)  # fmt: skip

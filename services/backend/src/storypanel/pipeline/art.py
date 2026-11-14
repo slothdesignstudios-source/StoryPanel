@@ -17,11 +17,52 @@ from storypanel.catalog import (
     render_prompt,
     styles,
 )  # fmt: skip
-from storypanel.domain.schemas import CharacterSpec, ComicFormat, LocationSpec, PageSpec, PanelSpec
+from storypanel.domain.schemas import (
+    CharacterSpec,
+    ComicFormat,
+    ContinuityRule,
+    LocationSpec,
+    PageSpec,
+    PanelSpec,
+)  # fmt: skip
 from storypanel.errors import AppError, ErrorCode
 from storypanel.providers.base import nearest_aspect
 
 SHOT_WORDS = {"wide": "Wide", "medium": "Medium", "close_up": "Close-up"}
+# What each shot means for the framing, so the image model gets more than one word.
+COMPOSITION = {
+    "wide": "Show full figures small within the setting, with the surroundings clearly visible.",
+    "medium": "Frame the characters from about the waist up.",
+    "close_up": "The main character's head and shoulders fill most of the frame; little background.",
+}
+CLIMAX = " This is the climactic moment of the page: give it the most dramatic composition."
+
+
+# ------------------------------------------------------------------ continuity rules
+def rules_for_panel(
+    rules: list[ContinuityRule], panel: PanelSpec
+) -> tuple[list[ContinuityRule], list[ContinuityRule]]:
+    """Visual rules that apply to one panel: (must, prefer). A character rule applies wherever
+    that character is drawn; a location rule wherever the panel is set there. Rules the user
+    excepted for this panel are left out (the exception is recorded in the script)."""
+    present = {c.id for c in panel.characters}
+    applies = [r for r in rules if r.visual and r.id not in panel.rule_exceptions and (
+        r.applies_to == "every_panel"
+        or (r.applies_to == "character" and r.target in present)
+        or (r.applies_to == "location" and r.target == panel.location_id))]  # fmt: skip
+    return [r for r in applies if r.strength == "must"], [r for r in applies if r.strength == "prefer"]
+
+
+def rules_for_character(rules: list[ContinuityRule], character_id: str) -> list[ContinuityRule]:
+    """Must-have visual rules about one character: part of the reference sheet."""
+    return [r for r in rules if r.visual and r.strength == "must" and r.applies_to == "character"
+            and r.target == character_id]  # fmt: skip
+
+
+def _rule_text(r: ContinuityRule) -> str:
+    return r.text.strip().rstrip(".") + "."
+
+
 POSITION_PHRASES = {"left": "On the left", "center": "In the centre", "right": "On the right"}
 
 
@@ -106,7 +147,7 @@ def compile_panel(
     *, panel: PanelSpec, aspect: str, style_preset: str, cast: dict[str, CharacterSpec],
     locations: dict[str, LocationSpec], character_refs: dict[str, dict[str, str]],
     location_refs: dict[str, str], continuity: tuple[str, str] | None, max_references: int,
-    fix_notes: tuple[str, ...] = (),
+    fix_notes: tuple[str, ...] = (), rules: list[ContinuityRule] | None = None,
 ) -> CompiledPanel:  # fmt: skip
     """Fixed order: style token, shot, setting, characters, action, mood, constraints."""
     style = styles().get(style_preset)
@@ -135,8 +176,11 @@ def compile_panel(
             "expression": ch.expression.strip().rstrip("."),
         })  # fmt: skip
     location = locations[panel.location_id]
+    must, prefer = rules_for_panel(rules or [], panel)
+    composition = COMPOSITION[panel.shot] + (CLIMAX if panel.emphasis == "large" else "")
     prompt = render_prompt(
-        "panel", style_token=style.token, shot=SHOT_WORDS[panel.shot],
+        "panel", style_token=style.token, shot=SHOT_WORDS[panel.shot], composition=composition,
+        must_rules=[_rule_text(r) for r in must], prefer_rules=[_rule_text(r) for r in prefer],
         angle=panel.angle.strip().rstrip("."), aspect=aspect,
         location_description=location.description.strip().rstrip("."),
         time_of_day=panel.time_of_day.strip().rstrip("."),
@@ -148,17 +192,18 @@ def compile_panel(
     inputs = {"kind": "panel", "characters": [
         {"id": ch.id, "position": ch.position, "palette": cast[ch.id].visual.palette,
          "signature_features": cast[ch.id].visual.signature_features}
-        for ch in panel.characters]}  # fmt: skip
+        for ch in panel.characters], "required_rules": [r.id for r in must]}  # fmt: skip
     return CompiledPanel(prompt, PROMPT_VERSION, prompt_sha256(prompt), aspect, tuple(slots), inputs)
 
 
 def compile_sheet_prompt(kind: str, spec: CharacterSpec, style_preset: str,
-                         instruction: str | None = None) -> tuple[str, dict[str, Any]]:  # fmt: skip
+                         instruction: str | None = None,
+                         rules: list[ContinuityRule] | None = None) -> tuple[str, dict[str, Any]]:  # fmt: skip
     style = styles().get(style_preset)
     palette = ", ".join(f"{k} {v}" for k, v in spec.visual.palette.items())
     ctx: dict[str, Any] = {"style_token": style.token, "name": spec.name,
-                           "canonical_description": spec.canonical_description(),
-                           "palette": palette}  # fmt: skip
+                           "canonical_description": spec.canonical_description(), "palette": palette,
+                           "must_rules": [_rule_text(r) for r in rules_for_character(rules or [], spec.id)]}  # fmt: skip
     if kind == "revise":
         ctx["instruction"] = instruction
         ctx.pop("palette")
@@ -175,11 +220,12 @@ def compile_location_prompt(loc: LocationSpec, style_preset: str, palette: list[
                          palette=", ".join(palette))  # fmt: skip
 
 
-def compile_edit_prompt(instruction: str, style_preset: str,
-                        characters: list[tuple[str, int]]) -> str:  # fmt: skip
+def compile_edit_prompt(instruction: str, style_preset: str, characters: list[tuple[str, int]],
+                        must_rules: list[ContinuityRule] | None = None) -> str:  # fmt: skip
     return render_prompt("panel_edit", style_token=styles().get(style_preset).token,
                          instruction=instruction.strip(),
-                         characters=[{"name": n, "ref": r} for n, r in characters])  # fmt: skip
+                         characters=[{"name": n, "ref": r} for n, r in characters],
+                         must_rules=[_rule_text(r) for r in must_rules or []])  # fmt: skip
 
 
 def compile_reference_repair_prompt(spec: CharacterSpec, style_preset: str, fix_notes: tuple[str, ...],

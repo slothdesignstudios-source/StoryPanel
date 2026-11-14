@@ -1,0 +1,12 @@
+{{ style_token }}. {{ shot }} shot, {{ angle }}, {{ aspect }} frame. {{ composition }}
+Setting: {{ location_description }}{% if time_of_day %}, {{ time_of_day }}{% endif %}{% if location_ref %} (image {{ location_ref }}){% endif %}.
+{% for c in characters %}{{ c.position_phrase }}: {{ c.name }}, {{ c.canonical_description }}{% if c.ref %} from image {{ c.ref }}{% endif %}, {{ c.pose }}, {{ c.expression }}.
+{% endfor %}{{ action }}. {{ mood }} mood.
+{% for r in must_rules %}Must be clearly visible: {{ r }}
+{% endfor %}{% for r in prefer_rules %}Where it fits naturally: {{ r }}
+{% endfor %}
+{% if continuity_ref %}Continue directly from the previous panel (image {{ continuity_ref }}): same place, lighting and outfits.
+{% endif %}{% if characters %}Keep all characters exactly as in their reference images.
+{% endif %}{% for note in fix_notes %}Correction: {{ note }}
+{% endfor %}Leave clear empty space in the {{ balloon_zone }} of the frame.
+No text, letters, speech bubbles, captions or watermarks.

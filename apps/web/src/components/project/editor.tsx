@@ -13,6 +13,7 @@ import { wordCount } from "@/lib/text";
 import type { Balloon, ExportOut, Geometry, Page, Panel, Project } from "@/lib/types";
 import { onIdentityReset, pk } from "@/lib/session";
 import { LETTERING_SUPPORTED_SUMMARY, unsupportedLetteringChars, unsupportedLetteringMessage } from "@/lib/lettering-charset";
+import { ContinuityRules } from "./continuity";
 
 const PageCanvas = dynamic(() => import("./page-canvas"), { ssr: false, loading: () => <div className="halftone aspect-[2/3] w-full" /> });
 
@@ -356,6 +357,7 @@ export function Editor({ project }: { project: Project }) {
           </Card>
         </aside>
       </div>
+      {project.bible && <ContinuityRules project={project} />}
     </div>
   );
 }

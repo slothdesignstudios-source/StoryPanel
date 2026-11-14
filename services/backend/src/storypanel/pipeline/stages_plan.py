@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select, update
@@ -26,6 +27,7 @@ from storypanel.db.models import (
 from storypanel.db.session import transaction
 from storypanel.domain.schemas import (
     AgeRating,
+    BeatSheet,
     CharacterSpec,
     ComicBrief,
     LocationSpec,
@@ -36,7 +38,7 @@ from storypanel.domain.validation import has_errors
 from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
 from storypanel.obs.logging import get_logger
-from storypanel.pipeline import art, moderation, qa, sheets, story
+from storypanel.pipeline import art, consistency, moderation, qa, sheets, story
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext, ImageInput, ImageRequest
 from storypanel.services import credits, events, repo
@@ -169,6 +171,8 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
         char_id, pending = char.id, char.pending_revision
         choice, model = project.image_provider, project.image_model
         spec = CharacterSpec.model_validate(char.spec)
+        bible_now = await repo.latest_bible(db, project_id)
+        rules = bible_now.continuity_rules if bible_now else []
         if revision and not pending:
             return {"outcome": "noop"}  # this revision was already applied
         if not revision and char.sheet_status == "ready":
@@ -224,18 +228,18 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
                 ),  # fmt: skip
             )
             spec = updated.model_copy(update={"id": spec.id, "name": spec.name})
-            prompt, inputs = art.compile_sheet_prompt("revise", spec, preset, instruction)
+            prompt, inputs = art.compile_sheet_prompt("revise", spec, preset, instruction, rules)
             assert old_portrait is not None
             req = ImageRequest(prompt, "3:4", (ImageInput(old_portrait),), mode="edit", inputs=inputs,
                                seed=int(uuid.UUID(pending["request_id"]).int % 2**31) if pending else None)  # fmt: skip
         else:
-            prompt, inputs = art.compile_sheet_prompt("portrait", spec, preset)
+            prompt, inputs = art.compile_sheet_prompt("portrait", spec, preset, rules=rules)
             req = ImageRequest(prompt, "3:4", inputs=inputs, seed=target)
         portrait = await _safe_image(req, ctx, key=f"{base_key}:portrait", audience=audience,
                                      owner=owner, project_id=project_id, choice=choice, model=model)  # fmt: skip
         ref_in = (ImageInput(portrait.data),)
-        t_prompt, t_inputs = art.compile_sheet_prompt("turnaround", spec, preset)
-        e_prompt, e_inputs = art.compile_sheet_prompt("expressions", spec, preset)
+        t_prompt, t_inputs = art.compile_sheet_prompt("turnaround", spec, preset, rules=rules)
+        e_prompt, e_inputs = art.compile_sheet_prompt("expressions", spec, preset, rules=rules)
         # Independent of each other, so they run in parallel; both depend on the portrait.
         turnaround, expressions = await asyncio.gather(
             _safe_image(ImageRequest(t_prompt, "16:9", ref_in, inputs=t_inputs, seed=target),
@@ -280,6 +284,8 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
             db.add(CharacterRef(character_id=char.id, sheet_version=target, view=view,
                                 asset_id=asset.id, embedding=embeddings.get(view)))  # fmt: skip
         char.sheet_version, char.sheet_status = target, "ready"
+        # Reviewed by stage_check_sheet next (a separate metered step); until then "pending".
+        char.sheet_check = {"sheet_version": target, "status": "pending", "layout": layout_report}
         char.spec = spec.model_dump(mode="json")
         if any(r["method"] == "unverified" for r in layout_report.values()):
             log.warning("sheet_layout_unverified", character=slug, report=layout_report)
@@ -369,13 +375,21 @@ async def stage_begin_scripting(project_id: uuid.UUID, version: int | None = Non
         return {"stale": False}
 
 
-async def stage_script(project_id: uuid.UUID) -> dict[str, Any]:
+async def stage_script(project_id: uuid.UUID, defer_gate: bool = False) -> dict[str, Any]:
+    """Write the script. With `defer_gate` the comic stays in "scripting" until the Story Bible
+    check of the new version has finished (open_script_gate), so the review screen never offers
+    an approval that would be refused while the check runs."""
     s = get_settings()
     async with transaction() as db:
         project = await repo.get_project(db, project_id)
         owner = project.owner_id
         if project.status != S.SCRIPTING.value:
             return {"outcome": "ready", "script_version": project.script_version}
+        if defer_gate and project.script_version:
+            latest = await repo.script_row(db, project_id, project.script_version)
+            if latest is not None and latest.source == "ai":
+                # written by an earlier attempt of this activity: never pay for it twice
+                return {"outcome": "ready", "script_version": project.script_version}
         bible = await repo.latest_bible(db, project_id)
         cast = list((await repo.cast_specs(db, project_id)).values())
     assert bible is not None
@@ -394,15 +408,17 @@ async def stage_script(project_id: uuid.UUID) -> dict[str, Any]:
             db.add(Script(project_id=project_id, version=project.script_version,
                           beats=outcome.draft.beat_sheet.model_dump(),
                           content=outcome.draft.script.model_dump(),
-                          issues=[i.model_dump() for i in outcome.issues], source="ai"))  # fmt: skip
+                          issues=[i.model_dump() for i in outcome.issues], source="ai",
+                          consistency=initial_consistency(outcome.draft.script, bible)))  # fmt: skip
             resv = await credits.open_reservation(db, project_id, "plan")
             if resv:
                 await credits.charge(db, resv.id, s.credits_script, reason="Story and script",
                                      dedupe_key=f"script:{project_id}")  # fmt: skip
                 await credits.close(db, resv.id)
-            await repo.set_status(db, project, S.AWAITING_SCRIPT_APPROVAL,
-                                  script_version=project.script_version,
-                                  has_errors=has_errors(outcome.issues), repairs=outcome.repairs)  # fmt: skip
+            if not defer_gate:
+                await repo.set_status(db, project, S.AWAITING_SCRIPT_APPROVAL,
+                                      script_version=project.script_version,
+                                      has_errors=has_errors(outcome.issues), repairs=outcome.repairs)  # fmt: skip
             await events.notify_after_commit(db)
         return {"outcome": "ready", "script_version": project.script_version}
 
@@ -446,6 +462,117 @@ async def stage_precheck_script(project_id: uuid.UUID, version: int) -> dict[str
     return {"outcome": "ok"}
 
 
+def initial_consistency(script: Any, bible: Any) -> dict[str, Any]:
+    """`pending` until the Story Bible check runs; `done` straight away when there is nothing to check
+    (no must-have rules and no beat tags), so no paid call is made for nothing."""
+    if consistency.nothing_to_check(script, bible.continuity_rules):
+        return {"status": "done", "checked_at": datetime.now(UTC).isoformat(), "skipped": "nothing to check"}
+    return {"status": "pending"}
+
+
+async def stage_check_script(project_id: uuid.UUID, version: int) -> dict[str, Any]:
+    """Judge one script version against the Story Bible and store the issues on that version."""
+    async with transaction() as db:
+        project = await repo.get_project(db, project_id)
+        row = await repo.script_row(db, project_id, version)
+        bible = await repo.latest_bible(db, project_id)
+        owner = project.owner_id
+        if row is None or bible is None or (row.consistency or {}).get("status") != "pending":
+            return {"outcome": "skipped"}
+        script = repo.parse_script(row)
+        beats = BeatSheet.model_validate(row.beats) if row.beats else None
+    found = await consistency.check_script(script, beats, bible.continuity_rules,
+                                           CallContext("script_consistency", str(owner), str(project_id)))  # fmt: skip
+    async with transaction() as db:
+        row = await repo.script_row(db, project_id, version)
+        assert row is not None
+        if (row.consistency or {}).get("status") != "pending":
+            return {"outcome": "skipped"}
+        kept = [i for i in row.issues if i.get("code") not in consistency.CONSISTENCY_CODES]
+        row.issues = kept + [i.model_dump() for i in found]
+        row.consistency = {"status": "done", "checked_at": datetime.now(UTC).isoformat()}
+        await events.emit(db, project_id, "script.checked", {"script_version": version,
+                                                             "issues": len(found)})  # fmt: skip
+        await events.notify_after_commit(db)
+    return {"outcome": "done", "issues": len(found)}
+
+
+async def stage_open_script_gate(project_id: uuid.UUID) -> None:
+    """After the first script's Story Bible check (or its "not checked" fallback): show the script
+    for review. Idempotent."""
+    async with transaction() as db:
+        project = await repo.get_project(db, project_id, lock=True)
+        if project.status != S.SCRIPTING.value or not project.script_version:
+            return
+        row = await repo.script_row(db, project_id, project.script_version)
+        assert row is not None
+        await repo.set_status(db, project, S.AWAITING_SCRIPT_APPROVAL, script_version=project.script_version,
+                              has_errors=any(i.get("severity") == "error" for i in row.issues))  # fmt: skip
+        await events.notify_after_commit(db)
+
+
+async def stage_script_unchecked(project_id: uuid.UUID, version: int) -> None:
+    """The check failed after its retries: record "not checked" (a review item), never a pass."""
+    async with transaction() as db:
+        row = await repo.script_row(db, project_id, version)
+        if row is None or (row.consistency or {}).get("status") != "pending":
+            return
+        kept = [i for i in row.issues if i.get("code") not in consistency.CONSISTENCY_CODES]
+        row.issues = kept + [consistency.unavailable_issue("the checking service didn't answer").model_dump()]
+        row.consistency = {"status": "unavailable", "checked_at": datetime.now(UTC).isoformat()}
+        await events.emit(db, project_id, "script.checked", {"script_version": version, "unavailable": True})
+        await events.notify_after_commit(db)
+
+
+async def stage_check_sheet(project_id: uuid.UUID, slug: str) -> dict[str, Any]:
+    """Review the current reference sheet of one character; flags are shown, nothing is redrawn."""
+    async with transaction() as db:
+        project = await repo.get_project(db, project_id)
+        char = (await db.execute(select(Character).where(Character.project_id == project_id,
+                                                         Character.slug == slug))).scalar_one()  # fmt: skip
+        check = char.sheet_check or {}
+        if check.get("status") != "pending" or check.get("sheet_version") != char.sheet_version:
+            return {"outcome": "skipped"}
+        refs = dict((await db.execute(select(CharacterRef.view, CharacterRef.asset_id).where(
+            CharacterRef.character_id == char.id, CharacterRef.sheet_version == char.sheet_version,
+            CharacterRef.view.in_(("portrait", "turnaround_sheet"))))).all())  # fmt: skip
+        if "portrait" not in refs or "turnaround_sheet" not in refs:
+            return {"outcome": "skipped"}
+        portrait, turnaround = (await repo.asset_bytes(db, refs["portrait"]),
+                                await repo.asset_bytes(db, refs["turnaround_sheet"]))  # fmt: skip
+        spec = CharacterSpec.model_validate(char.spec)
+        bible = await repo.latest_bible(db, project_id)
+        owner, version = project.owner_id, char.sheet_version
+    result = await consistency.check_sheet(spec, bible.continuity_rules if bible else [], portrait, turnaround,
+                                           CallContext("sheet_check", str(owner), str(project_id), target_id=slug))  # fmt: skip
+    async with transaction() as db:
+        char = (await db.execute(select(Character).where(Character.project_id == project_id,
+                                                         Character.slug == slug).with_for_update())).scalar_one()  # fmt: skip
+        if char.sheet_version != version:
+            return {"outcome": "skipped"}  # a newer sheet replaced it meanwhile
+        layout = (char.sheet_check or {}).get("layout") or {}
+        if any(r.get("method") == "unverified" for r in layout.values()):
+            result["status"] = "flagged"
+            result["layout_unverified"] = True
+        char.sheet_check = {"sheet_version": version, "layout": layout,
+                            "checked_at": datetime.now(UTC).isoformat(), **result}  # fmt: skip
+        await events.emit(db, project_id, "character.checked", {"slug": slug, "status": result["status"]})
+        await events.notify_after_commit(db)
+    return {"outcome": result["status"]}
+
+
+async def stage_sheet_unchecked(project_id: uuid.UUID, slug: str) -> None:
+    async with transaction() as db:
+        char = (await db.execute(select(Character).where(Character.project_id == project_id,
+                                                         Character.slug == slug).with_for_update())).scalar_one()  # fmt: skip
+        check = char.sheet_check or {}
+        if check.get("status") != "pending":
+            return
+        char.sheet_check = {**check, "status": "unavailable", "checked_at": datetime.now(UTC).isoformat()}
+        await events.emit(db, project_id, "character.checked", {"slug": slug, "status": "unavailable"})
+        await events.notify_after_commit(db)
+
+
 async def release_panel_hold(db: Any, project_id: uuid.UUID, version: int) -> None:
     """An approval that will not be drawn must not keep its illustration hold: the next approval
     holds again under its own key, and both would count against the available balance."""
@@ -464,15 +591,17 @@ def _issue(raw: dict[str, Any]) -> Any:
 
 
 async def record_approval(db: Any, project_id: uuid.UUID, kind: str, version: int,
-                          user_id: uuid.UUID) -> bool:  # fmt: skip
-    """Insert an approval for one content version. Returns False if it already existed."""
+                          user_id: uuid.UUID, overrides: list[dict[str, str]] | None = None) -> bool:  # fmt: skip
+    """Insert an approval for one content version (with any review items the user explicitly
+    accepted). Returns False if it already existed."""
     from sqlalchemy.dialects.postgresql import insert
 
     result = await db.execute(
         insert(Approval).values(id=uuid.uuid4(), project_id=project_id, kind=kind,
-                                content_version=version, approved_by=user_id, status="approved")
+                                content_version=version, approved_by=user_id, status="approved",
+                                overrides=overrides)
         .on_conflict_do_update(index_elements=["project_id", "kind", "content_version"],
-                               set_={"status": "approved"})
+                               set_={"status": "approved", "overrides": overrides})
         .returning(Approval.id)
     )  # fmt: skip
     return result.scalar_one_or_none() is not None

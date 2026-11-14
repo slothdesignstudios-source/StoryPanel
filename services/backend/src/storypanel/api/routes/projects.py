@@ -121,6 +121,19 @@ async def patch_bible(project_id: uuid.UUID, body: api.PatchBible, request: Requ
     return out
 
 
+@router.put("/projects/{project_id}/continuity-rules", response_model=api.ProjectOut, responses=ERR)
+async def put_continuity_rules(project_id: uuid.UUID, body: api.PutContinuityRules, request: Request,
+                               user: AuthUser = Depends(current_user)) -> api.ProjectOut:  # fmt: skip
+    """Replace the comic's continuity rules (classify world rules, add, edit or remove rules)."""
+    async with transaction() as db:
+        project = await repo.get_project(db, project_id, owner_id=user.id, lock=True)
+        await projects.put_continuity_rules(db, project, body)
+        await db.flush()
+        out = await projects.serialize(db, project)
+    await _after_commit(request, db)
+    return out
+
+
 @router.post("/projects/{project_id}/characters/{slug}/revise", response_model=api.Accepted,
              status_code=202, responses=ERR)  # fmt: skip
 async def revise_character(project_id: uuid.UUID, slug: str, body: api.ReviseCharacter,
@@ -139,7 +152,7 @@ async def approve_cast(project_id: uuid.UUID, body: api.ApproveCast, request: Re
     """Approve one exact cast version. A stale version returns 409 version_conflict."""
     async with transaction() as db:
         project = await repo.get_project(db, project_id, owner_id=user.id, lock=True)
-        await projects.approve_cast(db, project, body.cast_version, user.id)
+        await projects.approve_cast(db, project, body.cast_version, user.id, body.acknowledged)
         await repo.audit(db, user_ref=user.ref, action="cast.approve", target_type="project",
                          target_id=project_id, request_id=request.state.request_id,
                          version=body.cast_version)  # fmt: skip
@@ -154,9 +167,7 @@ async def patch_script(project_id: uuid.UUID, body: api.PatchScript, request: Re
     async with transaction() as db:
         project = await repo.get_project(db, project_id, owner_id=user.id, lock=True)
         row = await projects.patch_script(db, project, body)
-        out = api.ScriptOut(version=row.version, source=row.source, beats=row.beats,  # type: ignore[arg-type]
-                            content=row.content, issues=row.issues,  # type: ignore[arg-type]
-                            has_errors=any(i.get("severity") == "error" for i in row.issues))  # fmt: skip
+        out = projects.script_out_of(row)
     await _after_commit(request, db)
     return out
 
@@ -167,7 +178,7 @@ async def approve_script(project_id: uuid.UUID, body: api.ApproveScript, request
     """Approve one exact script version, hold illustration credits and start drawing."""
     async with transaction() as db:
         project = await repo.get_project(db, project_id, owner_id=user.id, lock=True)
-        await projects.approve_script(db, project, body.script_version, user.id)
+        await projects.approve_script(db, project, body.script_version, user.id, body.acknowledged)
         await repo.audit(db, user_ref=user.ref, action="script.approve", target_type="project",
                          target_id=project_id, request_id=request.state.request_id,
                          version=body.script_version)  # fmt: skip

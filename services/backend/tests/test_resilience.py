@@ -25,7 +25,7 @@ from storypanel.errors import AppError, ErrorCode
 from storypanel.pipeline import stages_art
 from storypanel.providers import fake
 from storypanel.services import credits
-from tests.conftest import SPANS, run_to_completion, wait_for
+from tests.conftest import SPANS, run_to_completion, wait_checked, wait_for
 
 pytestmark = pytest.mark.workflow
 STRIP = "A robot and a girl share noodles in the rain, as a 4 panel strip"
@@ -295,6 +295,7 @@ async def test_approvals_are_scoped_to_exact_versions(
     )
     assert fixed.status_code == 200 and not fixed.json()["has_errors"]
     assert await balances() == (200 - 9, 0)  # still nothing held for illustration
+    await wait_checked(client, pid, headers)  # the edited version is checked against the Story Bible first
     r = await client.post(
         f"/v1/projects/{pid}/script/approve", json={"script_version": s1 + 2}, headers=headers
     )

@@ -173,7 +173,7 @@ async def write_script(bible: StoryBible, cast: list[CharacterSpec], ctx: CallCo
     def check(draft: ScriptDraft) -> list[ScriptIssue]:
         return validate_script(draft.script, fmt=fmt, expected_pages=pages,
                                character_ids=set(character_ids), location_ids=set(location_ids),
-                               limits=lim)  # fmt: skip
+                               limits=lim, beats=draft.beat_sheet)  # fmt: skip
 
     user = base_user
     draft: ScriptDraft | None = None
