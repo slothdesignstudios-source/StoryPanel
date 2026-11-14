@@ -298,6 +298,7 @@ async def evaluate_panel(
         scores["identity_visual"] = identity  # Gemini categorical judgment; not a similarity score
     head_boxes = {o.id: o.head_box.model_dump() for o in report.characters if o.present and o.head_box}
     body_boxes = {o.id: o.body_box.model_dump() for o in report.characters if o.present and o.body_box}
+    scores["body_boxes"] = body_boxes  # lettering keeps balloons off the characters where it can
     if blocking:
         scores["repair"] = repair.repair_target(blocking, body_boxes)
     return QAOutcome(status, scores, notes[:6], head_boxes,

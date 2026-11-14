@@ -438,6 +438,7 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
                 dialogue=[d.model_dump() for d in spec.dialogue],
                 characters=[ch.model_dump() for ch in spec.characters],
                 head_boxes=scores.get("head_boxes"), action_box=scores.get("action_box"),
+                body_boxes=scores.get("body_boxes"),
                 font=styles().get(preset).font,
             )  # fmt: skip
             for b in placed:

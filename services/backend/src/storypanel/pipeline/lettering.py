@@ -22,7 +22,13 @@ FONT_MAX, FONT_MIN = 22.0, 15.0
 SFX_FONT = 54.0
 LINE_HEIGHT = 1.16
 TARGET_ASPECT = 1.3
-ELLIPSE_INSET = 0.74  # share of an ellipse's width/height usable by a text block
+# Share of a balloon's width/height usable by the text block. The largest rectangle inside an
+# ellipse is 70.7% of it; 0.74 put line ends on or past the outline. Speech ellipses use 0.66
+# (inside, with a margin for the outline). Thought clouds draw their clear interior as an
+# ellipse at 0.88 of the box (bumps sit on its edge), so 0.88 x 0.707 = 0.62; 0.58 leaves a
+# margin. Starting values, checked against rendered pixels in tests/test_balloon_text_bounds.py.
+ELLIPSE_INSET = 0.66
+THOUGHT_INSET = 0.58
 BOX_PAD = 10.0
 BORDER_BREAK = 0.12  # how far (of panel size) a balloon may cross the border
 # Print safe area: all lettering stays 0.125 in inside the trim. Exports print the page 6 in wide
@@ -182,9 +188,13 @@ def fit_text(text: str, font: str, box_w: float, box_h: float, max_size: float,
         size = max(min_size, size - 1.0)
 
 
+def _inset(kind: str) -> float:
+    return THOUGHT_INSET if kind == "thought" else ELLIPSE_INSET
+
+
 def inner_box(kind: str, w: float, h: float) -> tuple[float, float]:
     if kind in ("speech", "thought"):
-        return w * ELLIPSE_INSET, h * ELLIPSE_INSET
+        return w * _inset(kind), h * _inset(kind)
     return max(1.0, w - 2 * BOX_PAD), max(1.0, h - 2 * BOX_PAD)
 
 
@@ -196,7 +206,7 @@ def _balloon_size(kind: str, text: str, font: str, size: float, max_w: float) ->
     while width <= max(lo, max_w):
         _, tw, th = text_block(text, font, size, width)
         if kind in ("speech", "thought"):
-            bw, bh = tw / ELLIPSE_INSET + 8, th / ELLIPSE_INSET + 8
+            bw, bh = tw / _inset(kind) + 8, th / _inset(kind) + 8
         else:
             bw, bh = tw + 2 * BOX_PAD, th + 2 * BOX_PAD
         score = abs(bw / bh - TARGET_ASPECT)
@@ -287,14 +297,20 @@ def layout_panel(
     *, panel_rect: Rect, page_size: tuple[float, float], dialogue: list[dict[str, Any]],
     characters: list[dict[str, Any]], head_boxes: dict[str, dict[str, float]] | None = None,
     action_box: dict[str, float] | None = None, font: str = "comic_neue",
+    body_boxes: dict[str, dict[str, float]] | None = None,
 ) -> list[Placed]:  # fmt: skip
-    """Place every dialogue item of one panel. `dialogue` is in reading order."""
+    """Place every dialogue item of one panel. `dialogue` is in reading order.
+
+    Balloons avoid faces strongly and, when the QA check located them, characters' bodies less
+    strongly: in a crowded or narrow panel a balloon may still overlap a body, and is flagged
+    ("covers_subject") so the user can see it, rather than shrunk until unreadable."""
     px, py, pw, ph = panel_rect
     heads: dict[str, Rect] = {}
     for ch in characters:
         heads[ch["id"]] = (_abs((head_boxes or {}).get(ch["id"]), panel_rect)
                            or default_head(ch.get("position", "center"), panel_rect))  # fmt: skip
     no_go: list[Rect] = list(heads.values())
+    bodies = [r for ch in characters if (r := _abs((body_boxes or {}).get(ch["id"]), panel_rect))]
     action = _abs(action_box, panel_rect)
     placed: list[Placed] = []
     captions = 0
@@ -323,6 +339,9 @@ def layout_panel(
                                                             "rotation": -8.0}, page_size)  # fmt: skip
                         ink = ink_bounds(kind, text, g)
                         cost = sum(overlap(ink, _ink_rect(q)) for q in placed) / (ink[2] * ink[3]) * 40.0
+                        # sound effects sit near the action but not across faces or bodies
+                        cost += sum(overlap(ink, z) for z in no_go) / (ink[2] * ink[3]) * 6.0
+                        cost += sum(overlap(ink, z) for z in bodies) / (ink[2] * ink[3]) * 1.5
                         cost += math.hypot(g["x"] - tx, g["y"] - ty) / math.hypot(pw, ph)
                         if cost < best_cost - 1e-9:
                             best_cost, best_g = cost, g
@@ -388,6 +407,7 @@ def layout_panel(
                 cy = y0 + (y1 - y0) * iy / steps
                 rect = (cx, cy, w, h)
                 cost = sum(overlap(rect, z) for z in no_go) / (w * h) * 12.0
+                cost += sum(overlap(rect, z) for z in bodies) / (w * h) * 4.0
                 if action:
                     cost += overlap(rect, action) / (w * h) * 3.0
                 cost += sum(overlap(rect, _ink_rect(p)) for p in placed) / (w * h) * 40.0
@@ -408,6 +428,8 @@ def layout_panel(
         rect = (x, y, w, h)
         if any(overlap(rect, z) > 0.15 * z[2] * z[3] for z in heads.values()):
             flags.append("covers_face")
+        elif any(overlap(rect, z) > 0.5 * w * h and overlap(rect, z) > 0.1 * z[2] * z[3] for z in bodies):
+            flags.append("covers_subject")  # most of the balloon sits on a character
         tail = _tail_tip(rect, head) if head and kind in ("speech", "thought") else None
         if tail is not None:  # a tail aimed at a speaker near the page edge stops inside the safe area
             sx, sy, sw, sh = safe_rect(page_size)
@@ -421,7 +443,7 @@ def layout_panel(
     return placed
 
 
-TYPESET_VERSION = 1
+TYPESET_VERSION = 2  # 2: smaller text box inside speech and thought balloons (new balloons only)
 
 
 def typeset(

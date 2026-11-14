@@ -1,6 +1,8 @@
 /** Text fitting for balloons: the same greedy algorithm the server-side letterer uses. */
 export const LINE_HEIGHT = 1.16;
-export const ELLIPSE_INSET = 0.74;
+// Same values as the server (lettering.py), checked by tests/test_balloon_text_bounds.py.
+export const ELLIPSE_INSET = 0.66;
+export const THOUGHT_INSET = 0.58;
 export const BOX_PAD = 10;
 
 let ctx: CanvasRenderingContext2D | null = null;
@@ -27,7 +29,8 @@ export function wrap(text: string, font: string, size: number, maxWidth: number)
 }
 
 export function innerBox(type: string, w: number, h: number): [number, number] {
-  return type === "speech" || type === "thought" ? [w * ELLIPSE_INSET, h * ELLIPSE_INSET] : [Math.max(1, w - 2 * BOX_PAD), Math.max(1, h - 2 * BOX_PAD)];
+  const inset = type === "thought" ? THOUGHT_INSET : ELLIPSE_INSET;
+  return type === "speech" || type === "thought" ? [w * inset, h * inset] : [Math.max(1, w - 2 * BOX_PAD), Math.max(1, h - 2 * BOX_PAD)];
 }
 
 export function fitText(text: string, font: string, boxW: number, boxH: number, maxSize: number, minSize = 9) {

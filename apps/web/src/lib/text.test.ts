@@ -16,7 +16,8 @@ describe("balloon text fitting", () => {
     expect(tight.fits).toBe(false);
   });
   it("uses the ellipse inset for speech and padding for captions", () => {
-    expect(innerBox("speech", 100, 100)).toEqual([74, 74]);
+    innerBox("speech", 100, 100).forEach((v) => expect(v).toBeCloseTo(66));
+    innerBox("thought", 100, 100).forEach((v) => expect(v).toBeCloseTo(58));
     expect(innerBox("caption", 100, 100)).toEqual([80, 80]);
   });
   it("counts words the way the 25-word rule does", () => {
