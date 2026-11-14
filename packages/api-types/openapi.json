@@ -2000,6 +2000,24 @@
       "title": "Qa Problems",
       "type": "array"
      },
+     "qa_reasons": {
+      "items": {
+       "$ref": "#/components/schemas/QaReason"
+      },
+      "title": "Qa Reasons",
+      "type": "array"
+     },
+     "qa_state": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Qa State"
+     },
      "rect": {
       "items": {
        "type": "number"
@@ -2026,6 +2044,8 @@
      "current_version_id",
      "image_url",
      "qa_problems",
+     "qa_state",
+     "qa_reasons",
      "balloons",
      "busy"
     ],
@@ -2489,6 +2509,13 @@
       "title": "Pages Requested",
       "type": "integer"
      },
+     "panel_counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Panel Counts",
+      "type": "object"
+     },
      "progress": {
       "$ref": "#/components/schemas/ProgressOut"
      },
@@ -2557,6 +2584,7 @@
      "id",
      "title",
      "status",
+     "panel_counts",
      "format",
      "style_preset",
      "pages_requested",
@@ -2651,6 +2679,13 @@
       "title": "Pages Requested",
       "type": "integer"
      },
+     "panel_counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Panel Counts",
+      "type": "object"
+     },
      "status": {
       "title": "Status",
       "type": "string"
@@ -2680,6 +2715,7 @@
      "id",
      "title",
      "status",
+     "panel_counts",
      "format",
      "style_preset",
      "pages_requested",
@@ -2715,6 +2751,47 @@
      "rules"
     ],
     "title": "PutContinuityRules",
+    "type": "object"
+   },
+   "QaReason": {
+    "properties": {
+     "category": {
+      "enum": [
+       "visual_mismatch",
+       "missing",
+       "uncertain",
+       "not_checked"
+      ],
+      "title": "Category",
+      "type": "string"
+     },
+     "code": {
+      "title": "Code",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "subject": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject"
+     }
+    },
+    "required": [
+     "category",
+     "code",
+     "subject",
+     "label"
+    ],
+    "title": "QaReason",
     "type": "object"
    },
    "ReorderPanels": {
@@ -3082,6 +3159,17 @@
       "title": "Qa Problems",
       "type": "array"
      },
+     "qa_reasons": {
+      "items": {
+       "$ref": "#/components/schemas/QaReason"
+      },
+      "title": "Qa Reasons",
+      "type": "array"
+     },
+     "qa_state": {
+      "title": "Qa State",
+      "type": "string"
+     },
      "qa_status": {
       "title": "Qa Status",
       "type": "string"
@@ -3093,6 +3181,8 @@
      "instruction",
      "qa_status",
      "qa_problems",
+     "qa_state",
+     "qa_reasons",
      "attempt",
      "created_at",
      "image_url",

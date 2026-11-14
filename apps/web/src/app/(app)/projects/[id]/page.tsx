@@ -9,7 +9,7 @@ import { Cast, Questions, ScriptReview, Stopped, Working } from "@/components/pr
 import { Badge, Button, Dialog, DialogClose, DialogContent, DialogTrigger, Notice, Spinner } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
 import { useProjectEvents } from "@/lib/events";
-import { ACTIVE, STATUS_LABEL, WORKING, type Project } from "@/lib/types";
+import { ACTIVE, WORKING, projectStatus, type Project } from "@/lib/types";
 import { pk } from "@/lib/session";
 
 function Stage({ project }: { project: Project }) {
@@ -57,7 +57,7 @@ export default function ProjectPage() {
         <div className="min-w-0">
           <h1 className="truncate text-3xl font-bold">{project.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge tone={statusTone(project.status)}>{STATUS_LABEL[project.status] ?? project.status}</Badge>
+            <Badge tone={projectStatus(project).review ? "warn" : statusTone(project.status)}>{projectStatus(project).label}</Badge>
             <span className="text-xs text-muted">Illustrated with {PROVIDER_LABEL[project.image_provider ?? "fal"] ?? project.image_provider}{project.image_model ? ` (${project.image_model})` : ""}</span>
             {ACTIVE.has(project.status) && <span className="text-xs text-muted" role="status">{stream === "live" ? "Live updates on" : stream === "reconnecting" ? "Reconnecting… your comic is still running" : "Connecting…"}</span>}
           </div>

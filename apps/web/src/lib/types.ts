@@ -29,3 +29,16 @@ export const STATUS_LABEL: Record<string, string> = {
   illustrating: "Drawing", completed: "Finished", partially_completed: "Finished with gaps",
   failed: "Stopped", cancelled: "Cancelled", blocked: "Not allowed", expired: "Waiting too long",
 };
+
+/** Status text that keeps "the work finished" apart from "every panel passed its checks". */
+export function projectStatus(p: { status: string; panel_counts?: Record<string, number> }): { label: string; review: number } {
+  const c = p.panel_counts ?? {};
+  const review = c.needs_attention ?? 0;
+  if (p.status === "completed" && review > 0) return { label: `Drawn · ${review} panel${review > 1 ? "s" : ""} to review`, review };
+  if (p.status === "partially_completed") return { label: review ? `Drawn with gaps · ${review} to review` : "Drawn with gaps", review };
+  return { label: STATUS_LABEL[p.status] ?? p.status, review };
+}
+
+/** Short state of one panel's checks, for lists and badges. */
+export const QA_STATE_LABEL: Record<string, string> = { passed: "passed checks", issues: "problems found", uncertain: "couldn't confirm", not_checked: "not checked" };
+

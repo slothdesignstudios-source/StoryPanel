@@ -302,3 +302,57 @@ async def evaluate_panel(
         scores["repair"] = repair.repair_target(blocking, body_boxes)
     return QAOutcome(status, scores, notes[:6], head_boxes,
                      report.action_box.model_dump() if report.action_box else None)  # fmt: skip
+
+
+# ------------------------------------------------------------------ user-facing reasons
+# Every problem code a check can produce, by what it means for the user. "not_checked" is kept
+# apart from defects: a check that errored or had nothing to compare against says nothing
+# about the picture, and must never be presented as a confirmed problem.
+QA_CATEGORY = {
+    "identity_visual": "visual_mismatch", "identity_rating": "visual_mismatch", "features": "visual_mismatch",
+    "identity_embedding": "visual_mismatch", "action": "visual_mismatch", "character_count": "visual_mismatch",
+    "anatomy": "visual_mismatch", "stray_text": "visual_mismatch", "identity_flagged_repair": "visual_mismatch",
+    "missing": "missing", "rule_missing": "missing",
+    "identity_uncertain": "uncertain", "rule_uncertain": "uncertain", "identity_flagged_manual_review": "uncertain",
+    "identity_unverified": "not_checked", "identity_check_invalid": "not_checked", "no_reference": "not_checked",
+    "unlocalised": "not_checked",
+}  # fmt: skip
+
+
+def qa_reasons(qa_status: str | None, problems: list[str], *, names: dict[str, str] | None = None,
+               rules: dict[str, str] | None = None) -> tuple[str, list[dict[str, Any]]]:  # fmt: skip
+    """(state, reasons) for one panel version. state: passed | issues | uncertain | not_checked."""
+    names, rules = names or {}, rules or {}
+    if qa_status == "pending":  # the checks never completed (provider errors after retries)
+        return "not_checked", [{"category": "not_checked", "code": "qa_not_completed", "subject": None,
+                                "label": "The quality checks didn't complete for this picture."}]  # fmt: skip
+    reasons = []
+    for p in problems:
+        code, _, subject = p.partition(":")
+        cat = QA_CATEGORY.get(code, "visual_mismatch")
+        who = names.get(subject, subject)
+        label = {
+            "identity_visual": f"{who} looks different from the approved reference",
+            "identity_rating": f"{who} doesn't closely match the approved reference",
+            "identity_embedding": f"{who} doesn't closely match the approved reference",
+            "features": f"{who} is missing a signature feature",
+            "action": "The picture doesn't show the described action",
+            "character_count": "The number of characters is different from the script",
+            "anatomy": "There are drawing defects (hands, limbs or faces)",
+            "stray_text": "There is unwanted text in the picture",
+            "missing": f"{who} isn't in the picture",
+            "rule_missing": f"Not visible: {rules.get(subject, subject)}",
+            "identity_uncertain": f"Couldn't tell whether {who} matches the reference",
+            "rule_uncertain": f"Couldn't tell whether this is visible: {rules.get(subject, subject)}",
+            "identity_flagged_manual_review": "The identity check asked for a person to look",
+            "identity_flagged_repair": "The identity check found a mismatch",
+            "identity_unverified": f"{who} wasn't checked against the reference",
+            "identity_check_invalid": "The identity check gave an unusable answer",
+            "no_reference": f"There was no approved reference for {who} to compare with",
+            "unlocalised": f"{who} couldn't be located in the picture to compare",
+        }.get(code, p.replace("_", " "))
+        reasons.append({"category": cat, "code": code, "subject": subject or None, "label": label})
+    cats = {r["category"] for r in reasons}
+    state = ("issues" if cats & {"visual_mismatch", "missing"} else "not_checked" if "not_checked" in cats
+             else "uncertain" if "uncertain" in cats else "passed")  # fmt: skip
+    return state, reasons

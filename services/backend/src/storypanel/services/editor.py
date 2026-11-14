@@ -30,7 +30,7 @@ from storypanel.domain.states import ProjectStatus as S
 from storypanel.domain.validation import word_count
 from storypanel.errors import AppError, ErrorCode, invalid_state, not_found, version_conflict
 from storypanel.obs import metrics
-from storypanel.pipeline import lettering, moderation
+from storypanel.pipeline import lettering, moderation, qa
 from storypanel.pipeline.stages_art import panel_rect, revision_sha, snapshot_revision
 from storypanel.providers.base import CallContext
 from storypanel.services import credits, events, outbox, repo
@@ -106,7 +106,10 @@ async def request_panel_work(db: AsyncSession, *, panel_id: uuid.UUID, owner_id:
 
 
 async def list_versions(db: AsyncSession, panel_id: uuid.UUID, owner_id: uuid.UUID) -> list[api.VersionOut]:
-    panel, _ = await owned_panel(db, panel_id, owner_id)
+    panel, project = await owned_panel(db, panel_id, owner_id)
+    names = {c.slug: c.name for c in await repo.cast_rows(db, project.id)}
+    bible = await repo.latest_bible(db, project.id)
+    rules = {r.id: r.text for r in (bible.continuity_rules if bible else [])}
     rows = (await db.execute(
         select(PanelVersion, Asset.storage_key, Asset.quarantined)
         .join(Asset, Asset.id == PanelVersion.image_asset_id)
@@ -115,9 +118,13 @@ async def list_versions(db: AsyncSession, panel_id: uuid.UUID, owner_id: uuid.UU
     for v, key, quarantined in rows:
         if v.qa_status in ("blocked", "pending") or quarantined:
             continue  # blocked versions are never listed, compared or restorable
+        state, reasons = qa.qa_reasons(
+            v.qa_status, (v.qa_scores or {}).get("problems", []), names=names, rules=rules
+        )
         out.append(api.VersionOut(
             id=str(v.id), kind=v.kind, instruction=v.instruction, qa_status=v.qa_status,
-            qa_problems=(v.qa_scores or {}).get("problems", []), attempt=v.attempt,
+            qa_problems=(v.qa_scores or {}).get("problems", []), qa_state=state, qa_reasons=reasons,  # type: ignore[arg-type]
+            attempt=v.attempt,
             created_at=v.created_at, image_url=storage.signed_url(key),
             is_current=v.id == panel.current_version_id, model=v.model))  # fmt: skip
     return out

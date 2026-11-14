@@ -36,7 +36,7 @@ from storypanel.domain.states import ProjectStatus as S
 from storypanel.domain.validation import has_errors, validate_script
 from storypanel.errors import AppError, ErrorCode, invalid_state, not_found, version_conflict
 from storypanel.obs import metrics
-from storypanel.pipeline import moderation, story
+from storypanel.pipeline import moderation, qa, story
 from storypanel.pipeline.stages_art import panel_rect
 from storypanel.pipeline.stages_plan import initial_consistency, record_approval
 from storypanel.services import credits, events, outbox, repo
@@ -478,8 +478,11 @@ def _layout_out(t: Any) -> api.LayoutOut:
                          rects=[list(r) for r in t.rects])  # fmt: skip
 
 
-def summary(project: Project, cover_key: str | None = None) -> dict[str, Any]:
+def summary(
+    project: Project, cover_key: str | None = None, counts: dict[str, int] | None = None
+) -> dict[str, Any]:
     return {"id": str(project.id), "title": project.title, "status": project.status,
+            "panel_counts": counts or {},
             "format": project.format, "style_preset": project.style_preset,
             "pages_requested": project.pages_requested, "created_at": project.created_at,
             "updated_at": project.updated_at, "cover_url": _url(cover_key),
@@ -519,6 +522,22 @@ def choose_image_provider(requested: str | None) -> tuple[str, str]:
     return choice, option.model
 
 
+def _qa_fields(cur: Any, names: dict[str, str], rules: dict[str, str]) -> dict[str, Any]:
+    if cur is None:
+        return {"qa_state": None, "qa_reasons": []}
+    state, reasons = qa.qa_reasons(cur[4], (cur[1] or {}).get("problems", []), names=names, rules=rules)
+    return {"qa_state": state, "qa_reasons": reasons}
+
+
+async def panel_counts(db: AsyncSession, project_ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, int]]:
+    rows = (await db.execute(select(Panel.project_id, Panel.status, func.count()).where(
+        Panel.project_id.in_(project_ids)).group_by(Panel.project_id, Panel.status))).all()  # fmt: skip
+    out: dict[uuid.UUID, dict[str, int]] = {}
+    for pid, status, n in rows:
+        out.setdefault(pid, {})[status] = n
+    return out
+
+
 def _public_failure(failure: dict[str, Any] | None) -> dict[str, Any] | None:
     if not failure:
         return None
@@ -532,7 +551,8 @@ async def list_projects(db: AsyncSession, user_id: uuid.UUID) -> list[api.Projec
         .outerjoin(Asset, Asset.id == Page.preview_asset_id)
         .where(Project.owner_id == user_id, Project.deleted_at.is_(None))
         .order_by(Project.created_at.desc()).limit(100))).all()  # fmt: skip
-    return [api.ProjectSummary(**summary(p, key)) for p, key in rows]
+    counts = await panel_counts(db, [p.id for p, _ in rows])
+    return [api.ProjectSummary(**summary(p, key, counts.get(p.id))) for p, key in rows]
 
 
 async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
@@ -575,7 +595,7 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
 
     # pages / panels / balloons
     version_rows = (await db.execute(
-        select(Panel.id, PanelVersion.qa_scores, Asset.storage_key, Asset.quarantined)
+        select(Panel.id, PanelVersion.qa_scores, Asset.storage_key, Asset.quarantined, PanelVersion.qa_status)
         .join(PanelVersion, PanelVersion.id == Panel.current_version_id)
         .join(Asset, Asset.id == PanelVersion.image_asset_id).where(Panel.project_id == pid))).all()  # fmt: skip
     current = {r[0]: r for r in version_rows}
@@ -589,6 +609,8 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
         select(Page.id, Asset.storage_key).join(Asset, Asset.id == Page.preview_asset_id)
         .where(Page.project_id == pid))).all())  # fmt: skip
     fmt = ComicFormat(project.format)
+    names = {c.slug: c.name for c in await repo.cast_rows(db, pid)}
+    rule_text = {r.id: r.text for r in (bible.continuity_rules if bible else [])}
     pages_out: list[api.PageOut] = []
     total = done = 0
     for page, panels in await repo.pages_with_panels(db, pid):
@@ -606,6 +628,7 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
                 current_version_id=str(panel.current_version_id) if panel.current_version_id else None,
                 image_url=_url(cur[2], cur[3]) if visible and cur else None,
                 qa_problems=((cur[1] or {}).get("problems", []) if cur else []),
+                **_qa_fields(cur, names, rule_text),
                 balloons=balloons.get(panel.id, []),
                 busy=str(panel.id) in busy or panel.status == PanelStatus.GENERATING.value))  # fmt: skip
         options = [_layout_out(t) for t in sorted(layouts().values(), key=lambda t: t.id)
@@ -618,7 +641,8 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
     cast_rows = await repo.cast_rows(db, pid)
     cover = preview_keys.get(uuid.UUID(pages_out[0].id)) if pages_out else None
     return api.ProjectOut(
-        **summary(project, cover), prompt=project.prompt, brief=project.brief,  # type: ignore[arg-type]
+        **summary(project, cover, (await panel_counts(db, [project.id])).get(project.id)),
+        prompt=project.prompt, brief=project.brief,  # type: ignore[arg-type]
         questions=project.questions or [], bible=bible, cast_version=project.cast_version,
         script_version=project.script_version, edit_version=project.edit_version,
         event_seq=project.event_seq, approved_cast_version=approved.get("cast"),

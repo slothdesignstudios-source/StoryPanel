@@ -270,6 +270,13 @@ class BalloonOut(Out):
     version: int
 
 
+class QaReason(Out):
+    category: Literal["visual_mismatch", "missing", "uncertain", "not_checked"]
+    code: str
+    subject: str | None
+    label: str
+
+
 class PanelOut(Out):
     id: str
     index: int
@@ -279,6 +286,9 @@ class PanelOut(Out):
     current_version_id: str | None
     image_url: str | None
     qa_problems: list[str]
+    # passed | issues | uncertain | not_checked ("not_checked" is never a confirmed defect)
+    qa_state: str | None
+    qa_reasons: list[QaReason]
     balloons: list[BalloonOut]
     busy: bool
 
@@ -320,6 +330,9 @@ class ProjectSummary(Out):
     id: str
     title: str
     status: str
+    # Panel counts by status (ok, needs_attention, failed, blocked, ...): workflow completion
+    # ("completed") is separate from whether every panel passed its checks.
+    panel_counts: dict[str, int]
     format: str
     style_preset: str | None
     pages_requested: int
@@ -366,6 +379,8 @@ class VersionOut(Out):
     instruction: str | None
     qa_status: str
     qa_problems: list[str]
+    qa_state: str
+    qa_reasons: list[QaReason]
     attempt: int
     created_at: datetime
     image_url: str | None

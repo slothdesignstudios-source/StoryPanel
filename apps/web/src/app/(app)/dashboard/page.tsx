@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Badge, Button, Card, EmptyState, Notice, Spinner } from "@/components/ui";
 import { api, describeError } from "@/lib/api";
-import { ACTIVE, STATUS_LABEL, WORKING, type ProjectSummary } from "@/lib/types";
+import { ACTIVE, WORKING, projectStatus, type ProjectSummary } from "@/lib/types";
 import { pk } from "@/lib/session";
 
 export function statusTone(status: string) {
@@ -31,7 +31,7 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
         <div className="space-y-2 p-4">
           <h2 className="line-clamp-1 text-lg font-bold">{p.title}</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={statusTone(p.status)}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+            <Badge tone={projectStatus(p).review ? "warn" : statusTone(p.status)}>{projectStatus(p).label}</Badge>
             <span className="text-xs text-muted">{p.format === "strip" ? "Strip" : `${p.pages_requested} pages`} · {new Date(p.created_at).toLocaleDateString()}</span>
           </div>
         </div>

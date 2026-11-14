@@ -10,7 +10,7 @@ import { create } from "zustand";
 import { Badge, Button, Card, Dialog, DialogContent, DialogTrigger, Field, Notice, Select, Spinner, Textarea, cn } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
 import { wordCount } from "@/lib/text";
-import type { Balloon, ExportOut, Geometry, Page, Panel, Project } from "@/lib/types";
+import { QA_STATE_LABEL, type Balloon, type ExportOut, type Geometry, type Page, type Panel, type Project } from "@/lib/types";
 import { onIdentityReset, pk } from "@/lib/session";
 import { LETTERING_SUPPORTED_SUMMARY, unsupportedLetteringChars, unsupportedLetteringMessage } from "@/lib/lettering-charset";
 import { ContinuityRules } from "./continuity";
@@ -100,10 +100,10 @@ function Versions({ panel, onDone }: { panel: Panel; onDone: () => void }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold">Version {q.data.length - i}</span>
               {v.is_current && <Badge tone="working">Current</Badge>}
-              <Badge tone={v.qa_status === "pass" ? "ok" : "warn"}>{v.qa_status === "pass" ? "Passed checks" : "Needs attention"}</Badge>
+              <Badge tone={v.qa_state === "passed" ? "ok" : "warn"}>{v.qa_state === "passed" ? "Passed checks" : QA_STATE_LABEL[v.qa_state] ?? "Needs attention"}</Badge>
             </div>
             <p className="text-muted">{v.kind === "edit" ? `Edit: “${v.instruction}”` : v.kind === "regenerate" ? "Regenerated" : "First draw"} · {new Date(v.created_at).toLocaleString()}</p>
-            {v.qa_problems.length > 0 && <p className="text-xs text-warn">Flagged: {v.qa_problems.map((p) => p.split(":")[0]!.replace(/_/g, " ")).join(", ")}</p>}
+            {v.qa_reasons.length > 0 && <ul className="list-inside list-disc text-xs text-warn">{v.qa_reasons.map((r) => <li key={r.code + (r.subject ?? "")}>{r.label}</li>)}</ul>}
             {!v.is_current && <Button size="sm" busy={restore.isPending} onClick={() => restore.mutate(v.id)}>Use this version</Button>}
           </div>
         </li>
@@ -113,6 +113,26 @@ function Versions({ panel, onDone }: { panel: Panel; onDone: () => void }) {
 }
 
 // ------------------------------------------------------------------ side panels
+const QA_NOTICE: Record<string, [string, string]> = {
+  issues: ["Our checks found problems", "Automatic retries didn't fix them. Regenerate it, describe a fix, or keep it as is."],
+  uncertain: ["Our checks couldn't confirm this panel", "It may be fine. Please look, then keep it, regenerate it or describe a fix."],
+  not_checked: ["This panel wasn't fully checked", "The checking service had a problem, so this says nothing about the picture. It may be fine; please look."],
+};
+
+/** Why a delivered panel needs a look: the actual reasons, never presenting a failed check as a defect. */
+function QaNotice({ panel }: { panel: Panel }) {
+  const [title, body] = QA_NOTICE[panel.qa_state ?? "issues"] ?? QA_NOTICE.issues!;
+  const shown = panel.qa_reasons.filter((r) => panel.qa_state !== "issues" || r.category === "visual_mismatch" || r.category === "missing");
+  const other = panel.qa_reasons.filter((r) => !shown.includes(r));
+  return (
+    <Notice tone="warn" title={title}>
+      {shown.length > 0 && <ul className="list-inside list-disc">{shown.map((r) => <li key={r.code + (r.subject ?? "")}>{r.label}</li>)}</ul>}
+      {other.length > 0 && <p className="mt-1 text-xs">Also: {other.map((r) => r.label).join("; ")}.</p>}
+      <p className="mt-1">{body} This panel was delivered, so it was charged.</p>
+    </Notice>
+  );
+}
+
 function PanelTools({ project, page, panel }: { project: Project; page: Page; panel: Panel }) {
   const qc = useQueryClient();
   const refresh = () => { void qc.invalidateQueries({ queryKey: pk("project", project.id) }); void qc.invalidateQueries({ queryKey: pk("me") }); };
@@ -133,10 +153,10 @@ function PanelTools({ project, page, panel }: { project: Project; page: Page; pa
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-lg font-bold">Panel {panel.index + 1}</h3>
-        {panel.busy ? <Badge tone="working">Redrawing</Badge> : panel.status === "needs_attention" ? <Badge tone="warn">Needs attention</Badge> : panel.status === "blocked" ? <Badge tone="danger">Blocked by safety check</Badge> : panel.status === "failed" ? <Badge tone="danger">Couldn&apos;t draw</Badge> : <Badge tone="ok">Looks good</Badge>}
+        {panel.busy ? <Badge tone="working">Redrawing</Badge> : panel.status === "needs_attention" ? <Badge tone="warn">{(QA_STATE_LABEL[panel.qa_state ?? ""] ?? "needs attention").replace(/^./, (c) => c.toUpperCase())}</Badge> : panel.status === "blocked" ? <Badge tone="danger">Blocked by safety check</Badge> : panel.status === "failed" ? <Badge tone="danger">Couldn&apos;t draw</Badge> : <Badge tone="ok">Looks good</Badge>}
       </div>
       <p className="text-sm text-muted">{String(panel.spec.action ?? "")}</p>
-      {panel.status === "needs_attention" && <Notice tone="warn" title="Our checks flagged this panel">Automatic retries didn&apos;t fully fix it{panel.qa_problems.length ? `: ${panel.qa_problems.map((p) => p.split(":")[0]!.replace(/_/g, " ")).join(", ")}` : ""}. Regenerate it, describe a fix, or keep it as is.</Notice>}
+      {panel.status === "needs_attention" && <QaNotice panel={panel} />}
       {panel.status === "blocked" && <Notice tone="danger" title="This panel can't be shown">Every attempt failed our safety check, so no image is available and you weren&apos;t charged. Try regenerating.</Notice>}
       {panel.status === "failed" && <Notice tone="danger" title="This panel wasn't drawn">The illustration service had a problem. You weren&apos;t charged. Regenerate to try again.</Notice>}
       <div className="flex flex-wrap gap-2">
@@ -347,7 +367,7 @@ export function Editor({ project }: { project: Project }) {
             <ol className="space-y-2 text-sm">
               {page.panels.map((p) => (
                 <li key={p.id}>
-                  <button type="button" aria-pressed={panelId === p.id && !balloonId} onClick={() => set({ panelId: p.id, balloonId: null })} className={cn("w-full rounded-md px-2 py-1 text-left font-semibold hover:bg-ink/5", panelId === p.id && !balloonId && "bg-sun")}>Panel {p.index + 1}{p.status !== "ok" && <span className="ml-2 font-normal text-warn">{p.busy ? "redrawing" : p.status.replace("_", " ")}</span>}</button>
+                  <button type="button" aria-pressed={panelId === p.id && !balloonId} onClick={() => set({ panelId: p.id, balloonId: null })} className={cn("w-full rounded-md px-2 py-1 text-left font-semibold hover:bg-ink/5", panelId === p.id && !balloonId && "bg-sun")}>Panel {p.index + 1}{p.status !== "ok" && <span className="ml-2 font-normal text-warn">{p.busy ? "redrawing" : p.status === "needs_attention" ? QA_STATE_LABEL[p.qa_state ?? ""] ?? "needs attention" : p.status.replace("_", " ")}</span>}</button>
                   <ul className="ml-3 border-l-2 border-line pl-2">
                     {p.balloons.map((b) => <li key={b.id}><button type="button" aria-pressed={balloonId === b.id} onClick={() => set({ panelId: p.id, balloonId: b.id })} className={cn("w-full truncate rounded-md px-2 py-1 text-left hover:bg-ink/5", balloonId === b.id && "bg-sun")}><span className="text-muted">{b.type}: </span>{texts[b.id] ?? b.text}</button></li>)}
                   </ul>

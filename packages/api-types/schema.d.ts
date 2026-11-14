@@ -1282,6 +1282,10 @@ export interface components {
             index: number;
             /** Qa Problems */
             qa_problems: string[];
+            /** Qa Reasons */
+            qa_reasons: components["schemas"]["QaReason"][];
+            /** Qa State */
+            qa_state: string | null;
             /** Rect */
             rect: number[];
             /** Spec */
@@ -1428,6 +1432,10 @@ export interface components {
             pages: components["schemas"]["PageOut"][];
             /** Pages Requested */
             pages_requested: number;
+            /** Panel Counts */
+            panel_counts: {
+                [key: string]: number;
+            };
             progress: components["schemas"]["ProgressOut"];
             /** Prompt */
             prompt: string;
@@ -1473,6 +1481,10 @@ export interface components {
             image_provider: string | null;
             /** Pages Requested */
             pages_requested: number;
+            /** Panel Counts */
+            panel_counts: {
+                [key: string]: number;
+            };
             /** Status */
             status: string;
             /** Style Preset */
@@ -1491,6 +1503,20 @@ export interface components {
             cast_version: number;
             /** Rules */
             rules: components["schemas"]["ContinuityRuleIn"][];
+        };
+        /** QaReason */
+        QaReason: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "visual_mismatch" | "missing" | "uncertain" | "not_checked";
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Subject */
+            subject: string | null;
         };
         /** ReorderPanels */
         ReorderPanels: {
@@ -1618,6 +1644,10 @@ export interface components {
             model: string;
             /** Qa Problems */
             qa_problems: string[];
+            /** Qa Reasons */
+            qa_reasons: components["schemas"]["QaReason"][];
+            /** Qa State */
+            qa_state: string;
             /** Qa Status */
             qa_status: string;
         };
