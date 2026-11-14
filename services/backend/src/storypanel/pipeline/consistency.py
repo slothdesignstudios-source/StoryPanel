@@ -107,34 +107,36 @@ def issues_from_report(report: ScriptConsistencyReport, script: ComicScript,
         seen.add((pi, ni))
         panel = script.pages[pi].panels[ni]
         path = f"pages[{pi}].panels[{ni}]"
+        where = (f"Page {pi + 1}, panel {ni + 1}" if len(script.pages) > 1 else f"Panel {ni + 1}") + ": "
         for v in pc.rules:
             rule = by_id.get(v.rule_id)
             if rule is None or not _applies(rule, panel):
                 continue
             if v.verdict == "violated":
                 out.append(ScriptIssue(code="rule_violation", path=f"{path}.rule:{rule.id}",
-                                       message=f"Breaks the continuity rule “{rule.text}”: {v.reason} Edit the panel, "
+                                       message=f"{where}breaks the continuity rule “{rule.text}”: {v.reason} Edit the panel, "
                                                "or mark the rule as not applying to this panel."))  # fmt: skip
             elif v.verdict == "uncertain":
                 out.append(ScriptIssue(code="rule_uncertain", path=f"{path}.rule:{rule.id}", severity="review",
-                                       message=f"Can't tell whether this panel keeps “{rule.text}”: {v.reason}"))  # fmt: skip
+                                       message=f"{where}can't tell whether it keeps “{rule.text}”: {v.reason}"))  # fmt: skip
         claimed = {b.lower().strip() for b in panel.beats}
         for b in pc.beats:
             if b.beat.lower().strip() not in claimed:
                 continue
             if b.expressed == "no":
                 out.append(ScriptIssue(code="beat_not_expressed", path=f"{path}.beat:{b.beat}", severity="review",
-                                       message=f"Tagged with the “{b.beat}” beat, but the panel doesn't seem to show it: "
+                                       message=f"{where}tagged with the “{b.beat}” beat, but it doesn't seem to show it: "
                                                f"{b.reason}"))  # fmt: skip
             elif b.expressed == "uncertain":
                 out.append(ScriptIssue(code="beat_uncertain", path=f"{path}.beat:{b.beat}", severity="review",
-                                       message=f"Can't tell whether this panel shows the “{b.beat}” beat: {b.reason}"))  # fmt: skip
+                                       message=f"{where}can't tell whether it shows the “{b.beat}” beat: {b.reason}"))  # fmt: skip
     for pi, page in enumerate(script.pages):
         for ni, panel in enumerate(page.panels):
             needs = [r for r in musts if _applies(r, panel)] or panel.beats
             if needs and (pi, ni) not in seen:
+                label = f"Page {pi + 1}, panel {ni + 1}" if len(script.pages) > 1 else f"Panel {ni + 1}"
                 out.append(ScriptIssue(code="consistency_incomplete", path=f"pages[{pi}].panels[{ni}]", severity="review",
-                                       message="This panel wasn't covered by the Story Bible check."))  # fmt: skip
+                                       message=f"{label} wasn't covered by the Story Bible check."))  # fmt: skip
     for n, c in enumerate(report.conflicts):
         names = ", ".join(f"“{by_id[i].text}”" for i in c.rule_ids if i in by_id) or "the rules"
         out.append(ScriptIssue(code="rule_conflict", path=f"continuity_rules[{n}]", severity="review",

@@ -140,7 +140,9 @@ def test_consistency_verdicts_become_blocking_review_or_nothing() -> None:
          "beats": [{"beat": "payoff", "expressed": "uncertain", "reason": "?"}]},
         {"page": 9, "panel": 9, "rules": [], "beats": []},
     ], "conflicts": [{"kind": "rule_vs_beat", "rule_ids": ["apron_always"], "description": "The twist removes it."}]})  # fmt: skip
-    got = {(i.code, i.path): i.severity for i in consistency.issues_from_report(report, script, [APRON])}
+    found = consistency.issues_from_report(report, script, [APRON])
+    got = {(i.code, i.path): i.severity for i in found}
+    assert [i.message.split(":")[0] for i in found[:3]] == ["Panel 1", "Panel 2", "Panel 2"]  # tells them apart
     assert got == {
         ("rule_violation", "pages[0].panels[0].rule:apron_always"): "error",
         ("rule_uncertain", "pages[0].panels[1].rule:apron_always"): "review",
