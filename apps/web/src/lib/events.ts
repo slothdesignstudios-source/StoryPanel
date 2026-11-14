@@ -26,7 +26,14 @@ export function useProjectEvents(projectId: string, enabled: boolean, onEvent?: 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const refresh = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => void qc.invalidateQueries({ queryKey: pk("project", projectId) }), 120);
+      timer = setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: pk("project", projectId) });
+        // Background work (charges, holds, releases) changes the balance: keep the header,
+        // the Credits page and cost estimates current without a reload.
+        void qc.invalidateQueries({ queryKey: pk("me") });
+        void qc.invalidateQueries({ queryKey: pk("credits") });
+        void qc.invalidateQueries({ queryKey: pk("estimate") });
+      }, 120);
     };
 
     async function run() {

@@ -210,6 +210,8 @@ export function Cast({ project }: { project: Project }) {
   });
   const updating = project.characters.some((c) => c.revising || c.sheet_status !== "ready");
   const waiting = project.approved_cast_version === project.cast_version;
+  const meta = useQuery({ queryKey: ["meta"], staleTime: Infinity, queryFn: async () => (await api.GET("/v1/meta")).data! });
+  const price = meta.data?.credit_prices;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -219,7 +221,7 @@ export function Cast({ project }: { project: Project }) {
         </div>
         <div className="text-right">
           <Button variant="primary" size="lg" busy={approve.isPending || waiting} disabled={updating} onClick={() => approve.mutate()}>{waiting ? "Starting the script" : "Approve cast and write the script"}</Button>
-          <p className="mt-1 text-xs text-muted">{updating ? "Wait for the sheet to finish updating." : "The script is already covered by the credits held at the start."}</p>
+          <p className="mt-1 text-xs text-muted">{updating ? "Wait for the sheet to finish updating." : price ? `The cast (${price.cast} credits) has been charged; ${price.script} stay held for the script. A revision holds ${price.character_revision} and is charged only if the new sheet is delivered.` : "The script is already covered by the credits held at the start."}</p>
         </div>
       </div>
       {approve.isError && <Notice tone="danger" title={approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "The cast changed since you opened this page" : "Couldn't approve the cast"}>{approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "We've loaded the latest version. Review it and approve again." : describeError(approve.error)}</Notice>}
@@ -352,7 +354,7 @@ export function ScriptReview({ project }: { project: Project }) {
             <Button busy={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>Save changes</Button>
             <Dialog>
               <DialogTrigger asChild><Button variant="primary" disabled={dirty || script.has_errors || waiting || estimate.data?.sufficient === false} busy={waiting}>{waiting ? "Starting illustration" : "Approve and draw"}</Button></DialogTrigger>
-              <DialogContent title="Start drawing?" description={`This approves script version ${script.version} and holds ${estimate.data?.credits ?? "the"} credits. You're charged one credit per panel that is delivered; automatic quality retries are free.`}>
+              <DialogContent title="Start drawing?" description={`This approves script version ${script.version} and holds ${estimate.data?.credits ?? "the"} credits. ${estimate.data?.note ?? ""}`}>
                 {approve.isError && <Notice tone="danger" title="Couldn't start">{approve.error instanceof ApiError && approve.error.code === "insufficient_credits" ? <>You don&apos;t have enough credits. <Link className="underline" href="/billing">Add credits</Link></> : describeError(approve.error)}</Notice>}
                 <div className="mt-4 flex justify-end gap-3">
                   <DialogClose asChild><Button variant="ghost">Not yet</Button></DialogClose>

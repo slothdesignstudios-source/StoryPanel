@@ -30,7 +30,12 @@ export default function Billing() {
             <div key={k} className="rounded-md border-2 border-line bg-card p-3"><dt className="text-muted">{k}</dt><dd className="font-bold">{v} credit{v === 1 ? "" : "s"}</dd></div>
           ))}
         </dl>
-        <p className="text-sm text-muted">Automatic quality retries, failed panels and safety-blocked panels are never charged.</p>
+        <ul className="list-inside list-disc space-y-1 text-sm text-muted">
+          <li>Credits are held when work starts. Only delivered work is charged; whatever isn&apos;t used is released.</li>
+          <li>Automatic quality retries are free. Panels that fail or are blocked by the safety check aren&apos;t charged.</li>
+          <li>A delivered panel is charged even when our checks flag it as needing attention.</li>
+          <li>A regenerate or fix that produces an image is charged, even if you started another change before it finished.</li>
+        </ul>
       </section>
       <section aria-labelledby="plans" className="space-y-3">
         <h2 id="plans" className="text-xl font-bold">Plans and top-ups</h2>
@@ -54,19 +59,37 @@ export default function Billing() {
           </Card>
         </div>
       </section>
+      <section aria-labelledby="holds" className="space-y-3">
+        <h2 id="holds" className="text-xl font-bold">Held for work in progress</h2>
+        {c.holds.length === 0 ? <p className="text-sm text-muted">Nothing is held right now.</p> : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {c.holds.map((h) => (
+              <li key={h.id} className="rounded-md border-2 border-line bg-card p-3 text-sm">
+                <p className="font-semibold">{h.label}{h.project_title ? <span className="font-normal text-muted"> · {h.project_title}</span> : null}</p>
+                <p><span className="font-bold tabular-nums">{h.remaining}</span> held{h.charged ? <span className="text-muted"> ({h.charged} of {h.held} already charged)</span> : null}</p>
+                <p className="text-xs text-muted">Since {new Date(h.opened_at).toLocaleString()}{h.history === "unavailable" ? " · made before hold history was recorded" : ""}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <section aria-labelledby="history" className="space-y-3">
-        <h2 id="history" className="text-xl font-bold">History</h2>
-        {c.history.length === 0 ? <EmptyState title="No activity yet">Charges and top-ups will be listed here.</EmptyState> : (
+        <h2 id="history" className="text-xl font-bold">Activity</h2>
+        {c.holds_without_history > 0 && (
+          <Notice title="Some older holds aren't listed">Holds and releases{c.hold_history_since ? ` before ${new Date(c.hold_history_since).toLocaleDateString()}` : ""} weren&apos;t recorded, so they don&apos;t appear below. Charges, grants and the totals above are exact.</Notice>
+        )}
+        {c.activity.length === 0 ? <EmptyState title="No activity yet">Holds, charges and top-ups will be listed here.</EmptyState> : (
           <div className="overflow-x-auto rounded-lg border-2 border-ink bg-card">
-            <table className="w-full min-w-[32rem] text-left text-sm">
-              <caption className="sr-only">Credit history, newest first</caption>
-              <thead className="border-b-2 border-ink bg-paper"><tr><th scope="col" className="p-3">When</th><th scope="col" className="p-3">What</th><th scope="col" className="p-3 text-right">Credits</th><th scope="col" className="p-3 text-right">Balance</th></tr></thead>
+            <table className="w-full min-w-[40rem] text-left text-sm">
+              <caption className="sr-only">Credit activity, newest first. A charge taken from a hold doesn&apos;t change what is available, because the hold already set it aside.</caption>
+              <thead className="border-b-2 border-ink bg-paper"><tr><th scope="col" className="p-3">When</th><th scope="col" className="p-3">What</th><th scope="col" className="p-3 text-right">Available</th><th scope="col" className="p-3 text-right">Balance</th></tr></thead>
               <tbody>
-                {c.history.map((h) => (
-                  <tr key={h.id} className="border-b border-line last:border-0">
-                    <td className="p-3 text-muted">{new Date(h.created_at).toLocaleString()}</td><td className="p-3">{h.reason}</td>
-                    <td className={cn("p-3 text-right font-semibold tabular-nums", h.delta > 0 ? "text-ok" : "text-ink")}>{h.delta > 0 ? `+${h.delta}` : h.delta}</td>
-                    <td className="p-3 text-right tabular-nums">{h.balance_after}</td>
+                {c.activity.map((a, n) => (
+                  <tr key={`${a.at}-${n}`} className="border-b border-line last:border-0">
+                    <td className="p-3 text-muted">{new Date(a.at).toLocaleString()}</td>
+                    <td className="p-3">{a.reason}{a.project_title ? <span className="text-muted"> · {a.project_title}</span> : null}{a.type === "charge" && a.held_change !== 0 ? <span className="block text-xs text-muted">Charged from a hold</span> : null}</td>
+                    <td className={cn("p-3 text-right font-semibold tabular-nums", a.available_change > 0 ? "text-ok" : "text-ink")}>{a.available_change > 0 ? `+${a.available_change}` : a.available_change === 0 ? "0" : a.available_change}</td>
+                    <td className="p-3 text-right tabular-nums">{a.balance_change !== 0 ? <>{a.balance_change > 0 ? `+${a.balance_change}` : a.balance_change}<span className="text-muted"> → {a.balance_after}</span></> : <span className="text-muted">—</span>}</td>
                   </tr>
                 ))}
               </tbody>

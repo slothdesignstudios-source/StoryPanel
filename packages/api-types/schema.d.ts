@@ -780,8 +780,75 @@ export interface components {
             /** Style Preset */
             style_preset?: string | null;
         };
+        /**
+         * CreditActivityOut
+         * @description One credit movement. Charges are ledger rows (the only events that change the balance with
+         *     spending); a charge made from a hold also lowers the held amount, so it does not change what is
+         *     available a second time. Settlements are never listed separately.
+         */
+        CreditActivityOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Available Change */
+            available_change: number;
+            /** Balance After */
+            balance_after: number | null;
+            /** Balance Change */
+            balance_change: number;
+            /** Held Change */
+            held_change: number;
+            /** Project Id */
+            project_id: string | null;
+            /** Project Title */
+            project_title: string | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "grant" | "purchase" | "charge" | "refund" | "adjust" | "hold" | "release";
+        };
+        /**
+         * CreditHoldOut
+         * @description One open hold. `history` is "unavailable" for holds made before hold events were recorded:
+         *     their amounts are current values, not a reconstructed past.
+         */
+        CreditHoldOut: {
+            /** Charged */
+            charged: number;
+            /** Held */
+            held: number;
+            /**
+             * History
+             * @enum {string}
+             */
+            history: "recorded" | "unavailable";
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /** Project Id */
+            project_id: string | null;
+            /** Project Title */
+            project_title: string | null;
+            /** Purpose */
+            purpose: string;
+            /** Remaining */
+            remaining: number;
+        };
         /** CreditsOut */
         CreditsOut: {
+            /** Activity */
+            activity: components["schemas"]["CreditActivityOut"][];
             /** Available */
             available: number;
             /** Balance */
@@ -790,6 +857,12 @@ export interface components {
             billing_enabled: boolean;
             /** History */
             history: components["schemas"]["LedgerEntry"][];
+            /** Hold History Since */
+            hold_history_since: string | null;
+            /** Holds */
+            holds: components["schemas"]["CreditHoldOut"][];
+            /** Holds Without History */
+            holds_without_history: number;
             /** Plan */
             plan: string;
             /** Plans */
@@ -1018,6 +1091,8 @@ export interface components {
             id: string;
             /** Plan */
             plan: string;
+            /** Reserved */
+            reserved: number;
         };
         /** MetaOut */
         MetaOut: {

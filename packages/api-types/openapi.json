@@ -638,8 +638,178 @@
     "title": "CreateProject",
     "type": "object"
    },
+   "CreditActivityOut": {
+    "description": "One credit movement. Charges are ledger rows (the only events that change the balance with\nspending); a charge made from a hold also lowers the held amount, so it does not change what is\navailable a second time. Settlements are never listed separately.",
+    "properties": {
+     "at": {
+      "format": "date-time",
+      "title": "At",
+      "type": "string"
+     },
+     "available_change": {
+      "title": "Available Change",
+      "type": "integer"
+     },
+     "balance_after": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Balance After"
+     },
+     "balance_change": {
+      "title": "Balance Change",
+      "type": "integer"
+     },
+     "held_change": {
+      "title": "Held Change",
+      "type": "integer"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id"
+     },
+     "project_title": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Title"
+     },
+     "reason": {
+      "title": "Reason",
+      "type": "string"
+     },
+     "type": {
+      "enum": [
+       "grant",
+       "purchase",
+       "charge",
+       "refund",
+       "adjust",
+       "hold",
+       "release"
+      ],
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "at",
+     "type",
+     "reason",
+     "project_id",
+     "project_title",
+     "balance_change",
+     "held_change",
+     "available_change",
+     "balance_after"
+    ],
+    "title": "CreditActivityOut",
+    "type": "object"
+   },
+   "CreditHoldOut": {
+    "description": "One open hold. `history` is \"unavailable\" for holds made before hold events were recorded:\ntheir amounts are current values, not a reconstructed past.",
+    "properties": {
+     "charged": {
+      "title": "Charged",
+      "type": "integer"
+     },
+     "held": {
+      "title": "Held",
+      "type": "integer"
+     },
+     "history": {
+      "enum": [
+       "recorded",
+       "unavailable"
+      ],
+      "title": "History",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "opened_at": {
+      "format": "date-time",
+      "title": "Opened At",
+      "type": "string"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id"
+     },
+     "project_title": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Title"
+     },
+     "purpose": {
+      "title": "Purpose",
+      "type": "string"
+     },
+     "remaining": {
+      "title": "Remaining",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "id",
+     "purpose",
+     "label",
+     "project_id",
+     "project_title",
+     "held",
+     "charged",
+     "remaining",
+     "opened_at",
+     "history"
+    ],
+    "title": "CreditHoldOut",
+    "type": "object"
+   },
    "CreditsOut": {
     "properties": {
+     "activity": {
+      "items": {
+       "$ref": "#/components/schemas/CreditActivityOut"
+      },
+      "title": "Activity",
+      "type": "array"
+     },
      "available": {
       "title": "Available",
       "type": "integer"
@@ -658,6 +828,29 @@
       },
       "title": "History",
       "type": "array"
+     },
+     "hold_history_since": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hold History Since"
+     },
+     "holds": {
+      "items": {
+       "$ref": "#/components/schemas/CreditHoldOut"
+      },
+      "title": "Holds",
+      "type": "array"
+     },
+     "holds_without_history": {
+      "title": "Holds Without History",
+      "type": "integer"
      },
      "plan": {
       "title": "Plan",
@@ -700,6 +893,10 @@
      "available",
      "subscription_status",
      "history",
+     "holds",
+     "activity",
+     "hold_history_since",
+     "holds_without_history",
      "prices",
      "plans",
      "billing_enabled"
@@ -1338,6 +1535,10 @@
      "plan": {
       "title": "Plan",
       "type": "string"
+     },
+     "reserved": {
+      "title": "Reserved",
+      "type": "integer"
      }
     },
     "required": [
@@ -1345,7 +1546,8 @@
      "email",
      "plan",
      "balance",
-     "available"
+     "available",
+     "reserved"
     ],
     "title": "MeOut",
     "type": "object"

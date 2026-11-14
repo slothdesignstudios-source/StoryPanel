@@ -17,11 +17,11 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from storypanel.db.models import CreditLedger, CreditReservation, User
+from storypanel.db.models import CreditLedger, CreditReservation, CreditReservationEvent, User
 from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
 
@@ -52,6 +52,11 @@ async def _append(
                         dedupe_key=dedupe_key, balance_after=balance_after, project_id=project_id,
                         job_ref=job_ref, reservation_id=reservation_id))  # fmt: skip
     metrics.credit_events.labels(kind).inc()
+
+
+def _event(resv: CreditReservation, kind: str, amount: int) -> CreditReservationEvent:
+    return CreditReservationEvent(reservation_id=resv.id, user_id=resv.user_id, project_id=resv.project_id,
+                                  purpose=resv.purpose, kind=kind, amount=amount)  # fmt: skip
 
 
 async def _already_applied(db: AsyncSession, dedupe_key: str) -> bool:
@@ -126,7 +131,9 @@ async def reserve(
         raise AppError(ErrorCode.INSUFFICIENT_CREDITS,
                        "You don't have enough credits for this. Add credits to continue.")  # fmt: skip
     metrics.credit_events.labels("reserve").inc()
-    return (await db.execute(select(CreditReservation).where(CreditReservation.id == new_id))).scalar_one()
+    resv = (await db.execute(select(CreditReservation).where(CreditReservation.id == new_id))).scalar_one()
+    db.add(_event(resv, "hold", amount))
+    return resv
 
 
 async def charge(
@@ -163,6 +170,7 @@ async def charge(
     await _append(db, user_id=resv.user_id, delta=-units, kind="charge", reason=reason,
                   dedupe_key=dedupe_key, balance_after=new_balance, project_id=resv.project_id,
                   job_ref=job_ref, reservation_id=resv.id)  # fmt: skip
+    db.add(_event(resv, "settle", units))  # the money moved in the ledger row above
     return True
 
 
@@ -185,6 +193,7 @@ async def close(db: AsyncSession, reservation_id: uuid.UUID) -> int:
             update(User).where(User.id == resv.user_id)
             .values(credit_reserved=User.credit_reserved - unused)
         )  # fmt: skip
+        db.add(_event(resv, "release", unused))
     metrics.credit_events.labels("release").inc()
     return unused
 
@@ -236,3 +245,77 @@ async def reconcile(db: AsyncSession) -> list[dict[str, object]]:
          "reserved": r["credit_reserved"], "open_holds": r["held"]}
         for r in rows
     ]  # fmt: skip
+
+
+PURPOSE_LABELS = {"plan": "Cast, sheets and script", "panels": "Illustration", "revision": "Character revision",
+                  "regenerate": "Regenerate a panel", "edit": "Fix a panel by instruction"}  # fmt: skip
+
+
+async def account_view(db: AsyncSession, user_id: uuid.UUID, limit: int = 100) -> dict[str, object]:
+    """Open holds and recent activity from immutable records only (ledger rows and hold events).
+
+    Settle events are not listed: the matching charge is the ledger row. Holds made before hold
+    events existed are reported with history "unavailable" instead of a reconstructed past."""
+    from storypanel.db.models import Project
+
+    titles: dict[uuid.UUID, str | None] = {}
+
+    async def title(pid: uuid.UUID | None) -> str | None:
+        if pid is None:
+            return None
+        if pid not in titles:
+            titles[pid] = (await db.execute(select(Project.title).where(
+                Project.id == pid, Project.owner_id == user_id))).scalar_one_or_none()  # fmt: skip
+        return titles[pid]
+
+    open_rows = (await db.execute(select(CreditReservation).where(
+        CreditReservation.user_id == user_id, CreditReservation.status == "open")
+        .order_by(CreditReservation.created_at))).scalars().all()  # fmt: skip
+    recorded = set((await db.execute(select(CreditReservationEvent.reservation_id).where(
+        CreditReservationEvent.user_id == user_id, CreditReservationEvent.kind == "hold"))).scalars())  # fmt: skip
+    holds = [{"id": str(r.id), "purpose": r.purpose, "label": PURPOSE_LABELS.get(r.purpose, r.purpose),
+              "project_id": str(r.project_id) if r.project_id else None, "project_title": await title(r.project_id),
+              "held": r.amount, "charged": r.settled, "remaining": r.amount - r.settled, "opened_at": r.created_at,
+              "history": "recorded" if r.id in recorded else "unavailable"} for r in open_rows]  # fmt: skip
+    without = (await db.execute(select(func.count()).select_from(CreditReservation).where(
+        CreditReservation.user_id == user_id,
+        CreditReservation.id.not_in(select(CreditReservationEvent.reservation_id).where(
+            CreditReservationEvent.user_id == user_id))))).scalar_one()  # fmt: skip
+    since = (await db.execute(select(func.min(CreditReservationEvent.created_at)).where(
+        CreditReservationEvent.user_id == user_id))).scalar_one()  # fmt: skip
+
+    ledger = (await db.execute(select(CreditLedger).where(CreditLedger.user_id == user_id)
+                               .order_by(CreditLedger.id.desc()).limit(limit))).scalars().all()  # fmt: skip
+    events = (await db.execute(select(CreditReservationEvent).where(
+        CreditReservationEvent.user_id == user_id, CreditReservationEvent.kind.in_(("hold", "release")))
+        .order_by(CreditReservationEvent.id.desc()).limit(limit))).scalars().all()  # fmt: skip
+    held_charges = set((await db.execute(select(CreditReservationEvent.reservation_id).where(
+        CreditReservationEvent.user_id == user_id, CreditReservationEvent.kind == "hold"))).scalars())  # fmt: skip
+    activity: list[dict[str, object]] = []
+    for e in ledger:
+        # A charge settled from a recorded hold lowers the hold by the same amount: available is unchanged.
+        from_hold = e.kind == "charge" and e.reservation_id is not None and e.reservation_id in held_charges
+        held_change = e.delta if from_hold else 0
+        activity.append({"at": e.created_at, "type": e.kind if e.kind in ("grant", "purchase", "charge", "refund")
+                         else "adjust", "reason": e.reason, "project_id": str(e.project_id) if e.project_id else None,
+                         "project_title": await title(e.project_id), "balance_change": e.delta,
+                         "held_change": held_change, "available_change": e.delta - held_change,
+                         "balance_after": e.balance_after, "_order": (e.created_at, 1, e.id)})  # fmt: skip
+    for ev in events:
+        sign = 1 if ev.kind == "hold" else -1
+        verb = "held" if ev.kind == "hold" else "released (not used)"
+        activity.append({"at": ev.created_at, "type": ev.kind,
+                         "reason": f"{PURPOSE_LABELS.get(ev.purpose, ev.purpose)}: {verb}",
+                         "project_id": str(ev.project_id) if ev.project_id else None,
+                         "project_title": await title(ev.project_id), "balance_change": 0,
+                         "held_change": sign * ev.amount, "available_change": -sign * ev.amount,
+                         "balance_after": None, "_order": (ev.created_at, 0 if ev.kind == "hold" else 2, ev.id)})  # fmt: skip
+    activity.sort(key=lambda a: a["_order"], reverse=True)  # type: ignore[arg-type,return-value]
+    for a in activity:
+        a.pop("_order")
+    return {
+        "holds": holds,
+        "activity": activity[:limit],
+        "hold_history_since": since,
+        "holds_without_history": without,
+    }

@@ -148,7 +148,7 @@ function PanelTools({ project, page, panel }: { project: Project; page: Page; pa
         <Button variant="ghost" size="icon" aria-label="This panel has problems" disabled={!hasImage} onClick={() => rate.mutate(-1)}><ThumbsDown className="h-4 w-4" aria-hidden /></Button>
       </div>
       <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (instruction.trim().length >= 3) edit.mutate(); }}>
-        <Field label="Fix by instruction" hint="Each regenerate or fix costs 1 credit, only if it produces an image.">
+        <Field label="Fix by instruction" hint="Each regenerate or fix holds 1 credit. It is charged if it produces an image, even if you start another change before it finishes; if it fails or is blocked, the credit is released.">
           {(ids) => <Textarea {...ids} className="min-h-16" maxLength={400} value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="make her smile · add rain" disabled={!hasImage || panel.busy} />}
         </Field>
         <Button type="submit" busy={edit.isPending} disabled={!hasImage || panel.busy || instruction.trim().length < 3}><Wand2 className="h-4 w-4" aria-hidden />Apply fix</Button>

@@ -49,6 +49,13 @@ def workflow_input(project: Project, **extra: Any) -> dict[str, Any]:
             **extra}  # fmt: skip
 
 
+PANEL_CHARGE_POLICY = (
+    "Each delivered panel is charged once, including panels our checks flag as needing attention. "
+    "Automatic quality retries are free; panels that fail or are blocked by the safety check are "
+    "not charged, and their credits are released."
+)
+
+
 def plan_credits() -> int:
     s = get_settings()
     return s.credits_cast + s.credits_script
@@ -123,9 +130,10 @@ async def estimate(db: AsyncSession, user_id: uuid.UUID, project: Project | None
         return api.EstimateOut(
             step="start", credits=total, breakdown=breakdown, balance=bal.balance,
             available=bal.available, sufficient=bal.available >= total,
-            note=f"Illustration is charged later, after you approve the script: about "
-                 f"{panels * s.credits_per_panel} more credits for roughly {panels} panels. "
-                 "The exact amount is shown before you approve.")  # fmt: skip
+            note=f"{s.credits_cast} are charged as soon as the cast sheets are drawn, before you review them, "
+                 f"and {s.credits_script} when the script is written. Anything not used is released. "
+                 f"Illustration is held later, when you approve the script: about "
+                 f"{panels * s.credits_per_panel} more credits for roughly {panels} panels.")  # fmt: skip
     row = await repo.script_row(db, project.id)
     if row is None:
         return api.EstimateOut(step="plan", credits=0, breakdown={}, balance=bal.balance,
@@ -137,7 +145,7 @@ async def estimate(db: AsyncSession, user_id: uuid.UUID, project: Project | None
         step="illustration", credits=total, breakdown={"panels": panels,
                                                        "credits_per_panel": s.credits_per_panel},
         balance=bal.balance, available=bal.available, sufficient=bal.available >= total,
-        note="Automatic quality retries are free. Panels that fail or are blocked are not charged.")  # fmt: skip
+        note=PANEL_CHARGE_POLICY)  # fmt: skip
 
 
 # ------------------------------------------------------------------ gates

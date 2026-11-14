@@ -348,6 +348,38 @@ class LedgerEntry(Out):
     created_at: datetime
 
 
+class CreditHoldOut(Out):
+    """One open hold. `history` is "unavailable" for holds made before hold events were recorded:
+    their amounts are current values, not a reconstructed past."""
+
+    id: str
+    purpose: str
+    label: str
+    project_id: str | None
+    project_title: str | None
+    held: int
+    charged: int
+    remaining: int
+    opened_at: datetime
+    history: Literal["recorded", "unavailable"]
+
+
+class CreditActivityOut(Out):
+    """One credit movement. Charges are ledger rows (the only events that change the balance with
+    spending); a charge made from a hold also lowers the held amount, so it does not change what is
+    available a second time. Settlements are never listed separately."""
+
+    at: datetime
+    type: Literal["grant", "purchase", "charge", "refund", "adjust", "hold", "release"]
+    reason: str
+    project_id: str | None
+    project_title: str | None
+    balance_change: int
+    held_change: int
+    available_change: int
+    balance_after: int | None
+
+
 class CreditsOut(Out):
     plan: str
     balance: int
@@ -355,6 +387,11 @@ class CreditsOut(Out):
     available: int
     subscription_status: str | None
     history: list[LedgerEntry]
+    holds: list[CreditHoldOut]
+    activity: list[CreditActivityOut]
+    # earliest recorded hold event for this account; holds and releases before it were not recorded
+    hold_history_since: datetime | None
+    holds_without_history: int
     prices: dict[str, int]
     plans: dict[str, int]
     billing_enabled: bool
@@ -370,6 +407,7 @@ class MeOut(Out):
     plan: str
     balance: int
     available: int
+    reserved: int  # held for work in progress (balance - available)
 
 
 class TokenOut(Out):

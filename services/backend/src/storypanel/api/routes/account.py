@@ -53,7 +53,8 @@ async def me(user: AuthUser = Depends(current_user)) -> api.MeOut:
     async with transaction() as db:
         row = (await db.execute(select(User).where(User.id == user.id))).scalar_one()
         return api.MeOut(id=str(row.id), email=row.email, plan=row.plan, balance=row.credit_balance,
-                         available=row.credit_balance - row.credit_reserved)  # fmt: skip
+                         available=row.credit_balance - row.credit_reserved,
+                         reserved=row.credit_reserved)  # fmt: skip
 
 
 @router.delete("/v1/me", status_code=204, responses=ERR)
@@ -83,11 +84,19 @@ async def get_credits(user: AuthUser = Depends(current_user)) -> api.CreditsOut:
                                    project_id=str(e.project_id) if e.project_id else None,
                                    balance_after=e.balance_after, created_at=e.created_at)
                    for e in ledger]  # fmt: skip
+        view = await credits.account_view(db, user.id)
         return api.CreditsOut(
-            plan=row.plan, balance=row.credit_balance, reserved=row.credit_reserved,
+            plan=row.plan,
+            balance=row.credit_balance,
+            reserved=row.credit_reserved,
             available=row.credit_balance - row.credit_reserved,
-            subscription_status=row.subscription_status, history=history, prices=_prices(),
-            plans=s.plan_monthly_credits, billing_enabled=billing.enabled(s))  # fmt: skip
+            subscription_status=row.subscription_status,
+            history=history,
+            prices=_prices(),
+            plans=s.plan_monthly_credits,
+            billing_enabled=billing.enabled(s),
+            **view,
+        )  # type: ignore[arg-type]
 
 
 @router.post("/v1/billing/checkout", response_model=api.UrlOut, responses=ERR)

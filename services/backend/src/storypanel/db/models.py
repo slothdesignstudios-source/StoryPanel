@@ -310,6 +310,29 @@ class CreditReservation(Base, Timestamps):
     )
 
 
+class CreditReservationEvent(Base):
+    """Append-only history of credit holds (enforced by trigger in migration 0012).
+
+    hold: credits set aside for upcoming work; settle: part of a hold turned into a charge (the
+    charge itself is the credit_ledger row, so settle events are never shown as money moving);
+    release: the unused rest of a hold handed back. Holds made before this table existed have no
+    events: their history is unavailable, not reconstructed."""
+
+    __tablename__ = "credit_reservation_events"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    reservation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    user_id: Mapped[uuid.UUID] = fk("users.id")
+    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    purpose: Mapped[str] = mapped_column(String(40))
+    kind: Mapped[str] = mapped_column(String(10))  # hold | settle | release
+    amount: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_resv_event_amount"),
+        Index("ix_resv_events_user_created", "user_id", "created_at"),
+    )
+
+
 class CreditLedger(Base):
     """Append-only (enforced by trigger in the migration)."""
 
