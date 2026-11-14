@@ -295,3 +295,23 @@ Simulated providers and local stubs only. No paid call was made.
 | Character coverage | Documented in the UI (prompt and balloon fields), `release-notes.md`; one actionable message everywhere; prompts with unsupported characters refused before any paid call; editor keeps such text as an unsaved draft; web list generated from the fonts (parity test) | Done |
 | Setup | `first-live-comic.md` §1: cloud network secrets per host (fal key on three hosts; `v3.fal.media` allowed without a key because uploads use a CDN token) | Done |
 | Preflight | Credential-free checks always run (host reachability, price table, API); errors sanitised; fal pricing API check | Done; result without credentials in `evidence/preflight-no-credentials.txt` |
+
+## Provider change 2026-11-14 (from de239a8): Anthropic + OpenAI + Gemini; fal and Voyage disabled
+
+The owner has no fal or Voyage account. Simulated providers and mocked HTTP transports only: **no paid call was made.**
+
+| Item | Change | Evidence | Status |
+|---|---|---|---|
+| Provider enablement | `SP_FAL_ENABLED` / `SP_VOYAGE_ENABLED` (default false). Only the keys enabled capabilities need are required. Settings that would reach a disabled provider are refused at startup | IP default-settings test; U production config; P live config | Done |
+| OpenAI images | `openai_image.py`: generate and multi-reference edit, explicit sizes, no mask, hashed safety id, SDK retries off | IP request contracts (MockTransport behind the real SDK) | Done |
+| Gemini images | `gemini.py: GeminiImageProvider`, called directly (not through fal): aspect and size config, refusal detection, usage by modality | IP | Done |
+| Provider per comic | Selector on New comic (default OpenAI; unavailable options disabled with the reason). Stored on the comic and every attempt, never switched; refusals not rerouted | PP persistence across restart and config change; web vitest/tsc | Done |
+| Synchronous paid-request safety | `image_sync_*` ledger path: reserve, store before success, ambiguous never re-sent, worker-death recovery, 5xx/429/4xx policy, usage-based settlement, unresolved when usage is missing | IP (13 safeguard tests) | Done |
+| Unresolved-charge recovery | Charges importable by `attempt:<id>` when there is no request id; negative and malformed values refused | IP | Done |
+| Identity QA | Gemini visual judgment replaces Voyage embeddings. Structured per-character findings; the stricter of model and app outcome wins; mismatch → bounded repair on the same provider; uncertain/invalid/error → manual review | PP; IP structured validation; EVAL identity subset (swap and look-alike probes, simulated) | Done |
+| Exports | Local Lanczos resampling, effective-DPI report (300 good / 150 low) stored on the export and shown in the editor; no external call | PP all formats, both providers, fal methods booby-trapped | Done |
+| Reconciliation / deletion | Synchronous attempts are never queried. Disabled-fal attempts are rotated, not retried. Deletion purges stored provider results and keeps costs | IP; PP | Done |
+| Observability | `provider_unresolved_usd{provider}`, `identity_visual{outcome}`, `provider_print_dpi`. Log redaction covers OpenAI and Google key shapes. Bundle scan has OpenAI/Gemini canaries | U redaction; bundle scan | Done |
+| Configuration | `.env.example`, `config/live-smoke.env`, `render.yaml`, nightly eval workflow, `stack-env.sh`, `native-stack.sh` (web started without any provider key), PostgreSQL version auto-detected | blueprint test; shell syntax | Done |
+| Smoke tooling | Preflight checks the three hosts and uses free model lookups for each key. `--image-provider`. The cost model is rebuilt for token-billed images and Gemini QA | Simulated runs for both providers (`evidence/smoke/sim-*-20261114`) | Done |
+| Prices | OpenAI and Gemini rows **unverified** (search summaries; official pages blocked). Higher rate used where sources conflicted | `provider-verification.md` | Open (B5) |

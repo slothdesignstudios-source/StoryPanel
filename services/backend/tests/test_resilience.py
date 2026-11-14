@@ -78,6 +78,7 @@ async def test_retry_recovers_after_one_failed_attempt(
         assert sorted(set(rows)) == [(0, "fail"), (1, "pass")]
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_missing_localisation_is_insufficient_identity_evidence(
     client: Any, headers: dict[str, str], worker: Any
 ) -> None:
@@ -154,6 +155,7 @@ async def test_llm_moderation_blocks_prompt(client: Any, headers: dict[str, str]
 
 
 # ------------------------------------------------------------------ provider faults
+@pytest.mark.usefixtures("fal_voyage")
 async def test_throttling_and_malformed_output_are_retried(
     client: Any, headers: dict[str, str], worker: Any
 ) -> None:
@@ -172,6 +174,7 @@ async def test_throttling_and_malformed_output_are_retried(
     assert len(fake.control.submits) == 8
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_ambiguous_timeout_is_reconciled_not_repaid(
     client: Any, headers: dict[str, str], worker: Any
 ) -> None:
@@ -203,6 +206,7 @@ async def test_outage_fails_cleanly_and_resumes(client: Any, headers: dict[str, 
     assert await balances() == (200 - 6, 2)
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_partial_failure_then_retry_failed_panels(
     client: Any, headers: dict[str, str], worker: Any
 ) -> None:
@@ -304,6 +308,7 @@ async def test_approvals_are_scoped_to_exact_versions(
         assert rows == [("cast", v1 + 1, "approved"), ("script", s1 + 2, "approved")]
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_insufficient_credits_at_script_gate_spends_nothing(
     client: Any, headers: dict[str, str], worker: Any
 ) -> None:
@@ -461,6 +466,7 @@ async def test_trace_context_crosses_api_outbox_workflow_and_activity(client: An
 
 # ------------------------------------------------------------------ targeted repair, provenance
 @pytest.mark.parametrize("mode", ["reference_edit", "inpaint"])
+@pytest.mark.usefixtures("fal_voyage")
 async def test_local_qa_failure_is_repaired_in_place_not_redrawn(
     client: Any, headers: dict[str, str], worker: Any, mode: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

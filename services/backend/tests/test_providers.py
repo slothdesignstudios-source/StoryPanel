@@ -254,12 +254,27 @@ def test_price_table_accepts_explicit_free_and_rejects_duplicates() -> None:
         pricing.parse_table({"entries": [_entry(), _entry()]})
 
 
+# Default live configuration: Anthropic text, OpenAI + Gemini images, Gemini visual identity QA.
 LIVE = dict(
-    _env_file=None, provider_mode="live", anthropic_api_key="x", fal_key="x", voyage_api_key="x",
+    _env_file=None, provider_mode="live", anthropic_api_key="x", openai_api_key="x", gemini_api_key="x",
     text_model_story="claude-sonnet-5-5", text_model_light="claude-haiku-5-5", vision_model="claude-haiku-5-5",
+    openai_image_model="gpt-image-2.5-sunburst", gemini_image_model="gemini-3.1-flash-image",
+    gemini_qa_model="gemini-3.8-flash",
+)  # fmt: skip
+# The retained fal + Voyage configuration, enabled explicitly.
+LIVE_FAL = dict(
+    LIVE, fal_enabled=True, voyage_enabled=True, image_providers=["openai", "gemini", "fal"],
+    identity_qa="voyage_embedding", export_upscale="fal", fal_key="x", voyage_api_key="x",
     image_model_generate="fal-ai/nano-banana-2", image_model_edit="fal-ai/nano-banana-2/edit",
     upscale_model="fal-ai/esrgan", embedding_model="voyage-multimodal-3.5",
 )  # fmt: skip
+
+
+def _multimodal(model: str, provider: str, **kw: Any) -> dict[str, Any]:
+    return {"provider": provider, "model": model, "unit": "per_mtok_multimodal", "input_usd": "1",
+            "image_input_usd": "1", "output_usd": "3", "image_output_usd": "30",
+            "reserve_input_tokens_per_image": 1000, "reserve_output_image_tokens": 2000,
+            "reserve_output_text_tokens": 0, "source": "test", "verified_at": date.today().isoformat(), **kw}  # fmt: skip
 
 
 def _table(**override: Any) -> str:
@@ -272,6 +287,9 @@ def _table(**override: Any) -> str:
                                              ("fal-ai/esrgan", "0.01"))]  # fmt: skip
     entries.append({"provider": "voyage", "model": "voyage-multimodal-3.5", "unit": "per_billion_pixels",
                     "usd": "0.6", "source": "Voyage pricing", "verified_at": today})  # fmt: skip
+    entries += [_multimodal("gpt-image-2.5-sunburst", "openai"), _multimodal("gemini-3.1-flash-image", "gemini"),
+                {"provider": "gemini", "model": "gemini-3.8-flash", "unit": "per_mtok", "input_usd": "1.5",
+                 "output_usd": "7.5", "source": "test", "verified_at": today}]  # fmt: skip
     for e in entries:
         e.update(override.get(e["model"], {}))
     return json.dumps({"entries": entries})
@@ -281,23 +299,61 @@ def test_live_configuration_requires_verified_models_and_prices(monkeypatch: pyt
     for key in [k for k in __import__("os").environ if k.startswith("SP_")]:
         monkeypatch.delenv(key)
     pricing.reset_cache()
+    # Default: no fal or Voyage credential, model or price is needed.
     assert Settings(**LIVE, pricing_json=_table())  # type: ignore[arg-type]
     pricing.reset_cache()
-    with pytest.raises(ValueError, match="No verified price is configured for fal/fal-ai/esrgan"):
-        Settings(**LIVE, pricing_json=_table(**{"fal-ai/esrgan": {"model": "other"}}))  # type: ignore[arg-type]
+    no_fal = json.loads(_table())
+    no_fal["entries"] = [e for e in no_fal["entries"] if e["provider"] not in ("fal", "voyage")]
+    assert Settings(**LIVE, pricing_json=json.dumps(no_fal))  # type: ignore[arg-type]
+    pricing.reset_cache()
+    with pytest.raises(ValueError, match="No verified price is configured for openai/gpt-image-2.5-sunburst"):
+        Settings(**LIVE, pricing_json=_table(**{"gpt-image-2.5-sunburst": {"model": "other"}}))  # type: ignore[arg-type]
     pricing.reset_cache()
     stale = (date.today() - timedelta(days=90)).isoformat()
     with pytest.raises(ValueError, match="last verified 90 days ago"):
-        Settings(**LIVE, pricing_json=_table(**{"fal-ai/nano-banana-2/edit": {"verified_at": stale}}))  # type: ignore[arg-type]
+        Settings(**LIVE, pricing_json=_table(**{"gemini-3.1-flash-image": {"verified_at": stale}}))  # type: ignore[arg-type]
+    pricing.reset_cache()
+    with pytest.raises(ValueError, match="image_output_usd is zero"):
+        Settings(**LIVE, pricing_json=_table(**{"gpt-image-2.5-sunburst": {"image_output_usd": "0"}}))  # type: ignore[arg-type]
+    pricing.reset_cache()
+    with pytest.raises(ValueError, match="reservation assumptions"):
+        bad = json.loads(_table())
+        del next(e for e in bad["entries"] if e["model"] == "gemini-3.1-flash-image")[
+            "reserve_output_image_tokens"
+        ]
+        Settings(**LIVE, pricing_json=json.dumps(bad))  # type: ignore[arg-type]
+    pricing.reset_cache()
+    with pytest.raises(ValueError, match="No verified price is configured for gemini/gemini-3.8-flash"):
+        Settings(**LIVE, pricing_json=_table(**{"gemini-3.8-flash": {"model": "other"}}))  # type: ignore[arg-type]
+    pricing.reset_cache()
+    # Only the credentials an enabled capability needs: OpenAI-only images still need Gemini for QA.
+    with pytest.raises(ValueError, match="SP_GEMINI_API_KEY must be set") as e:
+        Settings(**{**LIVE, "gemini_api_key": None, "image_providers": ["openai"]}, pricing_json=_table())  # type: ignore[arg-type]
+    assert "SP_OPENAI_API_KEY" not in str(e.value) and "SP_FAL_KEY" not in str(e.value)
+    pricing.reset_cache()
+    # A disabled provider cannot be selected through any setting.
+    for bad_setting in ({"image_providers": ["openai", "fal"]}, {"export_upscale": "fal"},
+                        {"identity_qa": "voyage_embedding"}, {"repair_mode": "inpaint"}):  # fmt: skip
+        with pytest.raises(ValueError, match="ENABLED"):
+            Settings(**{**LIVE, **bad_setting}, pricing_json=_table())  # type: ignore[arg-type]
+        pricing.reset_cache()
+    # The retained fal + Voyage configuration keeps every earlier check.
+    assert Settings(**LIVE_FAL, pricing_json=_table())  # type: ignore[arg-type]
+    pricing.reset_cache()
+    with pytest.raises(ValueError, match="No verified price is configured for fal/fal-ai/esrgan"):
+        Settings(**LIVE_FAL, pricing_json=_table(**{"fal-ai/esrgan": {"model": "other"}}))  # type: ignore[arg-type]
+    pricing.reset_cache()
+    with pytest.raises(ValueError, match="last verified 90 days ago"):
+        Settings(**LIVE_FAL, pricing_json=_table(**{"fal-ai/nano-banana-2/edit": {"verified_at": stale}}))  # type: ignore[arg-type]
     pricing.reset_cache()
     with pytest.raises(ValueError, match="price is zero"):
-        Settings(**LIVE, pricing_json=_table(**{"fal-ai/esrgan": {"usd": "0"}}))  # type: ignore[arg-type]
+        Settings(**LIVE_FAL, pricing_json=_table(**{"fal-ai/esrgan": {"usd": "0"}}))  # type: ignore[arg-type]
     pricing.reset_cache()
     with pytest.raises(ValueError, match="no verified fal schema"):
-        Settings(**{**LIVE, "image_model_edit": "fal-ai/some-new-model"}, pricing_json=_table())  # type: ignore[arg-type]
+        Settings(**{**LIVE_FAL, "image_model_edit": "fal-ai/some-new-model"}, pricing_json=_table())  # type: ignore[arg-type]
     pricing.reset_cache()
     with pytest.raises(ValueError, match="not a Voyage model known to accept images"):
-        Settings(**{**LIVE, "embedding_model": "voyage-3.5"}, pricing_json=_table())  # type: ignore[arg-type]
+        Settings(**{**LIVE_FAL, "embedding_model": "voyage-3.5"}, pricing_json=_table())  # type: ignore[arg-type]
     pricing.reset_cache()
     with pytest.raises(ValueError, match="pricing table is invalid"):
         Settings(**LIVE, pricing_json="{not json")  # type: ignore[arg-type]

@@ -239,6 +239,7 @@ async def test_account_deletion_blocks_purges_and_resists_recreation(client: Any
     assert (await client.get("/v1/me", headers=other)).json()["balance"] > 0
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_deletion_during_generation_drains_cancels_and_leaves_nothing(
     client: Any, headers: dict[str, str], worker: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

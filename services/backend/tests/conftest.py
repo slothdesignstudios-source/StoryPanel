@@ -180,3 +180,20 @@ async def run_to_completion(
     return await wait_for(
         client, pid, headers, lambda p: p["status"] in ("completed", "partially_completed", "failed")
     )
+
+
+@pytest.fixture
+def fal_voyage(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The retained fal + Voyage configuration (off by default): comics drawn through the fal
+    queue path, Voyage embedding identity QA, fal export upscaling. Tests of that path opt in.
+    Set through the environment so settings rebuilt by other fixtures keep it."""
+    for k, v in {"SP_FAL_ENABLED": "true", "SP_VOYAGE_ENABLED": "true",
+                 "SP_IMAGE_PROVIDERS": '["openai", "gemini", "fal"]', "SP_IMAGE_PROVIDER_DEFAULT": "fal",
+                 "SP_IDENTITY_QA": "voyage_embedding", "SP_EXPORT_UPSCALE": "fal"}.items():  # fmt: skip
+        monkeypatch.setenv(k, v)
+    get_settings.cache_clear()
+    set_providers(None)
+    yield
+    monkeypatch.undo()
+    get_settings.cache_clear()
+    set_providers(None)

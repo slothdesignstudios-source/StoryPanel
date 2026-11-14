@@ -59,6 +59,7 @@ function Exports({ project }: { project: Project }) {
       {e.status === "ready" && e.download_url ? <Button asChild size="sm" variant="primary"><a href={e.download_url}><Download className="h-4 w-4" aria-hidden />Download</a></Button>
         : e.status === "failed" ? <Button size="sm" busy={retry.isPending} onClick={() => retry.mutate(e.id)}>Export failed · Retry</Button>
         : e.status === "expired" ? <Badge>Expired</Badge> : <Spinner label="Rendering" />}
+      {e.status === "ready" && <PrintQuality q={e.print_quality} />}
     </li>
   );
   return (
@@ -204,6 +205,20 @@ const FLAG_LABELS: [string, string][] = [
   ["tail_crosses_lettering", "Tail crosses other lettering"],
   ["unsupported_characters", "Contains characters that can't be printed"],
 ];
+
+
+type PrintQualityReport = { min_dpi?: number | null; warnings?: string[]; note?: string; print_width_in?: number } | null | undefined;
+
+/** Effective print resolution of the exported panels (local resampling never adds detail). */
+function PrintQuality({ q }: { q: PrintQualityReport }) {
+  if (!q || q.min_dpi == null) return null;
+  return (
+    <div className="w-full text-xs text-muted">
+      <span>Lowest panel resolution: {q.min_dpi} DPI at a {q.print_width_in ?? 6}-inch print width. {q.note}</span>
+      {(q.warnings ?? []).map((w) => <p key={w} role="note" className="font-semibold text-warn">{w}</p>)}
+    </div>
+  );
+}
 
 export function Editor({ project }: { project: Project }) {
   const qc = useQueryClient();

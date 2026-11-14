@@ -1,5 +1,35 @@
 # Verification report
 
+## Provider change, 2026-11-14 (from de239a8): Anthropic + OpenAI + Gemini; fal and Voyage disabled
+
+**Everything here is simulated or uses mocked HTTP transports behind the real SDK clients. No paid call was
+made, and no live provider has been exercised.**
+
+| Check | Result |
+|---|---|
+| Backend suite (`uv run pytest -q`, run alone) | **395 passed**, 0 failed (5 min 27 s). Includes `test_image_providers.py` (23 tests) and `test_provider_pipeline.py` (10) |
+| `ruff format --check` / `ruff check` (src, tests; also `scripts/live-smoke.py`) | clean |
+| `mypy src` | no issues in 64 files |
+| `alembic check` | no pending operations (migration `0011_image_providers` applied) |
+| Web: `tsc --noEmit` / `pnpm lint` / `vitest` | clean / 1 existing warning / 11 passed |
+| Browser e2e (native stack, Playwright) | 11 passed, 1 skipped (live Clerk). The journey now selects Gemini and checks it is shown for the comic. axe passes on the new selector |
+| Simulated 3-panel smoke, **OpenAI** (`evidence/smoke/sim-openai-final/`) | cast and script approval, 3 panels `ok`, 1 edit, PDF/PNG/CBZ `ok`, print-quality report. Paid-call models: Anthropic roles, `fake-openai-image`, `fake-gemini-qa`; **no upscale or embedding call** |
+| Simulated 3-panel smoke, **Gemini** (`evidence/smoke/sim-gemini-final/`) | same, with `fake-gemini-image` |
+| Preflight without credentials (`evidence/preflight-no-credentials-20261114.txt`) | Fails as expected. The only missing settings are `SP_ANTHROPIC_API_KEY`, `SP_OPENAI_API_KEY` and `SP_GEMINI_API_KEY`; no fal or Voyage key is asked for. `api.openai.com` is blocked by this sandbox's proxy, not by the app |
+| Bundle secret scan (canaries for all keys, including OpenAI and Gemini) | PASS |
+| Simulated identity eval subset (`evidence/remediation/eval-identity-simulated.json`) | 4 cases, 0 errors. Swap and look-alike probes are detected in fake mode only (a fake cannot measure judgment quality) |
+
+Zero fal/Voyage calls are enforced in three ways:
+- the registry does not construct either adapter (a fresh-interpreter test checks the modules are not
+  even imported);
+- the full-comic tests replace fal `generate_image`, `upscale_image` and `embed_images` with
+  functions that raise;
+- the smoke runs record no such call.
+
+Not verified (needs keys and an approved budget): real OpenAI/Gemini behaviour, error shapes and
+reported usage; image quality and reference fidelity; Gemini identity-judgment accuracy; whether the
+unverified prices are correct.
+
 ## Pre-spend verification round, 2026-11-12 (from 259342e)
 
 Findings and fixes: [`remediation-tracker.md`](remediation-tracker.md), section "Verification round". Cost

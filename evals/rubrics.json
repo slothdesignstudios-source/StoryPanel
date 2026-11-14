@@ -1,20 +1,86 @@
 {
  "version": "rubrics-v1",
  "targets": {
-  "identity_rating_avg": {"op": ">=", "value": 4.0, "source": "spec 8.3"},
-  "identity_pass_rate": {"op": ">=", "value": 0.90, "source": "spec 8.3"},
-  "script_adherence_first_attempt": {"op": ">=", "value": 0.85, "source": "spec 8.3"},
-  "panel_defect_rate": {"op": "<=", "value": 0.15, "source": "spec 8.3"},
-  "stray_text_rate": {"op": "<", "value": 0.03, "source": "spec 8.3"},
-  "story_quality": {"op": ">=", "value": 3.8, "source": "spec 8.3"},
-  "balloon_face_overlap_rate": {"op": "<", "value": 0.05, "source": "spec 8.3"},
-  "reading_order_errors": {"op": "==", "value": 0, "source": "spec 8.3"},
-  "time_to_first_page_p50_s": {"op": "<", "value": 90, "source": "spec 8.3"},
-  "time_to_first_page_p90_s": {"op": "<", "value": 180, "source": "spec 8.3"},
-  "full_comic_p50_s": {"op": "<", "value": 360, "source": "spec 8.3 (4-page comics)"},
-  "cost_per_page_usd": {"op": "<=", "value": 0.55, "source": "spec 8.3 (economy tier)"},
-  "policy_block_recall": {"op": "==", "value": 1.0, "source": "product policy"},
-  "script_valid_after_repair": {"op": "==", "value": 1.0, "source": "spec 7.5"}
+  "identity_rating_avg": {
+   "op": ">=",
+   "value": 4.0,
+   "source": "spec 8.3"
+  },
+  "identity_pass_rate": {
+   "op": ">=",
+   "value": 0.9,
+   "source": "spec 8.3"
+  },
+  "script_adherence_first_attempt": {
+   "op": ">=",
+   "value": 0.85,
+   "source": "spec 8.3"
+  },
+  "panel_defect_rate": {
+   "op": "<=",
+   "value": 0.15,
+   "source": "spec 8.3"
+  },
+  "stray_text_rate": {
+   "op": "<",
+   "value": 0.03,
+   "source": "spec 8.3"
+  },
+  "story_quality": {
+   "op": ">=",
+   "value": 3.8,
+   "source": "spec 8.3"
+  },
+  "balloon_face_overlap_rate": {
+   "op": "<",
+   "value": 0.05,
+   "source": "spec 8.3"
+  },
+  "reading_order_errors": {
+   "op": "==",
+   "value": 0,
+   "source": "spec 8.3"
+  },
+  "time_to_first_page_p50_s": {
+   "op": "<",
+   "value": 90,
+   "source": "spec 8.3"
+  },
+  "time_to_first_page_p90_s": {
+   "op": "<",
+   "value": 180,
+   "source": "spec 8.3"
+  },
+  "full_comic_p50_s": {
+   "op": "<",
+   "value": 360,
+   "source": "spec 8.3 (4-page comics)"
+  },
+  "cost_per_page_usd": {
+   "op": "<=",
+   "value": 0.55,
+   "source": "spec 8.3 (economy tier)"
+  },
+  "policy_block_recall": {
+   "op": "==",
+   "value": 1.0,
+   "source": "product policy"
+  },
+  "script_valid_after_repair": {
+   "op": "==",
+   "value": 1.0,
+   "source": "spec 7.5"
+  },
+  "identity_negative_detection_rate": {
+   "op": ">=",
+   "value": 0.9,
+   "source": "product: deliberately inconsistent pairs must not pass visual identity QA"
+  },
+  "identity_visual_pass_rate": {
+   "op": ">=",
+   "value": 0.85,
+   "source": "product target for the Gemini visual check (not comparable with the embedding pass rate)"
+  }
  },
  "story_judge": {
   "scale": "1-5 per dimension; the score is the mean",
@@ -29,6 +95,12 @@
  },
  "bakeoff": {
   "protocol": "spec 8.4: 20 scenes, identical references and compiled prompts, 2 samples per scene per model, model names stripped and shuffled, three blind raters",
-  "weights": {"identity": 0.35, "adherence": 0.20, "aesthetic": 0.20, "cost_per_accepted_panel": 0.15, "latency": 0.10}
+  "weights": {
+   "identity": 0.35,
+   "adherence": 0.2,
+   "aesthetic": 0.2,
+   "cost_per_accepted_panel": 0.15,
+   "latency": 0.1
+  }
  }
 }

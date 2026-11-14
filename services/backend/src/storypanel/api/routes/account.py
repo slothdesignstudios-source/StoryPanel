@@ -33,8 +33,12 @@ def _prices() -> dict[str, int]:
 @router.get("/v1/meta", response_model=api.MetaOut)
 async def meta(request: Request) -> api.MetaOut:
     """Public product catalog: styles, limits and credit prices."""
+    from storypanel.services.projects import image_provider_options
+
     s, cat = get_settings(), styles()
     return api.MetaOut(
+        image_providers=image_provider_options(), default_image_provider=s.image_provider_default,
+        identity_qa=s.identity_qa, export_resampling=s.export_upscale,
         styles=[api.StyleOut(id=p.id, name=p.name, blurb=p.blurb, swatch=list(p.swatch),
                              available=True) for p in cat.presets.values()],
         default_style=cat.default, default_pages=s.default_pages, max_pages=s.max_pages,

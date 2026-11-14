@@ -60,6 +60,18 @@ class FakeControl:
     crashes: dict[str, int] = field(default_factory=dict)  # op -> times to raise an unexpected error
     calls: list[tuple[str, str]] = field(default_factory=list)
     malformed_text: int = 0
+    # synchronous image providers (OpenAI / Gemini fakes)
+    sync_calls: list[tuple[str, str, int]] = field(default_factory=list)  # (provider, model, input images)
+    sync_requests: list[ImageRequest] = field(default_factory=list)
+    sync_errors: dict[str, list[Exception]] = field(default_factory=dict)  # provider -> queue of raises
+    sync_omit_usage: bool = False  # the provider answers without a usage report
+    # identity QA (Gemini visual comparison fake)
+    identity_mismatch_targets: set[str] = field(default_factory=set)  # panel ids judged "no"
+    identity_mismatch_attempts: int = 0  # every panel judged "no" on its first N attempts
+    identity_uncertain_targets: set[str] = field(default_factory=set)
+    identity_uncertain_attempts: int = 0  # every panel judged "uncertain" on its first N attempts
+    identity_omit_targets: set[str] = field(default_factory=set)  # leaves a character out of the report
+    identity_calls: list[tuple[str, int]] = field(default_factory=list)  # (panel id, reference images)
 
     def reset(self) -> None:
         self.__init__()  # type: ignore[misc]
@@ -114,9 +126,10 @@ class FakeTextProvider:
             "IntakeResult": self._intake, "BibleAndCast": self._bible, "ScriptDraft": self._script,
             "ModerationVerdict": self._moderation, "VisionQAReport": self._vision,
             "SafetyVerdict": self._safety, "CharacterSpec": self._revise_spec,
+            "IdentityVisualReport": self._identity,
         }[schema.__name__]  # fmt: skip
         out = schema.model_validate(builder(ctx, user))
-        usage = Usage(provider=self.name, model=f"fake-{role}", operation=f"text_{role}",
+        usage = Usage(provider=self.name, model=self.model_for(role), operation=f"text_{role}",
                       input_tokens=len(system + user) // 4, output_tokens=200, latency_ms=1)  # fmt: skip
         return out, usage
 
@@ -297,6 +310,36 @@ class FakeTextProvider:
             "fix_notes": (["Draw the missing signature feature clearly."] if fail else [])
             + (["Remove all lettering from the art."] if text else []),
         }  # fmt: skip
+
+    def _identity(self, ctx: CallContext, user: str) -> dict[str, Any]:
+        """Simulated Gemini visual comparison: judgments come only from FakeControl, never from
+        pixels, so tests state exactly which panel is judged inconsistent or uncertain."""
+        target = ctx.target_id or ""
+        ids: list[str] = ctx.inputs.get("character_ids", [])
+        control.identity_calls.append((target, int(ctx.inputs.get("reference_images", 0))))
+        mismatch = (
+            target in control.identity_mismatch_targets or ctx.attempt < control.identity_mismatch_attempts
+        )
+        uncertain = (
+            target in control.identity_uncertain_targets or ctx.attempt < control.identity_uncertain_attempts
+        )
+        chars = []
+        for cid in ids:
+            if target in control.identity_omit_targets and cid == ids[-1]:
+                continue
+            if mismatch:
+                chars.append({"id": cid, "present": True, "matches_reference": "no",
+                              "mismatches": [{"aspect": "clothing", "expected": "red apron", "observed": "blue coat"}],
+                              "evidence": "Clothing colour differs from the reference sheet.", "confidence": "high"})  # fmt: skip
+            elif uncertain:
+                chars.append({"id": cid, "present": True, "matches_reference": "uncertain", "mismatches": [],
+                              "evidence": "Face is turned away; identity cannot be confirmed.", "confidence": "low"})  # fmt: skip
+            else:
+                chars.append({"id": cid, "present": True, "matches_reference": "yes", "mismatches": [],
+                              "evidence": "Silhouette, palette and signature features match the reference.",
+                              "confidence": "high"})  # fmt: skip
+        outcome = "repair" if mismatch else "manual_review" if uncertain else "pass"
+        return {"characters": chars, "outcome": outcome, "notes": []}
 
     def _safety(self, ctx: CallContext, user: str) -> dict[str, Any]:
         bad = (ctx.target_id or "") in control.unsafe_targets or ctx.attempt < control.unsafe_attempts
@@ -510,3 +553,52 @@ class FakeUpscaleProvider:
         out = io.BytesIO()
         big.save(out, format="PNG")
         return ImageResult(out.getvalue(), self.name, model, request_id)
+
+
+# ------------------------------------------------------------------ synchronous image providers
+class FakeSyncImageProvider:
+    """Simulates the OpenAI / Gemini image APIs: one synchronous call, no request id to resume,
+    no cancellation, usage reported per call. Billing provider is "fake" (simulated prices)."""
+
+    name = "fake"
+
+    def __init__(self, choice: str, max_refs: int = 5) -> None:
+        from storypanel.providers.base import ImageCapabilities
+
+        self.choice = choice  # "openai" | "gemini"
+        self.capabilities = ImageCapabilities(max_reference_images=max_refs, supports_masked_inpainting=False,
+                                              instruction_edits=True, max_long_edge=1536 if choice == "openai" else 1024)  # fmt: skip
+
+    async def generate(self, req: ImageRequest, ctx: CallContext, *, model: str) -> Any:
+        from storypanel.providers.base import SyncImageResult
+        from storypanel.providers.pricing import ImageUsage
+
+        if req.mode == "inpaint":
+            raise AppError(ErrorCode.VALIDATION, "Edited by instruction, not by mask.", retryable=False)
+        n_inputs = min(
+            len(req.references) + (1 if req.image is not None else 0), self.capabilities.max_reference_images
+        )
+        control.sync_calls.append((self.choice, model, n_inputs))
+        control.sync_requests.append(req)
+        queue = control.sync_errors.get(self.choice)
+        if queue:
+            raise queue.pop(0)
+        control.crash_if_configured(f"sync:{self.choice}")
+        data = render_fake_image(req)
+        with Image.open(io.BytesIO(data)) as im:
+            w, h = im.size
+        usage = ImageUsage() if control.sync_omit_usage else ImageUsage(
+            input_text_tokens=len(req.prompt.encode()) // 4, input_image_tokens=n_inputs * 1000,
+            output_text_tokens=0 if self.choice == "openai" else 300,
+            output_image_tokens=4000 if self.choice == "openai" else 1120)  # fmt: skip
+        rid = f"fake-{self.choice}-{_h(req.prompt, req.seed, os.urandom(4).hex()):x}"
+        return SyncImageResult(data, self.name, model, rid, usage, w, h)
+
+
+class FakeIdentityProvider(FakeTextProvider):
+    """Simulated Gemini visual-QA model (structured judgments only)."""
+
+    max_tokens = 4096  # same output cap as GeminiVisionProvider, so simulated reservations match
+
+    def model_for(self, role: TextRole) -> str:
+        return "fake-gemini-qa"

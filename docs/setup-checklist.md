@@ -12,12 +12,30 @@ Sources and verification dates for every model, price and API version: [`provide
 
 ## A. First live comic (local stack, no hosting accounts)
 
-**See [`first-live-comic.md`](first-live-comic.md)**: three secrets (`SP_ANTHROPIC_API_KEY`, `SP_FAL_KEY`,
-`SP_VOYAGE_API_KEY`), five network hosts, the committed public config (`config/live-smoke.env`), which
-prices are verified and which are not, the free preflight command and the paid command with its scope.
-The cost model behind the budget request is [`smoke-test-cost.md`](smoke-test-cost.md): the estimated
-cost is about USD 1.14, a clean run needs a cap of at least USD 2.21, and the approved cap is an
-application limit, not a guaranteed ceiling on provider charges.
+**See [`first-live-comic.md`](first-live-comic.md).** It needs three secrets: `SP_ANTHROPIC_API_KEY`,
+`SP_OPENAI_API_KEY` and `SP_GEMINI_API_KEY`. **No fal or Voyage account is needed.** The file also
+lists three network hosts, the committed public config (`config/live-smoke.env`), which prices are
+verified and which are not, the free preflight command, and the paid command with its scope.
+
+The cost model behind the budget request is [`smoke-test-cost.md`](smoke-test-cost.md):
+
+| Images from | Estimated cost (unverified prices) | Smallest cap for a clean run |
+|---|---|---|
+| OpenAI | about USD 3.32 | USD 4.52 |
+| Gemini | about USD 1.19 | USD 1.72 |
+
+The approved cap is an application limit, not a guaranteed ceiling on provider charges.
+
+| # | Item | Kind | Where |
+|---|---|---|---|
+| A1 | `SP_ANTHROPIC_API_KEY` | secret | console.anthropic.com → API keys → untracked `.env` |
+| A2 | `SP_OPENAI_API_KEY` (a project key; image models may need organisation verification) | secret | platform.openai.com → API keys → `.env` |
+| A3 | `SP_GEMINI_API_KEY` (billing enabled; the free tier does not cover image output) | secret | aistudio.google.com → Get API key → `.env` |
+| A4 | Optional: `SP_IMAGE_PROVIDER_DEFAULT=gemini` to make Gemini the default | public | `.env` |
+| A5 | Hosts `api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com` | network | local machines: nothing to do |
+
+*The organisation-verification note for OpenAI image models and the free-tier note for Gemini come
+from search summaries and are unverified. Preflight reports whether each key can see its model.*
 
 ## B. Clerk authentication and identity deletion (development instance; local is fine)
 

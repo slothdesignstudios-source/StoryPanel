@@ -1,6 +1,6 @@
 # Requirements matrix
 
-Audited 2026-11-11; updated 2026-11-12 after the independent review remediation (see [`remediation-tracker.md`](remediation-tracker.md)).
+Audited 2026-11-11; updated 2026-11-12 after the independent review remediation (see [`remediation-tracker.md`](remediation-tracker.md)). Providers updated 2026-11-14 (Anthropic + OpenAI + Gemini; fal and Voyage disabled).
 
 ## Status vocabulary
 | Status | Meaning |
@@ -16,7 +16,7 @@ A configuration file on its own is never counted as verified. "Schema-verified" 
 response was checked against the provider's published machine-readable schema, offline; it is weaker than a live call.
 
 Evidence keys: `U` test_unit · `A` test_api · `F` test_flow · `R` test_resilience · `P` test_providers ·
-`AU` test_auth · `PR` test_paid_recovery · `D` test_deletion · `B` test_billing · `X` test_export_retry
+`AU` test_auth · `PR` test_paid_recovery · `D` test_deletion · `B` test_billing · `X` test_export_retry · `IP` test_image_providers · `PP` test_provider_pipeline
 (all under `services/backend/tests`; see verification-report.md for counts) · `E2E` apps/web/e2e (10 tests: native stack; 9 desktop tests also against the Compose containers) ·
 `OBS` docs/evidence/observability.json · `REL` docs/evidence/release-verification.json ·
 `INFRA` docs/evidence/infra-static-validation.json · `EVAL` simulated eval, 63 prompts, now including export
@@ -52,24 +52,27 @@ Evidence keys: `U` test_unit · `A` test_api · `F` test_flow · `R` test_resili
 | 4, 6 | Human cast and script approval, version-scoped | Locally verified | R approvals (stale 409, duplicates, edits invalidate) |
 | 5–6 | Beat sheet, script, validation, ≤2 repairs | Locally verified | U (12 rule cases); EVAL `script_valid_after_repair` = 1.0 |
 | 7 | Deterministic layout and prompt compilation | Locally verified | U (byte-identical prompts, fixed order, no dialogue) |
-| 8 | Reference-conditioned generation, view matching, continuity | Schema-verified + locally verified with fake images; real conditioning Blocked | P contract tests (108 cases vs fal's published schema); U; F |
-| 9 | Safety, identity, adherence, defect, stray-text checks | Logic locally verified; judgement quality Blocked | R QA tests (incl. missing localisation = insufficient evidence); P Anthropic refusal handling |
+| 8 | Reference-conditioned generation, view matching, continuity | Request contracts verified against the official OpenAI/Gemini SDKs (mock transport); locally verified with fake images for both providers; real conditioning Blocked (B1) | IP: OpenAI edit multipart (base image + references, no mask), Gemini contents/config; PP: references reach every sheet/panel/edit request on the comic's provider; F |
+| 9 | Safety, identity, adherence, defect, stray-text checks | Logic locally verified; judgement quality Blocked | R QA tests (incl. missing localisation = insufficient evidence); P Anthropic refusal handling; PP Gemini identity QA: mismatch → bounded repair on the same provider, uncertain/invalid/error → manual review, never pass; EVAL identity subset with deliberate swaps and look-alikes (simulated) |
 | – | Edited dialogue passes the full moderation classifier before export | Locally verified (classifier simulated) | X `test_edited_dialogue_is_fully_moderated_before_export` |
 | 10 | Bounded repair: ≤2 automatic retries | Locally verified | R (exactly 3 versions) |
 | 10 | Targeted repair of a local defect | Locally verified: `reference_edit` (default; panel + approved portrait, composited through the mask) and `inpaint`; identity benefit Blocked (B2) | R repair test, both modes: pixels outside the mask identical |
 | 11 | Vector lettering, reading order, tails, overflow handling | Locally verified | U; E2E lettering |
-| 12 | Finalise, upscale, export | Locally verified with fake upscaler; schema-verified for `fal-ai/esrgan` | F; P |
+| 12 | Finalise, export | Locally verified: native images, local Lanczos resampling, effective-DPI report and warnings (no external upscaler) | PP: pdf/png/cbz for both providers with fal paths booby-trapped; print-quality thresholds; F |
 | – | Limits: 4 characters, 3 per panel, 4–6 panels, 25 words, 3 balloons | Locally verified | U; A |
 | – | Safety failures never visible | Locally verified | R safety test + URL audit across project JSON, dashboard, version history, exports |
-| – | Primary and fallback image models | Locally verified (routing); fallback contract schema-verified; real failover Blocked | P breaker test; P Seedream contract |
+| – | Image provider per comic (OpenAI default, Gemini optional), never switched mid-comic, refusals never rerouted | Locally verified | PP: persistence across restart and config change; unavailable provider refused; IP refusal not rerouted. fal fallback routing retained behind `SP_FAL_ENABLED` (P breaker test, opt-in) |
 | – | Provenance labelling | Locally verified (IPTC `trainedAlgorithmicMedia` in PNG XMP, PDF, CBZ) | R provenance test. Signed C2PA manifests: Deferred, see decisions.md D-PROV |
 
 ## 3. Provider correctness and cost enforcement
 | Requirement | Status | Evidence |
 |---|---|---|
-| fal request/response contracts from the official schema, not guesses | Schema-verified | `providers/fal_profiles.py`; P: 108 request cases + 6 response cases against `tests/fixtures/fal_schema_fields.json` (extracted from `@fal-ai/client` 1.10.1) |
+| OpenAI / Gemini request contracts from the official SDKs | Locally verified (mock HTTP behind the real SDK clients) | IP (39 tests): sizes, edit body, generations endpoint, Gemini config, refusals, error mapping, timeouts, structured QA validation |
+| Synchronous image calls: store before success, no resend after ambiguity, SDK retries off, unresolved charges recoverable | Locally verified | IP: settle from usage, reuse without paying twice, timeout/connection/worker death → ambiguous and never re-sent, 5xx policy, 429 released, missing usage unresolved, cap checked before the call, attempt-id charge import |
+| fal and Voyage optional: no key, no construction, no call while disabled | Locally verified | IP fresh-interpreter import check; PP full comics with fal/Voyage methods raising; startup refusals for settings that would reach them |
+| fal request/response contracts from the official schema, not guesses (retained, disabled) | Schema-verified | `providers/fal_profiles.py`; P: 108 request cases + 6 response cases against `tests/fixtures/fal_schema_fields.json` (extracted from `@fal-ai/client` 1.10.1) |
 | Unverified endpoints cannot be configured | Locally verified | P: live config rejects an unknown model id |
-| Embedding model accepts images | Locally verified (allow-list); live Blocked | P: config rejects non-multimodal Voyage models; SDK routes images only to multimodal models |
+| Embedding model accepts images (Voyage, disabled by default) | Locally verified (allow-list); live Blocked | P: config rejects non-multimodal Voyage models; SDK routes images only to multimodal models |
 | Async polling, queued failure, unknown id, timeout classification | Locally verified against the SDK's status classes | P `test_queue_outcomes…`: job failure vs 5xx/429/reset/timeout on status, result and download vs expired result |
 | Resume, fetch, cancel and settle use the persisted endpoint and price | Locally verified | PR (breaker opens/closes between attempts; upscaler model change) |
 | Transient retrieval failures retry retrieval, never generation | Locally verified | PR: 6 fault types, exactly 1 provider submission |

@@ -39,15 +39,18 @@ jobs:
         env:
           SP_PROVIDER_MODE: live
           SP_ANTHROPIC_API_KEY: ${{ secrets.SP_ANTHROPIC_API_KEY }}
-          SP_FAL_KEY: ${{ secrets.SP_FAL_KEY }}
-          SP_VOYAGE_API_KEY: ${{ secrets.SP_VOYAGE_API_KEY }}
+          SP_OPENAI_API_KEY: ${{ secrets.SP_OPENAI_API_KEY }}
+          SP_GEMINI_API_KEY: ${{ secrets.SP_GEMINI_API_KEY }}
           SP_TEXT_MODEL_STORY: ${{ vars.SP_TEXT_MODEL_STORY }}
           SP_TEXT_MODEL_LIGHT: ${{ vars.SP_TEXT_MODEL_LIGHT }}
           SP_VISION_MODEL: ${{ vars.SP_VISION_MODEL }}
-          SP_IMAGE_MODEL_GENERATE: ${{ vars.SP_IMAGE_MODEL_GENERATE }}
-          SP_IMAGE_MODEL_EDIT: ${{ vars.SP_IMAGE_MODEL_EDIT }}
-          SP_UPSCALE_MODEL: ${{ vars.SP_UPSCALE_MODEL }}
-          SP_EMBEDDING_MODEL: ${{ vars.SP_EMBEDDING_MODEL }}
+          SP_OPENAI_IMAGE_MODEL: ${{ vars.SP_OPENAI_IMAGE_MODEL }}
+          SP_GEMINI_IMAGE_MODEL: ${{ vars.SP_GEMINI_IMAGE_MODEL }}
+          SP_GEMINI_QA_MODEL: ${{ vars.SP_GEMINI_QA_MODEL }}
+          SP_IDENTITY_QA: gemini_visual
+          SP_EXPORT_UPSCALE: local
+          SP_FAL_ENABLED: "false"
+          SP_VOYAGE_ENABLED: "false"
         run: uv run python -m storypanel.evals.harness --subset all --live --max-usd "${{ inputs.max_usd }}" --concurrency 2
       - uses: actions/upload-artifact@v4
         if: always()

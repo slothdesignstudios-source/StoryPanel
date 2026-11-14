@@ -364,11 +364,8 @@ def test_render_blueprint_supplies_a_complete_deployed_configuration(monkeypatch
     placeholders = {
         "SP_ENV": "staging", "SP_PSEUDONYM_SALT": "x" * 32, "SP_TEXT_MODEL_STORY": "claude-sonnet-5-5",
         "SP_TEXT_MODEL_LIGHT": "claude-haiku-5-5", "SP_VISION_MODEL": "claude-haiku-5-5",
-        "SP_IMAGE_MODEL_GENERATE": "fal-ai/nano-banana-2", "SP_IMAGE_MODEL_EDIT": "fal-ai/nano-banana-2/edit",
-        "SP_IMAGE_MODEL_FALLBACK": "fal-ai/bytedance/seedream/v5/lite/edit",
-        "SP_IMAGE_MODEL_FALLBACK_GENERATE": "fal-ai/bytedance/seedream/v5/lite/text-to-image",
-        "SP_INPAINT_MODEL": "fal-ai/flux-pro/v1/fill", "SP_UPSCALE_MODEL": "fal-ai/esrgan",
-        "SP_EMBEDDING_MODEL": "voyage-multimodal-3.5", "SP_PRICING_JSON": json.dumps(table),
+        "SP_OPENAI_IMAGE_MODEL": "gpt-image-2.5-sunburst", "SP_GEMINI_IMAGE_MODEL": "gemini-3.1-flash-image",
+        "SP_GEMINI_QA_MODEL": "gemini-3.8-flash", "SP_PRICING_JSON": json.dumps(table),
         "SP_CLERK_ISSUER": "https://clerk.example.com", "SP_CLERK_JWKS_URL": "https://clerk.example.com/.well-known/jwks.json",
         "SP_CLERK_AUTHORIZED_PARTIES": '["https://app.example.com"]', "SP_CORS_ORIGINS": '["https://app.example.com"]',
         "SP_DATABASE_URL": "postgresql+asyncpg://u:p@db/x", "SP_REDIS_URL": "redis://r:6379/0",
@@ -387,8 +384,12 @@ def test_render_blueprint_supplies_a_complete_deployed_configuration(monkeypatch
     try:
         env()
         Settings(_env_file=None)  # type: ignore[call-arg]  # complete: no problems
-        for critical in ("SP_PRICING_JSON", "SP_CLERK_SECRET_KEY", "SP_STRIPE_SECRET_KEY", "SP_FAL_KEY",
-                         "SP_CLERK_JWKS_URL", "SP_IMAGE_MODEL_EDIT", "SP_PSEUDONYM_SALT"):  # fmt: skip
+        # fal and Voyage are disabled: the blueprint asks for none of their keys or models
+        assert not {k for k in declared if k in ("SP_FAL_KEY", "SP_VOYAGE_API_KEY", "SP_UPSCALE_MODEL",
+                                                 "SP_EMBEDDING_MODEL", "SP_IMAGE_MODEL_EDIT")}  # fmt: skip
+        for critical in ("SP_PRICING_JSON", "SP_CLERK_SECRET_KEY", "SP_STRIPE_SECRET_KEY", "SP_OPENAI_API_KEY",
+                         "SP_GEMINI_API_KEY", "SP_CLERK_JWKS_URL", "SP_OPENAI_IMAGE_MODEL", "SP_GEMINI_QA_MODEL",
+                         "SP_PSEUDONYM_SALT"):  # fmt: skip
             assert critical in declared, f"{critical} missing from the blueprint"
             env(drop=critical)
             pricing.reset_cache()

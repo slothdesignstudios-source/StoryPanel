@@ -139,9 +139,11 @@ async def stage_bible(project_id: uuid.UUID) -> dict[str, Any]:
 
 
 async def _safe_image(req: ImageRequest, ctx: CallContext, *, key: str, audience: AgeRating,
-                      owner: uuid.UUID, project_id: uuid.UUID) -> storage.ValidatedImage:  # fmt: skip
-    """Generate one reference image and pass it through image safety before it is used."""
-    result, _ = await metering.generate_image(req, ctx, key=key)
+                      owner: uuid.UUID, project_id: uuid.UUID, choice: str | None,
+                      model: str | None) -> storage.ValidatedImage:  # fmt: skip
+    """Generate one reference image with the comic's own image provider and pass it through
+    image safety before it is used."""
+    result, _ = await metering.draw(req, ctx, key=key, choice=choice, model=model)
     image = storage.validate_image(result.data)
     verdict = await qa.check_safety(image.data, audience, ctx)
     if not verdict.allowed:
@@ -165,6 +167,7 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
         char = (await db.execute(select(Character).where(Character.project_id == project_id,
                                                          Character.slug == slug))).scalar_one()  # fmt: skip
         char_id, pending = char.id, char.pending_revision
+        choice, model = project.image_provider, project.image_model
         spec = CharacterSpec.model_validate(char.spec)
         if revision and not pending:
             return {"outcome": "noop"}  # this revision was already applied
@@ -229,7 +232,7 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
             prompt, inputs = art.compile_sheet_prompt("portrait", spec, preset)
             req = ImageRequest(prompt, "3:4", inputs=inputs, seed=target)
         portrait = await _safe_image(req, ctx, key=f"{base_key}:portrait", audience=audience,
-                                     owner=owner, project_id=project_id)  # fmt: skip
+                                     owner=owner, project_id=project_id, choice=choice, model=model)  # fmt: skip
         ref_in = (ImageInput(portrait.data),)
         t_prompt, t_inputs = art.compile_sheet_prompt("turnaround", spec, preset)
         e_prompt, e_inputs = art.compile_sheet_prompt("expressions", spec, preset)
@@ -237,10 +240,10 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
         turnaround, expressions = await asyncio.gather(
             _safe_image(ImageRequest(t_prompt, "16:9", ref_in, inputs=t_inputs, seed=target),
                         ctx, key=f"{base_key}:turnaround", audience=audience, owner=owner,
-                        project_id=project_id),
+                        project_id=project_id, choice=choice, model=model),
             _safe_image(ImageRequest(e_prompt, "1:1", ref_in, inputs=e_inputs, seed=target),
                         ctx, key=f"{base_key}:expressions", audience=audience, owner=owner,
-                        project_id=project_id),
+                        project_id=project_id, choice=choice, model=model),
         )  # fmt: skip
     except AppError as exc:
         if revision and exc.code is ErrorCode.MODERATION_BLOCKED:
@@ -257,9 +260,13 @@ async def stage_character_sheet(project_id: uuid.UUID, slug: str, revision: bool
         for view, data in zip(views, layout.crops, strict=False):
             crops[view] = storage.validate_image(data)
     # Only views whose crop is verified become identity references; the portrait always is.
-    embedded = [v for v in EMBEDDED_VIEWS if v in crops]
-    vectors = await metering.embed_images([crops[v].data for v in embedded], ctx)
-    embeddings = dict(zip(embedded, vectors, strict=True))
+    # Embeddings exist only with Voyage identity QA; Gemini visual QA compares the images
+    # themselves, so nothing is written to the embedding column (no placeholder vectors).
+    embeddings: dict[str, list[float]] = {}
+    if s.identity_qa == "voyage_embedding":
+        embedded = [v for v in EMBEDDED_VIEWS if v in crops]
+        vectors = await metering.embed_images([crops[v].data for v in embedded], ctx)
+        embeddings = dict(zip(embedded, vectors, strict=True))
 
     async with transaction() as db:
         char = (await db.execute(select(Character).where(Character.id == char_id)
@@ -303,6 +310,7 @@ async def stage_location_ref(project_id: uuid.UUID, slug: str) -> dict[str, Any]
         if loc.reference_asset_id is not None:
             return {"outcome": "ready"}
         loc_id, spec = loc.id, LocationSpec.model_validate(loc.spec)
+        choice, model = project.image_provider, project.image_model
         bible = await repo.latest_bible(db, project_id)
     assert bible is not None
     ctx = CallContext("location_ref", str(owner), str(project_id), target_id=slug,
@@ -310,7 +318,7 @@ async def stage_location_ref(project_id: uuid.UUID, slug: str) -> dict[str, Any]
     prompt = art.compile_location_prompt(spec, preset, bible.palette)
     image = await _safe_image(ImageRequest(prompt, "16:9", inputs={"kind": "location"}, seed=1), ctx,
                               key=f"location:{loc_id}", audience=audience, owner=owner,
-                              project_id=project_id)  # fmt: skip
+                              project_id=project_id, choice=choice, model=model)  # fmt: skip
     async with transaction() as db:
         loc = (await db.execute(select(Location).where(Location.id == loc_id)
                                 .with_for_update())).scalar_one()  # fmt: skip

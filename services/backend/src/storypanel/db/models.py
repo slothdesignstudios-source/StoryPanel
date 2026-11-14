@@ -101,6 +101,10 @@ class Project(Base, Timestamps):
     script_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The image provider and model chosen at creation; every image of the comic (sheets,
+    # panels, repairs, edits) uses them. NULL on comics created before 0011 (drawn with fal).
+    image_provider: Mapped[str | None] = mapped_column(String(20))
+    image_model: Mapped[str | None] = mapped_column(String(120))
     __table_args__ = (Index("ix_projects_owner_created", "owner_id", "created_at"),)
 
 
@@ -230,7 +234,7 @@ class PanelVersion(Base):
     references: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     spec_version: Mapped[int] = mapped_column(Integer)
     attempt: Mapped[int] = mapped_column(Integer, default=0)
-    qa_status: Mapped[str] = mapped_column(String(15), default="pending")  # pass|fail|blocked
+    qa_status: Mapped[str] = mapped_column(String(15), default="pending")  # pending|pass|fail|review|blocked
     qa_scores: Mapped[JSON | None] = mapped_column(JSONB)
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 5), default=0)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
@@ -403,6 +407,12 @@ class ProviderAttempt(Base):
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     images: Mapped[int] = mapped_column(Integer, default=0)
     error_code: Mapped[str | None] = mapped_column(String(40))
+    # Synchronous image calls (OpenAI, Gemini) have no request to fetch again: the delivered
+    # image is stored as an asset before the attempt is marked succeeded, so a crash after
+    # the provider answered never leads to paying for it twice.
+    result_asset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    # Provider-reported usage breakdown (token counts by kind), when the provider reports it.
+    usage_detail: Mapped[JSON | None] = mapped_column(JSONB)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -562,6 +572,8 @@ class Export(Base, Timestamps):
     attempt: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Effective print resolution per panel and any low-resolution warnings (local resampling).
+    print_quality: Mapped[JSON | None] = mapped_column(JSONB)
 
 
 class Outbox(Base):

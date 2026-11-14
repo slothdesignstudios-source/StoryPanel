@@ -30,13 +30,24 @@ from storypanel.errors import AppError, ErrorCode
 # per_compute_second: billed by the provider's compute time (e.g. fal's ESRGAN endpoint), which
 # we cannot observe. Reservations use rate x the request's wait budget; successful requests stay
 # "unresolved" at that upper bound until a provider-reported charge is imported.
-Unit = Literal["per_image", "per_megapixel", "per_mtok", "per_billion_pixels", "per_compute_second"]
+# per_mtok_multimodal: token-billed image models (OpenAI GPT Image, Gemini image models): separate
+# rates for text input, image input, text/thinking output and image output, all per million tokens.
+# Image output token counts are not knowable before the call, so the entry also states the
+# *assumptions* the reservation uses (`reserve_*`); settlement uses the provider-reported usage.
+Unit = Literal["per_image", "per_megapixel", "per_mtok", "per_billion_pixels", "per_compute_second",
+               "per_mtok_multimodal"]  # fmt: skip
 UNITS: tuple[str, ...] = (
     "per_image",
     "per_megapixel",
     "per_mtok",
     "per_billion_pixels",
     "per_compute_second",
+    "per_mtok_multimodal",
+)
+RESERVE_FIELDS = (
+    "reserve_input_tokens_per_image",
+    "reserve_output_image_tokens",
+    "reserve_output_text_tokens",
 )
 
 
@@ -50,17 +61,30 @@ class Price:
     free: bool
     source: str
     verified_at: date
+    # per_mtok_multimodal only: image input / image output rates and reservation assumptions
+    image_input_usd: Decimal = Decimal(0)
+    image_output_usd: Decimal = Decimal(0)
+    reserve: tuple[tuple[str, int], ...] = ()
 
     def ref(self) -> dict[str, Any]:
-        return {"unit": self.unit, "usd": str(self.usd), "output_usd": str(self.output_usd),
-                "free": self.free, "source": self.source, "verified_at": self.verified_at.isoformat()}  # fmt: skip
+        out = {"unit": self.unit, "usd": str(self.usd), "output_usd": str(self.output_usd),
+               "free": self.free, "source": self.source, "verified_at": self.verified_at.isoformat()}  # fmt: skip
+        if self.unit == "per_mtok_multimodal":
+            out.update(image_input_usd=str(self.image_input_usd), image_output_usd=str(self.image_output_usd),
+                       reserve=dict(self.reserve))  # fmt: skip
+        return out
+
+    def assumption(self, name: str) -> int:
+        return dict(self.reserve)[name]
 
     @classmethod
     def from_ref(cls, provider: str, model: str, ref: dict[str, Any]) -> Price:
         """The price an attempt was reserved under. Settlement uses this, not today's table,
         so a resumed request is priced by the model and price that accepted it."""
         return cls(provider, model, ref["unit"], Decimal(ref["usd"]), Decimal(ref.get("output_usd", "0")),
-                   bool(ref.get("free")), str(ref.get("source", "")), date.fromisoformat(ref["verified_at"]))  # fmt: skip
+                   bool(ref.get("free")), str(ref.get("source", "")), date.fromisoformat(ref["verified_at"]),
+                   Decimal(ref.get("image_input_usd", "0")), Decimal(ref.get("image_output_usd", "0")),
+                   tuple(sorted((ref.get("reserve") or {}).items())))  # fmt: skip
 
 
 class PricingError(ValueError):
@@ -90,15 +114,30 @@ def parse_table(raw: dict[str, Any]) -> dict[tuple[str, str], Price]:
             verified = date.fromisoformat(str(e["verified_at"]))
         except ValueError as exc:
             raise PricingError(f"{where}: verified_at must be an ISO date") from exc
-        usd = _dec(e.get("input_usd" if e["unit"] == "per_mtok" else "usd"), where)
-        out = _dec(e.get("output_usd", 0), where) if e["unit"] == "per_mtok" else Decimal(0)
+        token_unit = e["unit"] in ("per_mtok", "per_mtok_multimodal")
+        usd = _dec(e.get("input_usd" if token_unit else "usd"), where)
+        out = _dec(e.get("output_usd", 0), where) if token_unit else Decimal(0)
         free = e.get("free") is True
+        img_in = img_out = Decimal(0)
+        reserve: tuple[tuple[str, int], ...] = ()
+        if e["unit"] == "per_mtok_multimodal":
+            img_in = _dec(e.get("image_input_usd", e.get("input_usd")), where)
+            img_out = _dec(e.get("image_output_usd"), where)
+            try:
+                reserve = tuple(sorted((k, int(e[k])) for k in RESERVE_FIELDS))
+            except (KeyError, TypeError, ValueError) as exc:
+                raise PricingError(
+                    f"{where}: {', '.join(RESERVE_FIELDS)} are required reservation assumptions"
+                ) from exc
+            if not free and img_out == 0:
+                raise PricingError(f'{where}: image_output_usd is zero; set "free": true if that is intended')
         if not free and (usd == 0 or (e["unit"] == "per_mtok" and out == 0)):
             raise PricingError(f'{where}: price is zero; set "free": true if that is intended')
         ident = (str(e["provider"]), str(e["model"]))
         if ident in table:
             raise PricingError(f"{where}: duplicate entry")
-        table[ident] = Price(ident[0], ident[1], e["unit"], usd, out, free, str(e["source"]), verified)
+        table[ident] = Price(ident[0], ident[1], e["unit"], usd, out, free, str(e["source"]), verified,
+                             img_in, img_out, reserve)  # fmt: skip
     return table
 
 
@@ -112,6 +151,16 @@ SIMULATED = {
             ("fake-edit", "per_image", "0.08", "0"), ("fake-fallback", "per_image", "0.035", "0"),
             ("fake-inpaint", "per_image", "0.05", "0"), ("fake-upscale", "per_image", "0.01", "0"),
             ("fake-embed", "per_billion_pixels", "0.6", "0"),
+            ("fake-gemini-qa", "per_mtok", "1.5", "7.5"),
+        )
+    ] + [
+        {"provider": "fake", "model": m, "unit": "per_mtok_multimodal", "input_usd": ti, "image_input_usd": ii,
+         "output_usd": to, "image_output_usd": io_, "reserve_input_tokens_per_image": ri,
+         "reserve_output_image_tokens": ro, "reserve_output_text_tokens": rt,
+         "source": "simulated (fake providers)", "verified_at": "2099-01-01"}
+        for m, ti, ii, to, io_, ri, ro, rt in (
+            ("fake-openai-image", "5", "8", "10", "30", 2000, 8000, 0),
+            ("fake-gemini-image", "0.5", "0.5", "3", "60", 1120, 1120, 4000),
         )
     ]
 }  # fmt: skip
@@ -148,10 +197,23 @@ def reset_cache() -> None:
 def configured_models(s: Settings) -> list[tuple[str, str | None]]:
     if s.provider_mode == "fake":
         return []
-    return [("anthropic", s.text_model_story), ("anthropic", s.text_model_light), ("anthropic", s.vision_model),
-            ("fal", s.image_model_generate), ("fal", s.image_model_edit), ("fal", s.image_model_fallback),
-            ("fal", s.image_model_fallback_generate), ("fal", s.inpaint_model), ("fal", s.upscale_model),
-            ("voyage", s.embedding_model)]  # fmt: skip
+    """Every model an enabled capability can bill: disabled providers need no price."""
+    out: list[tuple[str, str | None]] = [
+        ("anthropic", s.text_model_story), ("anthropic", s.text_model_light), ("anthropic", s.vision_model)]  # fmt: skip
+    if "openai" in s.image_providers:
+        out.append(("openai", s.openai_image_model))
+    if "gemini" in s.image_providers:
+        out.append(("gemini", s.gemini_image_model))
+    if s.identity_qa == "gemini_visual":
+        out.append(("gemini", s.gemini_qa_model))
+    if s.fal_enabled:
+        out += [("fal", s.image_model_generate), ("fal", s.image_model_edit), ("fal", s.image_model_fallback),
+                ("fal", s.image_model_fallback_generate), ("fal", s.inpaint_model)]  # fmt: skip
+        if s.export_upscale == "fal":
+            out.append(("fal", s.upscale_model))
+    if s.voyage_enabled and s.identity_qa == "voyage_embedding":
+        out.append(("voyage", s.embedding_model))
+    return out
 
 
 def startup_problems(s: Settings) -> list[str]:
@@ -238,3 +300,54 @@ def image_cost(
     if price.unit == "per_billion_pixels":
         return price.usd * Decimal(pixels * images) / Decimal(1_000_000_000)
     raise AppError(ErrorCode.PRICING_UNAVAILABLE, f"Unit {price.unit} cannot price an image call.")
+
+
+# ------------------------------------------------------------------ token-billed image models
+@dataclass(frozen=True)
+class ImageUsage:
+    """Usage a token-billed image model reported for one call (None fields: not reported)."""
+
+    input_text_tokens: int | None = None
+    input_image_tokens: int | None = None
+    output_text_tokens: int | None = None  # includes thinking where the provider bills it as output
+    output_image_tokens: int | None = None
+
+    @property
+    def complete(self) -> bool:
+        return None not in (self.input_text_tokens, self.input_image_tokens, self.output_text_tokens,
+                            self.output_image_tokens)  # fmt: skip
+
+    def as_dict(self) -> dict[str, int | None]:
+        return {"input_text_tokens": self.input_text_tokens, "input_image_tokens": self.input_image_tokens,
+                "output_text_tokens": self.output_text_tokens, "output_image_tokens": self.output_image_tokens}  # fmt: skip
+
+
+def multimodal_cost(price: Price, u: ImageUsage) -> Decimal | None:
+    """Usage x operator price table; None when the provider did not report every component."""
+    if price.free:
+        return Decimal(0)
+    if price.unit != "per_mtok_multimodal" or not u.complete:
+        return None
+    assert u.input_text_tokens is not None and u.input_image_tokens is not None
+    assert u.output_text_tokens is not None and u.output_image_tokens is not None
+    return (Decimal(u.input_text_tokens) * price.usd + Decimal(u.input_image_tokens) * price.image_input_usd
+            + Decimal(u.output_text_tokens) * price.output_usd
+            + Decimal(u.output_image_tokens) * price.image_output_usd) / Decimal(1_000_000)  # fmt: skip
+
+
+def image_reservation(price: Price, *, prompt_bytes: int, input_images: int) -> Decimal:
+    """Hold for one token-billed image call: the prompt (one token per UTF-8 byte at most, plus
+    the text overhead), every input image at the entry's assumed token count, and the assumed
+    image + text/thinking output. These are ASSUMPTIONS from the price entry, not provider limits:
+    neither provider lets a caller cap image output tokens. The settled cost replaces the hold."""
+    if price.free:
+        return Decimal(0)
+    if price.unit != "per_mtok_multimodal":
+        raise AppError(ErrorCode.PRICING_UNAVAILABLE, f"{price.model} is not priced per token for images.")
+    u = ImageUsage(input_text_tokens=prompt_bytes + TEXT_OVERHEAD_TOKENS,
+                   input_image_tokens=input_images * price.assumption("reserve_input_tokens_per_image"),
+                   output_text_tokens=price.assumption("reserve_output_text_tokens"),
+                   output_image_tokens=price.assumption("reserve_output_image_tokens"))  # fmt: skip
+    cost = multimodal_cost(price, u)
+    assert cost is not None
+    return cost

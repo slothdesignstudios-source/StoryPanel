@@ -38,6 +38,18 @@ provider_unreconciled_usd = Gauge(
     "sp_provider_unreconciled_usd",
     "Provider cost counted at estimate because the outcome is still open or unknown",
 )
+provider_unresolved_usd = Gauge(
+    "sp_provider_unresolved_usd", "Potential charges still unresolved, by provider", ["provider"]
+)
+provider_print_dpi = Histogram(
+    "sp_export_panel_dpi",
+    "Effective print resolution of exported panels (local resampling)",
+    buckets=(72, 100, 150, 200, 250, 300, 400, 600),
+)
+# Gemini visual identity QA: a categorical judgment, kept apart from the embedding similarity score.
+identity_visual = Counter(
+    "sp_identity_visual_qa_total", "Visual identity QA outcomes (Gemini comparison)", ["outcome"]
+)
 sheet_layouts = Counter("sp_sheet_layouts_total", "Reference sheet crop layout outcome", ["sheet", "method"])
 billing_anomalies = Counter("sp_billing_anomalies_total", "Billing situations needing attention", ["kind"])
 account_deletions = Counter("sp_account_deletions_total", "Account deletion progress", ["outcome"])

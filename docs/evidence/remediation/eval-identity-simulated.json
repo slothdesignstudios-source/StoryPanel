@@ -1,0 +1,457 @@
+{
+ "evidence": "SIMULATED (fake providers: not evidence of model quality, cost or latency)",
+ "mode": "simulated",
+ "subset": "identity",
+ "at": "2026-11-14T04:20:04.405194+00:00",
+ "commit": "de239a8",
+ "versions": {
+  "golden": "golden-v1",
+  "prompts": "v1",
+  "styles": "2026.11.1",
+  "layouts": "2026.11.1",
+  "lettering_font_range": [
+   15.0,
+   22.0
+  ]
+ },
+ "models": {
+  "story": null,
+  "light": null,
+  "vision": null,
+  "image_providers": [
+   "openai",
+   "gemini"
+  ],
+  "openai_image": null,
+  "gemini_image": null,
+  "identity_qa": "gemini_visual",
+  "gemini_qa": null,
+  "export_upscale": "local"
+ },
+ "duration_s": 40.2,
+ "metrics": {
+  "identity_rating_avg": 5.0,
+  "identity_pass_rate": 1.0,
+  "identity_visual_pass_rate": 1.0,
+  "identity_manual_review_rate": 0.0,
+  "identity_negative_detection_rate": 1.0,
+  "script_adherence_first_attempt": 1.0,
+  "panel_defect_rate": 0.0,
+  "stray_text_rate": 0.0,
+  "story_quality": null,
+  "balloon_face_overlap_rate": 0.0,
+  "reading_order_errors": 0,
+  "time_to_first_page_p50_s": 7.59,
+  "time_to_first_page_p90_s": 8.57,
+  "full_comic_p50_s": 11.94,
+  "cost_per_page_usd": 0.9839,
+  "first_attempt_defect_rate": 0.0,
+  "repaired_defect_rate": null,
+  "finished_comic_p50_s": 27.14,
+  "completion_rate": 1.0,
+  "policy_block_recall": null,
+  "script_valid_after_repair": 1.0
+ },
+ "gates": {
+  "identity_rating_avg": {
+   "value": 5.0,
+   "target": ">= 4.0",
+   "verdict": "simulated_only"
+  },
+  "identity_pass_rate": {
+   "value": 1.0,
+   "target": ">= 0.9",
+   "verdict": "simulated_only"
+  },
+  "script_adherence_first_attempt": {
+   "value": 1.0,
+   "target": ">= 0.85",
+   "verdict": "simulated_only"
+  },
+  "panel_defect_rate": {
+   "value": 0.0,
+   "target": "<= 0.15",
+   "verdict": "simulated_only"
+  },
+  "stray_text_rate": {
+   "value": 0.0,
+   "target": "< 0.03",
+   "verdict": "simulated_only"
+  },
+  "story_quality": {
+   "value": null,
+   "target": ">= 3.8",
+   "verdict": "not_measured"
+  },
+  "balloon_face_overlap_rate": {
+   "value": 0.0,
+   "target": "< 0.05",
+   "verdict": "pass"
+  },
+  "reading_order_errors": {
+   "value": 0,
+   "target": "== 0",
+   "verdict": "pass"
+  },
+  "time_to_first_page_p50_s": {
+   "value": 7.59,
+   "target": "< 90",
+   "verdict": "simulated_only"
+  },
+  "time_to_first_page_p90_s": {
+   "value": 8.57,
+   "target": "< 180",
+   "verdict": "simulated_only"
+  },
+  "full_comic_p50_s": {
+   "value": 11.94,
+   "target": "< 360",
+   "verdict": "simulated_only"
+  },
+  "cost_per_page_usd": {
+   "value": 0.9839,
+   "target": "<= 0.55",
+   "verdict": "simulated_only"
+  },
+  "policy_block_recall": {
+   "value": null,
+   "target": "== 1.0",
+   "verdict": "not_measured"
+  },
+  "script_valid_after_repair": {
+   "value": 1.0,
+   "target": "== 1.0",
+   "verdict": "pass"
+  },
+  "identity_negative_detection_rate": {
+   "value": 1.0,
+   "target": ">= 0.9",
+   "verdict": "simulated_only"
+  },
+  "identity_visual_pass_rate": {
+   "value": 1.0,
+   "target": ">= 0.85",
+   "verdict": "simulated_only"
+  }
+ },
+ "counts": {
+  "cases": 4,
+  "completed": 4,
+  "allow_policy_cases": 4,
+  "block_policy_cases": 0,
+  "exported": 4,
+  "incomplete": [],
+  "false_blocks": 0,
+  "brief_mismatches": 0,
+  "errors": 0
+ },
+ "denominators": {
+  "quality_metrics": "completed comics",
+  "completion_rate": "allow-policy cases",
+  "policy_block_recall": "block-policy cases",
+  "first_attempt_defect_rate": "panels in completed comics",
+  "repaired_defect_rate": "first-attempt defects"
+ },
+ "cost": {
+  "product_usd": 9.8386,
+  "eval_overhead_usd": 0,
+  "unresolved_usd": 0,
+  "note": "includes failed and unresolved attempts; cases that errored before completion are counted in the run budget (spend cap) but not here"
+ },
+ "cases": [
+  {
+   "id": "trio-bakery",
+   "tags": [
+    "three_characters",
+    "dialogue_heavy"
+   ],
+   "policy": "allow",
+   "image_provider": "openai",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 7.48,
+   "time_to_complete_s": 11.34,
+   "time_to_export_s": 10.62,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 21.96,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "identity_visual_pass": 18,
+    "identity_visual_review": 0,
+    "identity_visual_checked": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 23,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "identity_probe": {
+    "probes": 0,
+    "detected": 0
+   },
+   "cost": {
+    "product_usd": 3.215054,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0,
+    "attempts": 88
+   },
+   "cost_usd": 3.215054,
+   "wall_s": 36.0
+  },
+  {
+   "id": "multi-twins",
+   "tags": [
+    "two_characters",
+    "near_identical_characters",
+    "identity_stress"
+   ],
+   "policy": "allow",
+   "image_provider": "openai",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "western_page",
+    "pages": 4,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 8.57,
+   "time_to_complete_s": 11.94,
+   "time_to_export_s": 15.2,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 27.14,
+   "pages": 4,
+   "panels": 18,
+   "panel_stats": {
+    "first_attempt_pass": 18,
+    "first_attempts": 18,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 18,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 18,
+    "final_versions": 18,
+    "identity_visual_pass": 18,
+    "identity_visual_review": 0,
+    "identity_visual_checked": 18,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 27,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "identity_probe": {
+    "probes": 18,
+    "detected": 18
+   },
+   "cost": {
+    "product_usd": 3.715224,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0,
+    "attempts": 112
+   },
+   "cost_usd": 3.715224,
+   "wall_s": 39.07
+  },
+  {
+   "id": "identity-swap-probe",
+   "tags": [
+    "two_characters",
+    "identity_qa",
+    "inconsistent_probe"
+   ],
+   "policy": "allow",
+   "image_provider": "openai",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 7.59,
+   "time_to_complete_s": 7.69,
+   "time_to_export_s": 1.81,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 9.49,
+   "pages": 1,
+   "panels": 3,
+   "panel_stats": {
+    "first_attempt_pass": 3,
+    "first_attempts": 3,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 3,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 3,
+    "final_versions": 3,
+    "identity_visual_pass": 3,
+    "identity_visual_review": 0,
+    "identity_visual_checked": 3,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 5,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "identity_probe": {
+    "probes": 3,
+    "detected": 3
+   },
+   "cost": {
+    "product_usd": 1.454134,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0,
+    "attempts": 37
+   },
+   "cost_usd": 1.454134,
+   "wall_s": 23.11
+  },
+  {
+   "id": "identity-lookalikes",
+   "tags": [
+    "two_characters",
+    "identity_qa",
+    "lookalikes",
+    "inconsistent_probe"
+   ],
+   "policy": "allow",
+   "image_provider": "openai",
+   "script_errors": 0,
+   "script_repairs": 0,
+   "brief": {
+    "format": "strip",
+    "pages": 1,
+    "style_preset": "clean_manga_warm",
+    "audience": "all_ages"
+   },
+   "brief_matches": true,
+   "outcome": "completed",
+   "time_to_first_page_s": 0.99,
+   "time_to_complete_s": 1.0,
+   "time_to_export_s": 0.49,
+   "export_status": "ready",
+   "time_to_finished_comic_s": 1.49,
+   "pages": 1,
+   "panels": 3,
+   "panel_stats": {
+    "first_attempt_pass": 3,
+    "first_attempts": 3,
+    "first_attempt_defects": 0,
+    "repaired_defects": 0,
+    "final_not_ok": 0,
+    "panels": 3,
+    "stray_text": 0,
+    "identity_ratings": [
+     5.0,
+     5.0,
+     5.0
+    ],
+    "identity_pass": 3,
+    "final_versions": 3,
+    "identity_visual_pass": 3,
+    "identity_visual_review": 0,
+    "identity_visual_checked": 3,
+    "user_regenerations": null
+   },
+   "lettering": {
+    "balloons": 5,
+    "covers_face": 0,
+    "reading_order": 0,
+    "overflow": 0
+   },
+   "identity_probe": {
+    "probes": 3,
+    "detected": 3
+   },
+   "cost": {
+    "product_usd": 1.454175,
+    "eval_overhead_usd": 0,
+    "unresolved_usd": 0,
+    "export_usd": 0,
+    "attempts": 37
+   },
+   "cost_usd": 1.454175,
+   "wall_s": 17.11
+  }
+ ]
+}

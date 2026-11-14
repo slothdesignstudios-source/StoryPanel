@@ -13,7 +13,7 @@
 | Input validation | Pydantic models with `extra="forbid"`; validation errors return field paths, never submitted values | `api/schemas.py` |
 | Webhooks | Stripe signature + 5-minute tolerance; Clerk via Svix signature | `services/billing.py`, `api/routes/account.py` |
 | Images | type allowlist, dimension and byte limits, decompression-bomb guard, full decode, re-encode to strip metadata | `storage.py:validate_image` |
-| SSRF | provider result URLs must be HTTPS and resolve only to public addresses; no redirects; size cap | `providers/fal_image.py` |
+| SSRF | provider result URLs must be HTTPS and resolve only to public addresses; no redirects; size cap | `providers/fal_image.py` (fal, disabled by default; OpenAI and Gemini return image bytes inline, no URL is fetched) |
 | Rendering | user text is only ever drawn as glyphs; XML/SVG output is escaped; download filenames are sanitised | `pipeline/render.py`, `storage.py` |
 | Storage | private bucket, SSE, TLS-only policy, 10-minute signed URLs, quarantined assets never signed | `storage.py`, `infra/terraform` |
 | Secrets | server-side only, `SecretStr`, validated at startup, never in images or the web bundle | `config.py` |

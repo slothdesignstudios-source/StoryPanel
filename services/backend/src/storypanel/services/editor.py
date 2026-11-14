@@ -130,7 +130,7 @@ async def restore_version(db: AsyncSession, panel_id: uuid.UUID, version_id: uui
     row = (await db.execute(
         select(PanelVersion, Asset.quarantined).join(Asset, Asset.id == PanelVersion.image_asset_id)
         .where(PanelVersion.id == version_id, PanelVersion.panel_id == panel_id))).one_or_none()  # fmt: skip
-    if row is None or row[1] or row[0].qa_status not in ("pass", "fail"):
+    if row is None or row[1] or row[0].qa_status not in ("pass", "fail", "review"):
         raise not_found("Version")
     panel.current_version_id = version_id
     panel.status = (PanelStatus.OK if row[0].qa_status == "pass" else PanelStatus.NEEDS_ATTENTION).value

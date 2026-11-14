@@ -13,7 +13,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFilter
 
-LOCAL_PREFIXES = ("features:", "identity_rating:", "identity_embedding:")
+LOCAL_PREFIXES = ("features:", "identity_rating:", "identity_embedding:", "identity_visual:")
 PAD = 0.06
 
 

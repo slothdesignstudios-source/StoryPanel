@@ -6,7 +6,9 @@
 # kept in the data directory, so /var/run/postgresql need not be writable. Clients connect over TCP.
 set -euo pipefail
 SP_DATA="${SP_DATA:-/tmp/storypanel-data}"
-PGBIN="${PGBIN:-/usr/lib/postgresql/16/bin}"
+# newest installed PostgreSQL (16 on Ubuntu 24.04, newer on later releases) unless PGBIN is set
+PGBIN="${PGBIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)}"
+[ -x "$PGBIN/initdb" ] || { echo "PostgreSQL server binaries not found; install postgresql (or set PGBIN)" >&2; exit 1; }
 PGPORT="${PGPORT:-5432}"
 run_pg() { if [ "$(id -u)" = "0" ]; then runuser -u postgres -- "$@"; else "$@"; fi; }
 case "${1:-start}" in

@@ -255,10 +255,12 @@ def test_log_redaction() -> None:
         "authorization": "Bearer abc.def.ghi", "api_key": "x", "note": "key sk_live_abcdefgh12345678 ok",
         "url": "https://s3/x?X-Amz-Signature=deadbeef&X-Amz-Credential=AKIA", "email": "a@b.c",
         "nested": {"password": "p", "jwt": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk"},
-        "prompt_text": "secret story", "ok": "plain", "stripe-signature": "t=1,v1=abc"})  # fmt: skip
+        "prompt_text": "secret story", "ok": "plain", "stripe-signature": "t=1,v1=abc",
+        "err": "bad key sk-proj-Abcdefghijklmnop0123456789 and AIzaSyAbcdefghijklmnopqrstuvwxyz0123456",
+        "legacy": "sk-0123456789abcdefghijABCDEFGHIJ0123"})  # fmt: skip
     blob = json.dumps(out)
     for leak in ("abc.def.ghi", "sk_live_abcdefgh", "deadbeef", "AKIA", "a@b.c", "secret story",
-                 "eyJhbGci", "v1=abc"):  # fmt: skip
+                 "eyJhbGci", "v1=abc", "sk-proj-Abcdef", "AIzaSyAbcdef", "sk-0123456789abc"):  # fmt: skip
         assert leak not in blob
     assert out["ok"] == "plain" and out["api_key"] == REDACTED
     assert pseudonymize("user-1") == pseudonymize("user-1") != pseudonymize("user-2")
@@ -298,7 +300,11 @@ def test_production_config_refuses_fakes_and_dev_auth(monkeypatch: pytest.Monkey
     assert "fake providers are not permitted" in msg and "dev auth is not permitted" in msg
     with pytest.raises(ValueError) as e:
         Settings(env="local", provider_mode="live", _env_file=None)  # type: ignore[call-arg]
-    assert "SP_IMAGE_MODEL_GENERATE must be set" in str(e.value)  # no guessed model ids
+    assert "SP_OPENAI_IMAGE_MODEL must be set" in str(e.value)  # no guessed model ids
+    assert "SP_GEMINI_QA_MODEL must be set" in str(e.value)
+    assert "SP_FAL_KEY" not in str(e.value) and "SP_VOYAGE_API_KEY" not in str(
+        e.value
+    )  # disabled: not required
     assert Settings(_env_file=None).max_pages == 8  # type: ignore[call-arg]
 
 

@@ -18,6 +18,10 @@ Environment = Literal["local", "test", "staging", "production"]
 ProviderMode = Literal["fake", "live"]
 
 
+ImageProviderName = Literal["openai", "gemini", "fal"]
+DEFAULT_IMAGE_PROVIDERS: tuple[ImageProviderName, ...] = ("openai", "gemini")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SP_", env_file=".env", extra="ignore")
 
@@ -79,6 +83,30 @@ class Settings(BaseSettings):
     text_model_story: str | None = None
     text_model_light: str | None = None
     vision_model: str | None = None
+    # --- image and identity-QA providers (docs/providers.md)
+    # Image providers a new comic may use; each comic keeps the one it was created with.
+    image_providers: list[ImageProviderName] = Field(default_factory=lambda: list(DEFAULT_IMAGE_PROVIDERS))
+    image_provider_default: ImageProviderName = "openai"
+    openai_api_key: SecretStr | None = None
+    openai_image_model: str | None = None
+    openai_image_quality: Literal["low", "medium", "high"] = "medium"
+    gemini_api_key: SecretStr | None = None
+    gemini_image_model: str | None = None
+    gemini_image_size: Literal["1K", "2K"] = "1K"
+    # Per-request timeout for synchronous image calls. A call that times out is never re-sent
+    # automatically: it stays an unresolved potential charge (providers/metering.py).
+    image_request_timeout_seconds: float = 240.0
+    # How panels are checked against the approved character references:
+    #   gemini_visual: Gemini compares the panel with the reference images (structured judgment)
+    #   voyage_embedding: Voyage image embeddings + cosine similarity (needs SP_VOYAGE_ENABLED)
+    identity_qa: Literal["gemini_visual", "voyage_embedding"] = "gemini_visual"
+    gemini_qa_model: str | None = None
+    # Exports resample the generated images locally (deterministic, no external service).
+    # "fal" re-enables the fal ESRGAN upscaler (needs SP_FAL_ENABLED).
+    export_upscale: Literal["local", "fal"] = "local"
+    # fal (images, inpainting, upscaling) and Voyage (embeddings) are kept but off by default.
+    fal_enabled: bool = False
+    voyage_enabled: bool = False
     fal_key: SecretStr | None = None
     image_model_generate: str | None = None
     image_model_edit: str | None = None
@@ -172,6 +200,30 @@ class Settings(BaseSettings):
     log_prompts: bool = False  # raw user prompts stay out of logs/traces unless enabled
     metrics_port: int = 9464
 
+    def required_live_settings(self) -> list[str]:
+        """Only the credentials and models the enabled capabilities need."""
+        req = ["anthropic_api_key", "text_model_story", "text_model_light", "vision_model"]
+        if "openai" in self.image_providers:
+            req += ["openai_api_key", "openai_image_model"]
+        if "gemini" in self.image_providers:
+            req += ["gemini_api_key", "gemini_image_model"]
+        if self.identity_qa == "gemini_visual":
+            req += ["gemini_api_key", "gemini_qa_model"]
+        if self.fal_enabled and ("fal" in self.image_providers or self.repair_mode == "inpaint"):
+            req += ["fal_key", "image_model_generate", "image_model_edit"]
+        if self.fal_enabled and self.export_upscale == "fal":
+            req += ["fal_key", "upscale_model"]
+        if self.voyage_enabled and self.identity_qa == "voyage_embedding":
+            req += ["voyage_api_key", "embedding_model"]
+        return list(dict.fromkeys(req))
+
+    def image_model_for(self, provider: str) -> str | None:
+        """The model a new comic on `provider` is drawn with (fixed on the comic at creation)."""
+        if self.provider_mode == "fake":
+            return f"fake-{provider}-image"
+        return {"openai": self.openai_image_model, "gemini": self.gemini_image_model,
+                "fal": self.image_model_edit}.get(provider)  # fmt: skip
+
     @property
     def is_deployed(self) -> bool:
         return self.env in ("staging", "production")
@@ -206,13 +258,9 @@ class Settings(BaseSettings):
                 problems.append("SP_SIGNUP_BONUS_CREDITS above 50 is not permitted in staging/production")
         if self.auth_mode == "clerk" and not (self.clerk_issuer and self.clerk_jwks_url):
             problems.append("clerk auth requires SP_CLERK_ISSUER and SP_CLERK_JWKS_URL")
+        problems += _capability_problems(self)
         if self.provider_mode == "live":
-            required = (
-                "anthropic_api_key", "text_model_story", "text_model_light", "vision_model",
-                "fal_key", "image_model_generate", "image_model_edit", "upscale_model",
-                "voyage_api_key", "embedding_model",
-            )  # fmt: skip
-            problems += [f"SP_{n.upper()} must be set for live providers" for n in required
+            problems += [f"SP_{n.upper()} must be set for live providers" for n in self.required_live_settings()
                          if getattr(self, n) is None]  # fmt: skip
             problems += _live_model_problems(self)
         from storypanel.db.models import EMBEDDING_DIM
@@ -226,6 +274,29 @@ class Settings(BaseSettings):
         return self
 
 
+def _capability_problems(s: Settings) -> list[str]:
+    """Disabled providers must not be reachable through any setting (no silent fallback)."""
+    p = []
+    if not s.image_providers:
+        p.append("SP_IMAGE_PROVIDERS must name at least one image provider")
+    if s.image_provider_default not in s.image_providers:
+        p.append("SP_IMAGE_PROVIDER_DEFAULT must be one of SP_IMAGE_PROVIDERS")
+    if not s.fal_enabled:
+        if "fal" in s.image_providers:
+            p.append("SP_IMAGE_PROVIDERS includes fal but SP_FAL_ENABLED is false")
+        if s.export_upscale == "fal":
+            p.append("SP_EXPORT_UPSCALE=fal needs SP_FAL_ENABLED=true (use local)")
+        if s.repair_mode == "inpaint":
+            p.append(
+                "SP_REPAIR_MODE=inpaint uses fal mask inpainting: needs SP_FAL_ENABLED=true (use reference_edit)"
+            )
+        if s.image_model_fallback or s.image_model_fallback_generate:
+            p.append("fal fallback models are set but SP_FAL_ENABLED is false")
+    if not s.voyage_enabled and s.identity_qa == "voyage_embedding":
+        p.append("SP_IDENTITY_QA=voyage_embedding needs SP_VOYAGE_ENABLED=true (use gemini_visual)")
+    return p
+
+
 def _live_model_problems(s: Settings) -> list[str]:
     """Every configured model must have a verified contract and a valid, current price."""
     from storypanel.providers import fal_profiles, pricing
@@ -235,9 +306,9 @@ def _live_model_problems(s: Settings) -> list[str]:
                        ("edit", "image_model_fallback"), ("generate", "image_model_fallback_generate"),
                        ("inpaint", "inpaint_model"), ("upscale", "upscale_model")):  # fmt: skip
         model = getattr(s, name)
-        if model and fal_profiles.profile_for(model, role) is None:  # type: ignore[arg-type]
+        if s.fal_enabled and model and fal_profiles.profile_for(model, role) is None:  # type: ignore[arg-type]
             problems.append(f"SP_{name.upper()}={model} has no verified fal schema for role '{role}'")
-    if s.embedding_model and s.embedding_model not in VOYAGE_IMAGE_MODELS:
+    if s.voyage_enabled and s.embedding_model and s.embedding_model not in VOYAGE_IMAGE_MODELS:
         problems.append(
             f"SP_EMBEDDING_MODEL={s.embedding_model} is not a Voyage model known to accept images"
         )

@@ -77,3 +77,19 @@ for. The v1 intake prompt was edited in place (one sentence) rather than version
 (automatic lettering, editor moves, layout changes) clamps all ink (shape, text, rotated SFX with outline,
 tail tip) to it. Overlaps that cannot be avoided in an over-full panel are flagged and shown, not hidden.
 Characters outside the bundled fonts (Latin-1 + typographic punctuation) are a script error.
+
+**D-PROVIDERS (2026-11-14): Anthropic + OpenAI + Gemini; fal and Voyage disabled, not deleted.** The owner has
+no fal or Voyage account.
+- Images come from OpenAI (default) or the Gemini API, called directly rather than through fal.
+- Identity QA is a Gemini visual judgment against the approved references, replacing Voyage embeddings.
+- Exports resample locally instead of using fal ESRGAN.
+- The fal/Voyage adapters remain behind `SP_FAL_ENABLED` / `SP_VOYAGE_ENABLED` (default false). Any
+  setting that would reach a disabled provider is refused at startup, so nothing falls back to them
+  silently.
+- Synchronous image APIs get their own ledger path (`image_sync_*`): store-before-success, no
+  automatic resend after an ambiguous outcome, and SDK retries off.
+- The provider is a property of the comic, never switched mid-comic. A refusal is never rerouted to
+  the other provider.
+- Gemini QA outcomes are categorical. An uncertain or invalid answer means manual review, never a
+  silent pass.
+

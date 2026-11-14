@@ -18,7 +18,7 @@ services/backend/         One Python package, two entrypoints: FastAPI API and T
     services/             projects, editor, credits ledger, billing, events (SSE), outbox, maintenance
     pipeline/             story, art director, QA, lettering, rendering, stage implementations
     workflows/            Temporal workflow definitions, activities, worker
-    providers/            adapters (Anthropic, fal, Voyage), deterministic fakes, metering
+    providers/            adapters (Anthropic, OpenAI, Gemini; fal/Voyage retained, disabled), fakes, metering
     domain/ db/ obs/      schemas and rules, models, logging/tracing/metrics
     evals/                evaluation harness
   migrations/ tests/
@@ -102,7 +102,7 @@ CI fails if the generated files are stale.
 ## Going live
 Follow [`docs/blockers.md`](docs/blockers.md), [`docs/providers.md`](docs/providers.md) → "Before the first live run",
 then [`docs/staging-plan.md`](docs/staging-plan.md). Every setting is listed in [`.env.example`](.env.example).
-External accounts needed: Anthropic, fal, Voyage, Clerk, Stripe, Temporal Cloud, an S3-compatible bucket, and a host (Render blueprint provided).
+External accounts needed: Anthropic, OpenAI, Google Gemini API, Clerk, Stripe, Temporal Cloud, an S3-compatible bucket, and a host (Render blueprint provided). fal and Voyage are not needed: their adapters are disabled by default (`SP_FAL_ENABLED`, `SP_VOYAGE_ENABLED`).
 
 ## Documentation
 - [Requirements matrix and release gates](docs/requirements-matrix.md)

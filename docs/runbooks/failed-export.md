@@ -7,7 +7,8 @@ already rendered (`exports.pages_done`). Users have a Retry button; it starts wo
 
 1. `select id, format, status, error, pages_done from exports where status='failed' order by created_at desc limit 20;`
 2. `error.code`:
-   - `provider_*` / `timeout` → the upscaler. See provider-outage.md. Upscaled panels are cached per panel version, so progress is kept.
+   - `provider_*` / `timeout` → only possible with `SP_EXPORT_UPSCALE=fal` (fal upscaler). The default `local` mode makes no provider call. See provider-outage.md.
+   - Low print quality is not a failure: `exports.print_quality` lists each panel's effective DPI and the warning shown to the user.
    - `storage_error` → object storage. Check `sp_dependency_up{dependency="storage"}` and bucket credentials.
    - `internal_error` → find the trace: logs with `export_id=<id>` carry `trace_id`. A render crash on one page usually means unusual balloon geometry; the snapshot JSON has it.
 3. Retry on the user's behalf: `POST /v1/exports/<id>/retry` as the owner, or ask them to press Retry.

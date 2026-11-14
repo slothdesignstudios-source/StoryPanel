@@ -34,7 +34,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Checkout */
+        /**
+         * Checkout
+         * @description Start Checkout. A repeated request with the same Idempotency-Key returns the same
+         *     session; a subscription is refused while one is already live (use the portal).
+         */
         post: operations["checkout_v1_billing_checkout_post"];
         delete?: never;
         options?: never;
@@ -127,6 +131,10 @@ export interface paths {
         /**
          * Delete Account
          * @description Delete the account and all of its comics, images and exports.
+         *
+         *     The account is blocked immediately; cancellation, draining, verified content deletion,
+         *     subscription cancellation and identity deletion then run as a durable job (finished
+         *     by the maintenance loop if anything is still in progress).
          */
         delete: operations["delete_account_v1_me_delete"];
         options?: never;
@@ -716,6 +724,8 @@ export interface components {
             named_characters: string[];
             /** Pages */
             pages: number;
+            /** Panels */
+            panels?: number | null;
             /** Setting */
             setting: string;
             /** Style Preset */
@@ -761,6 +771,8 @@ export interface components {
             audience?: ("all_ages" | "teen" | "mature") | null;
             /** Format */
             format?: ("western_page" | "strip") | null;
+            /** Image Provider */
+            image_provider?: ("openai" | "gemini" | "fal") | null;
             /** Pages */
             pages?: number | null;
             /** Prompt */
@@ -872,6 +884,10 @@ export interface components {
             format: string;
             /** Id */
             id: string;
+            /** Print Quality */
+            print_quality?: {
+                [key: string]: unknown;
+            } | null;
             /** Status */
             status: string;
         };
@@ -887,6 +903,8 @@ export interface components {
         FormatSpec: {
             /** Pages */
             pages: number;
+            /** Panels */
+            panels?: number | null;
             /** Panels Per Page */
             panels_per_page: string;
             type: components["schemas"]["ComicFormat"];
@@ -921,6 +939,21 @@ export interface components {
             x: number;
             /** Y */
             y: number;
+        };
+        /** ImageProviderOut */
+        ImageProviderOut: {
+            /** Available */
+            available: boolean;
+            /** Capabilities */
+            capabilities: string[];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Model */
+            model: string | null;
+            /** Reason */
+            reason: string | null;
         };
         /** LayoutOut */
         LayoutOut: {
@@ -994,10 +1027,18 @@ export interface components {
             credit_prices: {
                 [key: string]: number;
             };
+            /** Default Image Provider */
+            default_image_provider: string;
             /** Default Pages */
             default_pages: number;
             /** Default Style */
             default_style: string;
+            /** Export Resampling */
+            export_resampling: string;
+            /** Identity Qa */
+            identity_qa: string;
+            /** Image Providers */
+            image_providers: components["schemas"]["ImageProviderOut"][];
             /** Limits */
             limits: {
                 [key: string]: number;
@@ -1192,6 +1233,10 @@ export interface components {
             format: string;
             /** Id */
             id: string;
+            /** Image Model */
+            image_model: string | null;
+            /** Image Provider */
+            image_provider: string | null;
             /** Locations */
             locations: components["schemas"]["LocationOut"][];
             /** Pages */
@@ -1237,6 +1282,10 @@ export interface components {
             format: string;
             /** Id */
             id: string;
+            /** Image Model */
+            image_model: string | null;
+            /** Image Provider */
+            image_provider: string | null;
             /** Pages Requested */
             pages_requested: number;
             /** Status */

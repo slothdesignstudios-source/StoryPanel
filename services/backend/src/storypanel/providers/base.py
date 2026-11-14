@@ -172,3 +172,37 @@ def nearest_aspect(width: float, height: float, supported: tuple[str, ...] | Non
     ratio = width / height
     names = supported or tuple(ASPECTS)
     return min(names, key=lambda n: abs(ASPECTS[n] - ratio) / ASPECTS[n])
+
+
+# ------------------------------------------------------------------ synchronous image providers
+@dataclass(frozen=True)
+class ImageCapabilities:
+    """What a synchronous image provider can actually do; the pipeline adapts to it."""
+
+    max_reference_images: int  # input images per request the app will send (<= the API limit)
+    supports_masked_inpainting: bool  # pixel-mask edits honoured by the provider
+    instruction_edits: bool  # edits an input image from a text instruction
+    max_long_edge: int  # longest side the app requests, in pixels
+    output_format: str = "png"
+
+
+@dataclass(frozen=True)
+class SyncImageResult:
+    data: bytes
+    provider: str
+    model: str
+    request_id: str | None  # the provider's id for the call, when it reports one (support/billing)
+    usage: Any  # pricing.ImageUsage (provider-reported; fields None when not reported)
+    width: int = 0
+    height: int = 0
+
+
+class SyncImageProvider(Protocol):
+    """One request, one answer (OpenAI Images API, Gemini generateContent). There is no request
+    id to resume by and no cancellation: an ambiguous outcome cannot be reconciled with the
+    provider, so it is never re-sent automatically (see providers/metering.py)."""
+
+    name: str  # adapter / billing provider name (e.g. "openai")
+    capabilities: ImageCapabilities
+
+    async def generate(self, req: ImageRequest, ctx: CallContext, *, model: str) -> SyncImageResult: ...

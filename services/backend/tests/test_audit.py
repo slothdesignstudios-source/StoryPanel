@@ -380,6 +380,7 @@ async def test_eval_run_budget_survives_restart_midnight_concurrency_and_unresol
 
 
 # ------------------------------------------------------------------ compute-time billing (fal ESRGAN)
+@pytest.mark.usefixtures("fal_voyage")
 async def test_compute_second_billing_reserves_the_wait_budget_and_stays_unresolved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

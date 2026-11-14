@@ -16,6 +16,7 @@
   "revise": "revise.image.j2",
   "panel_edit": "panel_edit.image.j2",
   "repair": "repair.image.j2",
-  "repair_reference": "repair_reference.image.j2"
+  "repair_reference": "repair_reference.image.j2",
+  "identity_visual": "identity_visual.system.md"
  }
 }

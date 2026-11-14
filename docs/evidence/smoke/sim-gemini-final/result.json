@@ -1,0 +1,399 @@
+{
+ "run_id": "sim-gemini-final",
+ "mode": "SIMULATED",
+ "project_id": "7b15d8c3-a15c-4e9b-977b-24512ddd09c5",
+ "prompt": "A lighthouse keeper and a cheeky seagull argue over the last sandwich on a windy pier, as a 3 panel strip",
+ "approved_usd": null,
+ "image_provider": "gemini",
+ "image_model": "fake-gemini-image",
+ "characters": 2,
+ "scripted_panels": [
+  3
+ ],
+ "panels": 3,
+ "panel_status": [
+  "ok",
+  "ok",
+  "ok"
+ ],
+ "panels_requested": 3,
+ "edit_request": 202,
+ "print_quality": {
+  "pdf": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    }
+   ],
+   "min_dpi": 417,
+   "warnings": [],
+   "print_width_in": 6.0
+  },
+  "png": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    }
+   ],
+   "min_dpi": 417,
+   "warnings": [],
+   "print_width_in": 6.0
+  },
+  "cbz": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    }
+   ],
+   "min_dpi": 417,
+   "warnings": [],
+   "print_width_in": 6.0
+  }
+ },
+ "exports": {
+  "pdf": {
+   "ok": true,
+   "bytes": 110473,
+   "all_fonts_embedded": true,
+   "selectable_text_chars": 156,
+   "fonts": [
+    "Bangers-Regular",
+    "ComicNeue-Bold",
+    "ComicNeue-Regular"
+   ],
+   "trim_box": [
+    9.0,
+    9.0,
+    441.0,
+    160.2
+   ],
+   "bleed_box": [
+    0.0,
+    0.0,
+    450.0,
+    169.2
+   ]
+  },
+  "png": {
+   "ok": true,
+   "size": [
+    2000,
+    700
+   ]
+  },
+  "cbz": {
+   "ok": true,
+   "entries": [
+    "page_001.png",
+    "ComicInfo.xml"
+   ]
+  }
+ },
+ "timings_s": {
+  "story+cast": 2.0,
+  "script": 2.1,
+  "panels": 2.1,
+  "edit": 2.1,
+  "export_pdf": 2.1,
+  "export_png": 2.1,
+  "export_cbz": 2.1,
+  "total": 14.7
+ },
+ "timing_resolution_s": 2,
+ "usage": {
+  "by_stage": {
+   "intake|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000137",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008732",
+    "max_input_tokens": 369
+   },
+   "moderation.prompt|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000139",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008602",
+    "max_input_tokens": 387
+   },
+   "bible|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "provider": "fake",
+    "counted": "0.002958",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.178544",
+    "max_input_tokens": 479
+   },
+   "moderation.bible|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000153",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008659",
+    "max_input_tokens": 531
+   },
+   "character_sheet|image_sync_generate": {
+    "calls": 2,
+    "model": "fake-gemini-image",
+    "provider": "fake",
+    "counted": "0.136330",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_input_text_tokens": 140,
+    "max_input_image_tokens": 0,
+    "max_estimate": "0.081481",
+    "max_input_tokens": 140
+   },
+   "location_ref|image_sync_generate": {
+    "calls": 2,
+    "model": "fake-gemini-image",
+    "provider": "fake",
+    "counted": "0.136284",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_input_text_tokens": 84,
+    "max_input_image_tokens": 0,
+    "max_estimate": "0.081370",
+    "max_input_tokens": 84
+   },
+   "image_safety|text_vision": {
+    "calls": 12,
+    "model": "fake-vision",
+    "provider": "fake",
+    "counted": "0.001404",
+    "statuses": {
+     "succeeded": 12
+    },
+    "max_estimate": "0.008581",
+    "max_input_tokens": 165
+   },
+   "character_sheet|image_sync_edit": {
+    "calls": 4,
+    "model": "fake-gemini-image",
+    "provider": "fake",
+    "counted": "0.274686",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_input_text_tokens": 157,
+    "max_input_image_tokens": 1000,
+    "max_estimate": "0.082074",
+    "max_input_tokens": 1157
+   },
+   "script|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "provider": "fake",
+    "counted": "0.003868",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.181246",
+    "max_input_tokens": 934
+   },
+   "moderation.script|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000141",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008612",
+    "max_input_tokens": 412
+   },
+   "panel_generate|image_sync_edit": {
+    "calls": 4,
+    "model": "fake-gemini-image",
+    "provider": "fake",
+    "counted": "0.278263",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_input_text_tokens": 248,
+    "max_input_image_tokens": 4000,
+    "max_estimate": "0.083937",
+    "max_input_tokens": 4248
+   },
+   "vision_qa|text_vision": {
+    "calls": 4,
+    "model": "fake-vision",
+    "provider": "fake",
+    "counted": "0.000555",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.008939",
+    "max_input_tokens": 407
+   },
+   "identity_visual|text_vision": {
+    "calls": 4,
+    "model": "fake-gemini-qa",
+    "provider": "fake",
+    "counted": "0.008625",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.045270",
+    "max_input_tokens": 466
+   },
+   "moderation.panel_edit|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000137",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008596",
+    "max_input_tokens": 373
+   }
+  },
+  "totals": {
+   "reserved_estimate": "1.704585",
+   "calculated": "0.843680",
+   "unresolved": "0",
+   "provider_confirmed": "0",
+   "counted": "0.843680"
+  },
+  "estimate_overruns": [],
+  "counted_by_model": {
+   "fake-light": "0.000707",
+   "fake-story": "0.006826",
+   "fake-gemini-image": "0.825563",
+   "fake-vision": "0.001959",
+   "fake-gemini-qa": "0.008625"
+  },
+  "note": "calculated = usage x operator price table (not a provider charge); unresolved = potential charges counted at their estimate (e.g. compute-time upscaling) until a provider charge is imported"
+ }
+}

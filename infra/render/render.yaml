@@ -13,22 +13,26 @@ envVarGroups:
       # Secrets and model ids are entered in the dashboard (sync: false), never committed.
       - { key: SP_PSEUDONYM_SALT, generateValue: true }
       - { key: SP_ANTHROPIC_API_KEY, sync: false }
-      - { key: SP_FAL_KEY, sync: false }
-      - { key: SP_VOYAGE_API_KEY, sync: false }
+      - { key: SP_OPENAI_API_KEY, sync: false }
+      - { key: SP_GEMINI_API_KEY, sync: false }
       - { key: SP_TEXT_MODEL_STORY, sync: false }
       - { key: SP_TEXT_MODEL_LIGHT, sync: false }
       - { key: SP_VISION_MODEL, sync: false }
-      - { key: SP_IMAGE_MODEL_GENERATE, sync: false }
-      - { key: SP_IMAGE_MODEL_EDIT, sync: false }
-      - { key: SP_UPSCALE_MODEL, sync: false }
-      # Optional models: leave unset to disable that path (no fallback / no region repair).
-      - { key: SP_IMAGE_MODEL_FALLBACK, sync: false }
-      - { key: SP_IMAGE_MODEL_FALLBACK_GENERATE, sync: false }
-      - { key: SP_INPAINT_MODEL, sync: false }
+      # Image providers a new comic may use (each comic keeps its own); model ids are checked
+      # against the provider's model list before deploying (docs/providers.md).
+      - { key: SP_IMAGE_PROVIDERS, value: '["openai", "gemini"]' }
+      - { key: SP_IMAGE_PROVIDER_DEFAULT, value: openai }
+      - { key: SP_OPENAI_IMAGE_MODEL, sync: false }
+      - { key: SP_GEMINI_IMAGE_MODEL, sync: false }
+      - { key: SP_IDENTITY_QA, value: gemini_visual }
+      - { key: SP_GEMINI_QA_MODEL, sync: false }
+      # Exports resample locally; no external upscaler. fal and Voyage stay disabled.
+      - { key: SP_EXPORT_UPSCALE, value: local }
+      - { key: SP_FAL_ENABLED, value: "false" }
+      - { key: SP_VOYAGE_ENABLED, value: "false" }
       # Verified provider price table (JSON, see packages/pricing/pricing.example.json).
       # Live startup refuses missing, zero, malformed or stale (>60 days) prices.
       - { key: SP_PRICING_JSON, sync: false }
-      - { key: SP_EMBEDDING_MODEL, sync: false }
       - { key: SP_TEMPORAL_ADDRESS, sync: false }
       - { key: SP_TEMPORAL_NAMESPACE, sync: false }
       - { key: SP_TEMPORAL_API_KEY, sync: false }

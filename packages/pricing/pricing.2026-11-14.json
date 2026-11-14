@@ -1,0 +1,65 @@
+{
+ "_note": "Checked 2026-11-14. Anthropic prices were read from the official pricing page fetched directly on 2026-11-12 (docs/evidence/pricing-2026-11-12/). OpenAI and Google pages could not be fetched from the build sandbox; their values come from web-search summaries restricted to openai.com / ai.google.dev and are UNVERIFIED until someone opens the source page. Where sources disagreed, the higher rate is used. reserve_* fields are reservation ASSUMPTIONS (neither API lets a caller cap image output tokens); settled costs use the usage each provider reports.",
+ "entries": [
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-5",
+   "unit": "per_mtok",
+   "input_usd": "2.00",
+   "output_usd": "10.00",
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "verified_at": "2026-11-12",
+   "verification": "official page fetched 2026-11-12 (docs/evidence/pricing-2026-11-12/anthropic-pricing.txt)"
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-haiku-5-5",
+   "unit": "per_mtok",
+   "input_usd": "0.10",
+   "output_usd": "0.50",
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing (prompts up to 100K tokens)",
+   "verified_at": "2026-11-12",
+   "verification": "official page fetched 2026-11-12"
+  },
+  {
+   "provider": "openai",
+   "model": "gpt-image-2.5-sunburst",
+   "unit": "per_mtok_multimodal",
+   "input_usd": "5.00",
+   "image_input_usd": "8.00",
+   "output_usd": "30.00",
+   "image_output_usd": "30.00",
+   "reserve_input_tokens_per_image": 3000,
+   "reserve_output_image_tokens": 6500,
+   "reserve_output_text_tokens": 0,
+   "source": "https://developers.openai.com/api/docs/pricing ; https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst ; https://developers.openai.com/api/docs/guides/image-generation (text in $5/M, image in $8/M, image out $30/M; the model page headline and the pricing page disagree on input, higher rate used; text output is not listed for image calls, priced at the image-output rate)",
+   "verified_at": "2026-11-14",
+   "verification": "UNVERIFIED: search-result summary of the official page only (developers.openai.com / ai.google.dev are blocked from the build sandbox)"
+  },
+  {
+   "provider": "gemini",
+   "model": "gemini-3.1-flash-image",
+   "unit": "per_mtok_multimodal",
+   "input_usd": "0.50",
+   "image_input_usd": "0.50",
+   "output_usd": "3.00",
+   "image_output_usd": "60.00",
+   "reserve_input_tokens_per_image": 1120,
+   "reserve_output_image_tokens": 1120,
+   "reserve_output_text_tokens": 4000,
+   "source": "https://ai.google.dev/gemini-api/docs/pricing ; https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image (image output $60/M = ~$0.067 per 1K image at 1120 tokens; input $0.50/M and text/thinking output $3/M per the pricing page, another Google page lists $0.25/$1.50: higher used; thinking can add output tokens)",
+   "verified_at": "2026-11-14",
+   "verification": "UNVERIFIED: search-result summary of the official page only (developers.openai.com / ai.google.dev are blocked from the build sandbox)"
+  },
+  {
+   "provider": "gemini",
+   "model": "gemini-3.8-flash",
+   "unit": "per_mtok",
+   "input_usd": "1.50",
+   "output_usd": "7.50",
+   "source": "https://ai.google.dev/gemini-api/docs/pricing (introductory $0.75 in / $3.75 out through 2026-12-31; standard $1.50 / $7.50 from 2027-01-01: the standard rate is used, so estimates overstate cost until then)",
+   "verified_at": "2026-11-14",
+   "verification": "UNVERIFIED: search-result summary of the official page only (developers.openai.com / ai.google.dev are blocked from the build sandbox)"
+  }
+ ]
+}

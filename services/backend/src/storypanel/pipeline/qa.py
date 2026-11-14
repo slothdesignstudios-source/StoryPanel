@@ -21,10 +21,12 @@ from storypanel.config import get_settings
 from storypanel.domain.schemas import (
     AgeRating,
     CharacterSpec,
+    IdentityVisualReport,
     PanelSpec,
     SafetyVerdict,
     VisionQAReport,
 )  # fmt: skip
+from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
 from storypanel.pipeline import repair
 from storypanel.providers import metering
@@ -33,7 +35,7 @@ from storypanel.providers.base import CallContext, ImageInput
 
 @dataclass
 class QAOutcome:
-    status: str  # pass | fail | blocked
+    status: str  # pass | fail (repairable) | review (manual review; no automatic repair) | blocked
     scores: dict[str, Any] = field(default_factory=dict)
     fix_notes: list[str] = field(default_factory=list)
     head_boxes: dict[str, dict[str, float]] = field(default_factory=dict)
@@ -75,10 +77,75 @@ async def check_safety(image: bytes, audience: AgeRating, ctx: CallContext) -> S
     return verdict
 
 
+IDENTITY_SEVERITY = {"pass": 0, "manual_review": 1, "repair": 2}
+REVIEW_ONLY = frozenset({"identity_uncertain", "identity_unverified", "identity_check_invalid",
+                         "identity_flagged_manual_review"})  # fmt: skip
+
+
+def assess_identity(report: IdentityVisualReport, expected: list[str]) -> tuple[str, list[str]]:
+    """The outcome the app acts on, derived from the per-character findings and never more lenient
+    than the model's own `outcome`. A character missing from the report is unverified, never passed."""
+    found = {f.id: f for f in report.characters}
+    problems: list[str] = []
+    derived = "pass"
+    for cid in expected:
+        f = found.get(cid)
+        if f is None:
+            problems.append(f"identity_unverified:{cid}")
+            derived = max(derived, "manual_review", key=IDENTITY_SEVERITY.__getitem__)
+        elif not f.present:
+            problems.append(f"missing:{cid}")
+            derived = "repair"
+        elif f.matches_reference == "no":
+            problems.append(f"identity_visual:{cid}")
+            derived = "repair"
+        elif f.matches_reference == "uncertain" or f.confidence == "low":
+            problems.append(f"identity_uncertain:{cid}")
+            derived = max(derived, "manual_review", key=IDENTITY_SEVERITY.__getitem__)
+    outcome = max(derived, report.outcome, key=IDENTITY_SEVERITY.__getitem__)
+    if outcome != "pass" and not problems:  # the model flagged something it did not itemise
+        problems.append(f"identity_flagged_{outcome}")
+    return outcome, problems
+
+
+async def check_identity_visual(*, image: bytes, expected: list[str], cast: dict[str, CharacterSpec],
+                                references: dict[str, list[bytes]], ctx: CallContext) -> tuple[str, list[str], dict[str, Any]]:  # fmt: skip
+    """Gemini compares the panel with each expected character's approved reference images."""
+    from storypanel.providers.registry import get_providers
+
+    provider = get_providers().identity
+    if provider is None:
+        raise AppError(ErrorCode.INVALID_STATE, "Visual identity QA is not configured.", retryable=False)
+    imgs = [ImageInput(image, label="Panel to check:")]
+    for cid in expected:
+        for n, ref in enumerate(references.get(cid, [])):
+            imgs.append(ImageInput(ref, label=f"Reference {n + 1} for '{cid}' ({cast[cid].name}):"))
+    lines = ["Expected characters:"] + [
+        f"- id '{cid}' ({cast[cid].name}): {cast[cid].canonical_description()}" for cid in expected]  # fmt: skip
+    model = provider.model_for("vision")
+    try:
+        report = await metering.structured(
+            role="vision", system=render_prompt("identity_visual"), user="\n".join(lines),
+            schema=IdentityVisualReport, images=tuple(imgs), provider=provider,
+            ctx=CallContext("identity_visual", ctx.user_id, ctx.project_id, ctx.target_id, ctx.attempt,
+                            PROMPT_VERSION, inputs={"character_ids": expected,
+                                                    "reference_images": len(imgs) - 1}))  # fmt: skip
+    except AppError as exc:
+        if exc.code is not ErrorCode.PROVIDER_BAD_OUTPUT:
+            raise  # transient: the activity retries; never treated as a pass
+        metrics.identity_visual.labels("invalid_response").inc()
+        return "manual_review", ["identity_check_invalid"], {"method": "gemini_visual", "model": model,
+                                                             "error": "invalid_response"}  # fmt: skip
+    outcome, problems = assess_identity(report, expected)
+    metrics.identity_visual.labels(outcome).inc()
+    return outcome, problems, {"method": "gemini_visual", "model": model, "outcome": outcome,
+                               "report": report.model_dump()}  # fmt: skip
+
+
 async def evaluate_panel(
     *, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec], audience: AgeRating,
     reference_images: dict[str, bytes], reference_embeddings: dict[str, list[list[float]]],
-    ctx: CallContext,
+    ctx: CallContext, identity_references: dict[str, list[bytes]] | None = None,
 ) -> QAOutcome:  # fmt: skip
     s = get_settings()
     safety = await check_safety(image, audience, ctx)
@@ -144,9 +211,21 @@ async def evaluate_panel(
         if o.identity_rating < 3:
             problems.append(f"identity_rating:{ch.id}")
 
-    # Identity embedding needs a location and references for every expected character that is
-    # present. Without them there is no identity evidence, which is a failure, not a pass.
-    for ch in expected:
+    similarities: dict[str, float] = {}
+    identity: dict[str, Any] = {"method": s.identity_qa}
+    if s.identity_qa == "gemini_visual":
+        refs = identity_references or {}
+        present = [ch.id for ch in expected if observed.get(ch.id) is not None and observed[ch.id].present]
+        no_ref = [cid for cid in present if not refs.get(cid)]
+        problems += [f"no_reference:{cid}" for cid in no_ref]  # no evidence is a failure, not a pass
+        to_check = [cid for cid in present if cid not in no_ref]
+        if to_check:
+            _, idp, identity = await check_identity_visual(image=image, expected=to_check, cast=cast,
+                                                           references=refs, ctx=ctx)  # fmt: skip
+            problems += [p for p in idp if p not in problems]
+    # Embedding identity (Voyage): needs a location and references for every present character.
+    # Without them there is no identity evidence, which is a failure, not a pass.
+    for ch in expected if s.identity_qa == "voyage_embedding" else []:
         o = observed.get(ch.id)
         if o is None or not o.present:
             continue
@@ -154,11 +233,10 @@ async def evaluate_panel(
             problems.append(f"unlocalised:{ch.id}")
         elif not reference_embeddings.get(ch.id):
             problems.append(f"no_reference:{ch.id}")
-    # Identity embedding: crop each character and compare with their reference crops.
-    similarities: dict[str, float] = {}
     crops = [(ch.id, crop_box(image, (observed[ch.id].body_box or observed[ch.id].head_box).model_dump()))  # type: ignore[union-attr]
              for ch in expected
-             if ch.id in observed and observed[ch.id].present and ch.id in reference_embeddings
+             if s.identity_qa == "voyage_embedding"
+             and ch.id in observed and observed[ch.id].present and ch.id in reference_embeddings
              and (observed[ch.id].body_box or observed[ch.id].head_box)]  # fmt: skip
     if crops:
         vectors = await metering.embed_images(
@@ -173,21 +251,34 @@ async def evaluate_panel(
                 problems.append(f"identity_embedding:{cid}")
 
     passed = not problems
-    metrics.qa_results.labels("vision", "pass" if passed else "fail").inc()
+    # Problems a repaint cannot resolve (uncertain or unverifiable identity) go to manual review.
+    blocking = [p for p in problems if p.split(":")[0] not in REVIEW_ONLY]
+    status = "pass" if passed else "fail" if blocking else "review"
+    metrics.qa_results.labels("vision", status).inc()
     metrics.qa_results.labels("stray_text", "fail" if report.visible_text else "pass").inc()
     notes = list(report.fix_notes)
     for p in problems:
         if p.startswith("identity_embedding:") and not notes:
             notes.append(f"Match {cast[p.split(':')[1]].name} to the reference image exactly.")
+    for f in (identity.get("report") or {}).get("characters", []):
+        for mm in f.get("mismatches", [])[:2]:
+            if f["id"] in cast:
+                notes.append(
+                    f"{cast[f['id']].name}: {mm['aspect']} must be {mm['expected']} (not {mm['observed']})."
+                )
     scores = {
-        "safety": safety.model_dump(), "problems": problems,
+        "safety": safety.model_dump(), "problems": problems, "status": status,
         "identity_rating_avg": round(sum(ratings) / len(ratings), 2) if ratings else None,
-        "identity_similarity": similarities, "visible_text": report.visible_text,
+        "visible_text": report.visible_text,
         "anatomy_defects": report.anatomy_defects, "action_matches": report.action_matches,
     }  # fmt: skip
+    if s.identity_qa == "voyage_embedding":
+        scores["identity_similarity"] = similarities  # embedding cosine similarity (Voyage)
+    else:
+        scores["identity_visual"] = identity  # Gemini categorical judgment; not a similarity score
     head_boxes = {o.id: o.head_box.model_dump() for o in report.characters if o.present and o.head_box}
     body_boxes = {o.id: o.body_box.model_dump() for o in report.characters if o.present and o.body_box}
-    if not passed:
-        scores["repair"] = repair.repair_target(problems, body_boxes)
-    return QAOutcome("pass" if passed else "fail", scores, notes[:6], head_boxes,
+    if blocking:
+        scores["repair"] = repair.repair_target(blocking, body_boxes)
+    return QAOutcome(status, scores, notes[:6], head_boxes,
                      report.action_box.model_dump() if report.action_box else None)  # fmt: skip

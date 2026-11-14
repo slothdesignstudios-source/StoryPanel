@@ -24,7 +24,7 @@ case "${1:-start}" in
     [ -d .next/standalone ] || NEXT_TELEMETRY_DISABLED=1 pnpm build >"$SP_RUN/web-build.log" 2>&1
     cp -r .next/static .next/standalone/.next/ 2>/dev/null || true
     cp -r public .next/standalone/ 2>/dev/null || true  # standalone output does not include public/
-    PORT=3000 HOSTNAME=127.0.0.1 launch web env -u SP_ANTHROPIC_API_KEY -u SP_FAL_KEY -u SP_VOYAGE_API_KEY node .next/standalone/server.js
+    PORT=3000 HOSTNAME=127.0.0.1 launch web env -u SP_ANTHROPIC_API_KEY -u SP_OPENAI_API_KEY -u SP_GEMINI_API_KEY -u SP_FAL_KEY -u SP_VOYAGE_API_KEY node .next/standalone/server.js
     wait_http http://127.0.0.1:8000/readyz && wait_http http://127.0.0.1:3000/sign-in
     echo "web http://localhost:3000  api http://127.0.0.1:8000  logs $SP_RUN" ;;
   stop)

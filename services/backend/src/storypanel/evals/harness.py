@@ -30,7 +30,17 @@ from sqlalchemy import func, select
 
 from storypanel.catalog import PROMPT_VERSION, catalog_root, layout_version, styles
 from storypanel.config import get_settings
-from storypanel.db.models import Balloon, Panel, PanelVersion, Project, ProviderUsage, Script, User
+from storypanel.db.models import (
+    Balloon,
+    Character,
+    CharacterRef,
+    Panel,
+    PanelVersion,
+    Project,
+    ProviderUsage,
+    Script,
+    User,
+)  # fmt: skip
 from storypanel.db.session import dispose_engine, transaction
 from storypanel.domain.schemas import ComicScript, StoryBible
 from storypanel.pipeline import lettering, moderation
@@ -42,7 +52,8 @@ from storypanel.services import credits, editor, events, repo
 
 EVALS = catalog_root().parent / "evals"
 # Metrics that only real providers can measure.
-LIVE_ONLY = {"identity_rating_avg", "identity_pass_rate", "script_adherence_first_attempt",
+LIVE_ONLY = {"identity_rating_avg", "identity_pass_rate", "identity_negative_detection_rate",
+             "identity_visual_pass_rate", "identity_manual_review_rate", "script_adherence_first_attempt",
              "panel_defect_rate", "stray_text_rate", "story_quality", "time_to_first_page_p50_s",
              "time_to_first_page_p90_s", "full_comic_p50_s", "cost_per_page_usd"}  # fmt: skip
 
@@ -55,7 +66,7 @@ async def _panel(panel_id: str, retries: int) -> None:
                                               attempt=attempt, fix_notes=notes)  # fmt: skip
         versions.append(made["version_id"])
         verdict = await art.stage_qa_panel(uuid.UUID(made["version_id"]), attempt)
-        if verdict["status"] == "pass":
+        if verdict["status"] in ("pass", "review"):  # as ComicWorkflow: review is not repainted
             break
         notes = verdict.get("fix_notes", [])
     await art.stage_finalize_panel(uuid.UUID(panel_id), version_ids=versions, kind="generate",
@@ -69,8 +80,13 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
     out: dict[str, Any] = {"id": case["id"], "tags": case["tags"], "policy": case["policy"]}
     started = time.monotonic()
     rules = moderation.rule_check(moderation.neutralise_style_references(case["prompt"])[0])
+    from storypanel.services.projects import choose_image_provider
+
+    image_provider, image_model = choose_image_provider(case.get("image_provider"))
+    out["image_provider"] = image_provider
     async with transaction() as db:
-        project = Project(id=uuid.uuid4(), owner_id=user_id, prompt=case["prompt"])
+        project = Project(id=uuid.uuid4(), owner_id=user_id, prompt=case["prompt"],
+                          image_provider=image_provider, image_model=image_model)  # fmt: skip
         db.add(project)
         await db.flush()
         await credits.reserve(db, user_id, 8, purpose="plan", project_id=project.id,
@@ -187,6 +203,12 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
                                          for x in (v.qa_scores or {}).get("problems", []))
                                  for v in final_versions),
             "final_versions": len(final_versions),
+            # Gemini visual identity QA (categorical; kept apart from the 1-5 rating and embeddings)
+            "identity_visual_pass": sum(((v.qa_scores or {}).get("identity_visual") or {}).get("outcome") == "pass"
+                                        for v in final_versions),
+            "identity_visual_review": sum(v.qa_status == "review" for v in final_versions),
+            "identity_visual_checked": sum(bool(((v.qa_scores or {}).get("identity_visual") or {}).get("outcome"))
+                                           for v in final_versions),
             # nobody regenerates panels in an automated run; measured only with real users
             "user_regenerations": None,
         }  # fmt: skip
@@ -197,6 +219,8 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
         }  # fmt: skip
         if s.provider_mode == "live" and bible_doc is not None:
             out["story_quality"] = await judge_story(bible_doc, script_json, str(user_id), str(pid))
+        if case.get("identity_probe") and s.identity_qa == "gemini_visual":
+            out["identity_probe"] = await identity_negative_probe(pid, user_id, panels, final_versions)
         out["cost"] = await _costs(pid)
         out["cost_usd"] = out["cost"]["product_usd"]
         return out
@@ -204,6 +228,47 @@ async def run_case(case: dict[str, Any], user_id: uuid.UUID) -> dict[str, Any]:
         out["wall_s"] = round(time.monotonic() - started, 2)
         async with transaction() as db:
             await credits.close_for_project(db, pid)
+
+
+async def identity_negative_probe(
+    pid: uuid.UUID, user_id: uuid.UUID, panels: Any, final_versions: Any
+) -> dict[str, int]:
+    """Deliberately inconsistent pairs: each finished panel's character is checked against a
+    *different* character's approved references. The correct answer is "not a match" (repair or
+    manual review); a pass is a missed inconsistency. Costs QA calls only, no images."""
+    from storypanel.domain.schemas import PanelSpec
+    from storypanel.pipeline import qa
+    from storypanel.providers import fake
+
+    s = get_settings()
+    async with transaction() as db:
+        cast = await repo.cast_specs(db, pid)
+        rows = (await db.execute(
+            select(Character.slug, CharacterRef.asset_id).join(CharacterRef, CharacterRef.character_id == Character.id)
+            .where(Character.project_id == pid, CharacterRef.view.in_(("portrait", "front")),
+                   CharacterRef.sheet_version == Character.sheet_version))).all()  # fmt: skip
+        refs: dict[str, list[bytes]] = {}
+        for slug, asset_id in rows:
+            refs.setdefault(slug, []).append(await repo.asset_bytes(db, asset_id))
+        images = {v.panel_id: await repo.asset_bytes(db, v.image_asset_id) for v in final_versions}
+    probes = detected = 0
+    for p in panels:
+        spec = PanelSpec.model_validate(p.spec)
+        if p.id not in images or not spec.characters:
+            continue
+        cid = spec.characters[0].id
+        other = next((o for o in refs if o != cid), None)
+        if other is None or cid not in cast:
+            continue
+        target = f"{p.id}:probe"
+        if s.provider_mode == "fake":  # SIMULATED: the fake judge is told which pairs are inconsistent
+            fake.control.identity_mismatch_targets.add(target)
+        outcome, _, _ = await qa.check_identity_visual(
+            image=images[p.id], expected=[cid], cast=cast, references={cid: refs[other]},
+            ctx=CallContext("eval_identity_probe", str(user_id), str(pid), target_id=target))  # fmt: skip
+        probes += 1
+        detected += outcome != "pass"
+    return {"probes": probes, "detected": detected}
 
 
 async def ensure_run(run_id: str, budget: Any, reason: str) -> tuple[uuid.UUID, Any]:
@@ -304,6 +369,14 @@ def summarise(results: list[dict[str, Any]], mode: str) -> dict[str, Any]:
     metrics: dict[str, float | None] = {
         "identity_rating_avg": round(statistics.mean(ratings), 2) if ratings else None,
         "identity_pass_rate": total("identity_pass") / total("final_versions") if ps and total("final_versions") else None,
+        "identity_visual_pass_rate": (total("identity_visual_pass") / total("identity_visual_checked")
+                                      if ps and total("identity_visual_checked") else None),
+        "identity_manual_review_rate": (total("identity_visual_review") / total("final_versions")
+                                        if ps and total("final_versions") else None),
+        "identity_negative_detection_rate": (
+            sum(r["identity_probe"]["detected"] for r in done if "identity_probe" in r)
+            / max(1, sum(r["identity_probe"]["probes"] for r in done if "identity_probe" in r))
+            if any(r.get("identity_probe", {}).get("probes") for r in done) else None),
         "script_adherence_first_attempt": total("first_attempt_pass") / total("first_attempts") if ps else None,
         "panel_defect_rate": total("final_not_ok") / total("panels") if ps else None,
         "stray_text_rate": total("stray_text") / total("final_versions") if ps and total("final_versions") else None,
@@ -367,7 +440,13 @@ def bakeoff_decision(scores: dict[str, dict[str, float]]) -> list[tuple[str, flo
 
 async def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--subset", choices=["fast", "all"], default="fast")
+    ap.add_argument(
+        "--subset",
+        choices=["fast", "all", "identity"],
+        default="fast",
+        help="identity: the cases with deliberately inconsistent reference probes",
+    )
+    ap.add_argument("--cases", default="", help="comma-separated case ids (overrides --subset)")
     ap.add_argument("--live", action="store_true", help="use real providers (costs money)")
     ap.add_argument("--max-usd", type=float, default=0.0, help="hard budget for a --live run")
     ap.add_argument("--concurrency", type=int, default=3)
@@ -391,7 +470,11 @@ async def main(argv: list[str] | None = None) -> int:
 
         await storage.ensure_bucket()  # local runs may use a fresh S3 bucket
     golden = json.loads((EVALS / "golden" / "golden-v1.json").read_text())
-    cases = [c for c in golden["cases"] if args.subset == "all" or c["id"] in golden["fast_subset"]]
+    wanted = {c.strip() for c in args.cases.split(",") if c.strip()}
+    cases = [c for c in golden["cases"] if (c["id"] in wanted) if wanted] or [
+        c for c in golden["cases"]
+        if args.subset == "all" or (args.subset == "identity" and c.get("identity_probe"))
+        or (args.subset == "fast" and c["id"] in golden["fast_subset"])]  # fmt: skip
     # The run's budget is persisted as a lifetime spend cap on this run's own user, enforced
     # by the same serialised reservation as every other ceiling: it does not reset at
     # midnight, survives restarts (re-run with the same --run-id), and no other account's
@@ -433,7 +516,9 @@ async def main(argv: list[str] | None = None) -> int:
         "versions": {"golden": golden["version"], "prompts": PROMPT_VERSION, "styles": styles().version,
                      "layouts": layout_version(), "lettering_font_range": [lettering.FONT_MIN, lettering.FONT_MAX]},
         "models": {"story": s.text_model_story, "light": s.text_model_light, "vision": s.vision_model,
-                   "image": s.image_model_generate, "embedding": s.embedding_model},
+                   "image_providers": s.image_providers, "openai_image": s.openai_image_model,
+                   "gemini_image": s.gemini_image_model, "identity_qa": s.identity_qa,
+                   "gemini_qa": s.gemini_qa_model, "export_upscale": s.export_upscale},
         "duration_s": round(time.monotonic() - started, 1),
         **summarise(list(results), mode), "cases": results,
     }  # fmt: skip

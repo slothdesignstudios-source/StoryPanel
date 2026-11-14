@@ -23,6 +23,11 @@ test("prompt → cast approval → script approval → generation → edit → e
   await expect(page.getByText(/original hero/i)).toBeVisible();
   await page.getByLabel("Your idea").fill("A shy robot who runs a night-time noodle stall learns to make friends. 2 pages, manga style.");
   await expect(page.getByText(/Starting holds 8 credits/)).toBeVisible();
+  // illustration provider: OpenAI by default, Gemini selectable; fal is not offered
+  const providers = page.getByRole("group", { name: "Illustration provider" });
+  await expect(providers.getByRole("radio", { name: /OpenAI \(default\)/ })).toBeChecked();
+  await expect(providers.getByRole("radio")).toHaveCount(2);
+  await providers.getByRole("radio", { name: /Google Gemini/ }).check();
   await shot(page, "02-wizard");
   await page.getByRole("button", { name: "Create my cast" }).click();
 
@@ -30,6 +35,7 @@ test("prompt → cast approval → script approval → generation → edit → e
   await expect(page.getByRole("heading", { name: "Meet the cast" })).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole("heading", { name: "Kiro" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Kiro, hero portrait" })).toBeVisible();
+  await expect(page.getByText(/Illustrated with Google Gemini/)).toBeVisible(); // kept for the whole comic
   await shot(page, "03-cast");
   // reload mid-flow: the same gate comes back
   await page.reload();

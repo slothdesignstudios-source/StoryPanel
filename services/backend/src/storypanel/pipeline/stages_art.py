@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -33,6 +34,7 @@ from storypanel.obs import metrics
 from storypanel.pipeline import art, lettering, moderation, qa, render, repair
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext, ImageInput, ImageRequest
+from storypanel.providers.registry import get_providers
 from storypanel.services import credits, events, repo
 
 PREVIEW_WIDTH = 1000
@@ -137,8 +139,11 @@ async def stage_generate_panel(
         # Targeted repair: if the previous attempt failed QA only locally (one character),
         # repaint that region instead of paying for, and re-rolling, the whole panel.
         repair_of: tuple[bytes, dict[str, Any]] | None = None
+        # Mask inpainting is a fal capability; comics drawn with OpenAI or Gemini repair by
+        # reference edit (instruction edit + local compositing), never by a provider mask.
         repair_available = s.repair_mode == "reference_edit" or (
-            s.repair_mode == "inpaint" and (s.inpaint_model or s.provider_mode == "fake"))  # fmt: skip
+            s.repair_mode == "inpaint" and project.image_provider in (None, "fal")
+            and (s.inpaint_model or s.provider_mode == "fake"))  # fmt: skip
         if attempt > 0 and kind != "edit" and repair_available:
             prev_version = (await db.execute(select(PanelVersion).where(
                 PanelVersion.idempotency_key == f"panel:{panel_id}:{request_key}:a{attempt - 1}"))).scalar_one_or_none()  # fmt: skip
@@ -146,6 +151,8 @@ async def stage_generate_panel(
             if prev_version is not None and prev_version.qa_status == "fail" and target:
                 repair_of = (await repo.asset_bytes(db, prev_version.image_asset_id), target)
         spec_version, owner, project_id = panel.spec_version, project.owner_id, project.id
+        # The comic's own provider and model, for the first image, every repair and every edit.
+        choice, image_model = project.image_provider, project.image_model
         if attempt == 0:
             panel.status = PanelStatus.GENERATING.value
             await events.emit(db, project_id, "panel.generating", {"panel_id": str(panel_id)})
@@ -174,7 +181,7 @@ async def stage_generate_panel(
         req = ImageRequest(prompt, aspect, (ImageInput(base_image), ImageInput(portrait)), mode="edit", seed=seed,
                            audience=c["audience"].value,
                            inputs={"kind": "repair", "character": target["character"]})  # fmt: skip
-    elif repair_of is not None:
+    elif repair_of is not None and choice in (None, "fal"):
         base_image, target = repair_of
         who = cast[target["character"]]
         mask = repair.build_mask(base_image, target["box"])
@@ -222,7 +229,7 @@ async def stage_generate_panel(
         req = ImageRequest(prompt, aspect, tuple(refs), seed=seed, inputs=compiled.inputs,
                            audience=c["audience"].value)  # fmt: skip
 
-    result, usage = await metering.generate_image(req, ctx, key=key)
+    result, usage = await metering.draw(req, ctx, key=key, choice=choice, model=image_model)
     data = result.data
     if repair_of is not None and mask is not None:
         data = repair.composite(repair_of[0], storage.validate_image(result.data).data, mask)
@@ -261,16 +268,20 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
                    Character.slug.in_([ch.id for ch in spec.characters])))).all()  # fmt: skip
         ref_images: dict[str, bytes] = {}
         ref_vectors: dict[str, list[list[float]]] = {}
+        identity_refs: dict[str, list[bytes]] = {}  # approved portrait + front view, for visual QA
         for slug, view, asset_id, embedding in rows:
             if view == "portrait":
                 ref_images[slug] = await repo.asset_bytes(db, asset_id)
+            if view in ("portrait", "front"):
+                identity_refs.setdefault(slug, []).append(await repo.asset_bytes(db, asset_id))
             if embedding is not None:
                 ref_vectors.setdefault(slug, []).append([float(x) for x in embedding])
     ctx = CallContext("panel_qa", str(project.owner_id), str(project.id),
                       target_id=str(version.panel_id), attempt=attempt)  # fmt: skip
     outcome = await qa.evaluate_panel(image=image, panel=spec, cast=cast, audience=c["audience"],
                                       reference_images=ref_images,
-                                      reference_embeddings=ref_vectors, ctx=ctx)  # fmt: skip
+                                      reference_embeddings=ref_vectors, identity_references=identity_refs,
+                                      ctx=ctx)  # fmt: skip
     async with transaction() as db:
         version = (await db.execute(select(PanelVersion).where(PanelVersion.id == version_id)
                                     .with_for_update())).scalar_one()  # fmt: skip
@@ -297,9 +308,13 @@ async def stage_finalize_panel(
             PanelVersion.id.in_([uuid.UUID(v) for v in version_ids]))
             .order_by(PanelVersion.attempt))).scalars())  # fmt: skip
         passed = [v for v in versions if v.qa_status == "pass"]
+        review = [v for v in versions if v.qa_status == "review"]  # identity uncertain: a person decides
         failed = [v for v in versions if v.qa_status == "fail"]
+        # QA could not finish (provider error after retries): kept for review, never counted as passed.
+        unchecked = [v for v in versions if v.qa_status == "pending"]
         # Safety-blocked versions are never candidates, whatever the retry count.
-        chosen = passed[-1] if passed else failed[-1] if failed else None
+        chosen = (passed[-1] if passed else review[-1] if review else failed[-1] if failed
+                  else unchecked[-1] if unchecked else None)  # fmt: skip
         initial = kind == "generate"
         superseded = panel.intent_seq != intent_seq
         if chosen is not None:
@@ -534,6 +549,10 @@ async def stage_export_page(export_id: uuid.UUID, page_index: int) -> dict[str, 
         export_format = export.format
     page = revision["pages"][page_index]
     ctx = CallContext("export_upscale", str(owner), str(project_id), target_id=str(export_id))
+    # Local resampling (default): the stored image is scaled by the renderer (Lanczos); nothing is
+    # sent to any service. "fal" re-enables the external ESRGAN upscaler when fal is enabled.
+    external_upscale = get_settings().export_upscale == "fal" and get_providers().upscale is not None
+    quality: list[dict[str, Any]] = []
     panels = []
     for p in page["panels"]:
         image: bytes | None = None
@@ -546,7 +565,11 @@ async def stage_export_page(export_id: uuid.UUID, page_index: int) -> dict[str, 
                     Asset.id == version.image_asset_id))).scalar_one()  # fmt: skip
                 data = None if quarantined else await repo.asset_bytes(db, source_id)
                 upscaled = version.upscaled_asset_id is not None
-            if data is not None and not upscaled:
+            if data is not None:
+                quality.append(
+                    print_resolution(page_index, len(quality), data, tuple(p["rect"]), tuple(page["size"]))
+                )
+            if data is not None and not upscaled and external_upscale:
                 result = await metering.upscale_image(data, ctx, key=f"upscale:{vid}")
                 big = storage.validate_image(result.data)
                 async with transaction() as db:
@@ -571,7 +594,53 @@ async def stage_export_page(export_id: uuid.UUID, page_index: int) -> dict[str, 
             asset = await repo.save_image(db, owner_id=owner, project_id=project_id,
                                           kind="export_page", image=rendered)  # fmt: skip
             export.pages_done = {**(export.pages_done or {}), str(page_index): str(asset.id)}
+            export.print_quality = merge_print_quality(export.print_quality, page_index, quality,
+                                                      "external_upscale" if external_upscale else "local_resample")  # fmt: skip
+    for q in quality:
+        metrics.provider_print_dpi.observe(q["dpi"])
     return {"skipped": False}
+
+
+PRINT_WIDTH_IN = 6.0  # the PDF trim width (render.PDF_TRIM_WIDTH_PT = 432 pt)
+DPI_GOOD, DPI_LOW = 300, 150
+
+
+def print_resolution(page_index: int, n: int, image: bytes, rect: tuple[float, ...],
+                     page_size: tuple[float, ...]) -> dict[str, Any]:  # fmt: skip
+    """Effective print resolution of one panel: source pixels per printed inch along the axis the
+    cover crop scales most (the lower of the two). Resampling cannot add detail beyond this."""
+    from PIL import Image as PILImage
+
+    with PILImage.open(io.BytesIO(image)) as im:
+        w, h = im.size
+    inch_per_unit = PRINT_WIDTH_IN / page_size[0]
+    pw_in, ph_in = rect[2] * inch_per_unit, rect[3] * inch_per_unit
+    dpi = min(w / pw_in, h / ph_in)
+    return {
+        "page": page_index + 1,
+        "panel": n + 1,
+        "source_px": [w, h],
+        "printed_in": [round(pw_in, 2), round(ph_in, 2)],
+        "dpi": round(dpi),
+    }
+
+
+def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels: list[dict[str, Any]],
+                        method: str) -> dict[str, Any]:  # fmt: skip
+    rows = [r for r in (current or {}).get("panels", []) if r["page"] != page_index + 1] + panels
+    rows.sort(key=lambda r: (r["page"], r["panel"]))
+    low = [r for r in rows if r["dpi"] < DPI_LOW]
+    soft = [r for r in rows if DPI_LOW <= r["dpi"] < DPI_GOOD]
+    warnings = []
+    if low:
+        warnings.append(f"{len(low)} panel(s) below {DPI_LOW} DPI at a {PRINT_WIDTH_IN:g}-inch print width: "
+                        "they will look blurry in print. Fine on screen.")  # fmt: skip
+    if soft:
+        warnings.append(f"{len(soft)} panel(s) between {DPI_LOW} and {DPI_GOOD} DPI: may look soft in print.")
+    return {"method": method, "print_width_in": PRINT_WIDTH_IN,
+            "note": "Panels are resampled locally (Lanczos); this does not add detail." if method == "local_resample"
+            else "Panels were upscaled by an external model.",
+            "min_dpi": min((r["dpi"] for r in rows), default=None), "panels": rows, "warnings": warnings}  # fmt: skip
 
 
 async def stage_export_assemble(export_id: uuid.UUID) -> dict[str, Any]:

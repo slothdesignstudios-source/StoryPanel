@@ -1,4 +1,37 @@
-# Provider, model and API-version verification — 2026-11-12
+# Provider, model and API-version verification
+
+## 2026-11-14: OpenAI and Google Gemini (fal and Voyage disabled)
+
+`developers.openai.com`, `platform.openai.com` and `ai.google.dev` are **blocked** from the build
+sandbox. PyPI is reachable. Facts below are labelled by source. "SDK" means the official SDK
+installed in `services/backend` (`openai` 3.51.0, `google-genai` 3.3.0), read from its type
+definitions and docstrings. "Search" means a web-search summary restricted to the provider's own
+domain: **unverified** until someone opens the page.
+
+| Fact | Value used | Source | Status |
+|---|---|---|---|
+| OpenAI image model id | `gpt-image-2.5-sunburst` (dated snapshot `gpt-image-2.5-sunburst-2026-09-08` also listed) | SDK `types/image_model.py` | verified (SDK) |
+| OpenAI edit inputs | up to 16 images (png/webp/jpg, < 50 MB each) | SDK `image_edit_params.py` | verified (SDK) |
+| OpenAI sizes | `WxH`, both divisible by 16, aspect 1:3 to 3:1, max 3840×2160; base64 output; usage with text/image input and image output tokens | SDK params and `ImagesResponse` types | verified (SDK) |
+| OpenAI `mask` | exists; **not used** by the app | SDK | n/a |
+| OpenAI price | text in $5/M, image in $8/M, image out $30/M (higher of two conflicting summaries) | Search: developers.openai.com pricing and model pages | **UNVERIFIED** |
+| Gemini QA model id | `gemini-3.8-flash` | SDK `client.py` examples | verified (SDK) |
+| Gemini image model id | `gemini-3.1-flash-image` | Search: ai.google.dev models page | **UNVERIFIED** (preflight checks it with the free `models.get`) |
+| Gemini structured output | `response_mime_type` + `response_json_schema`; `ThinkingConfig(thinking_level)`; `ImageConfig(aspect_ratio, image_size)`; `HttpRetryOptions(attempts=1)` | SDK `types.py` | verified (SDK) |
+| Gemini 3.1 Flash Image price | input $0.50/M, text/thinking out $3/M, image out $60/M (about $0.067 per 1K image at 1,120 tokens); another Google page listed lower rates, so the higher are used | Search: ai.google.dev pricing | **UNVERIFIED** |
+| Gemini 3.8 Flash price | $1.50 in / $7.50 out (standard rate from 2027-01-01; introductory $0.75 / $3.75 until then, so estimates overstate cost) | Search: ai.google.dev pricing | **UNVERIFIED** |
+| Free key checks | OpenAI `GET /v1/models/{id}`, Gemini `models.get`, Anthropic Models API | SDK methods; free per provider docs (Search) | method verified; "free" unverified for OpenAI/Gemini |
+
+Request contracts are pinned by `tests/test_image_providers.py`, which uses `httpx.MockTransport`
+behind each real SDK client. It checks the multipart edit body (`image[]` parts, model, size,
+quality, no mask), the generations endpoint, the Gemini request and config, refusal shapes, error
+mapping and timeouts. Live behaviour is unverified until the first paid run.
+
+Network hosts for a live run: `api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com`.
+
+---
+
+## 2026-11-12: Anthropic (and the fal/Voyage setup, now disabled)
 
 **Second pass, same day:** `platform.claude.com` is now reachable from the sandbox. The Anthropic rows
 below were re-checked against the official pages, fetched directly; copies are in
@@ -42,7 +75,7 @@ and [changelog](https://docs.stripe.com/changelog/endive); it is also the versio
 (stripe 16.1.0). The app pins it (`SP_STRIPE_API_VERSION`), sends it on every request, and refuses webhook
 events in any other version — **set the webhook endpoint (or `stripe listen`) to the same version**.
 
-## Network hosts the live run needs
+## Network hosts the live run needed (fal/Voyage setup, superseded above)
 
 Anthropic `api.anthropic.com`; fal `queue.fal.run`, `rest.fal.ai`, `auth.fal.ai`, `v3.fal.media` (result
 and upload storage; the SDK's hosts); Voyage `api.voyageai.com`; Stripe `api.stripe.com`; Clerk

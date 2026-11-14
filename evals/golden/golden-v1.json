@@ -1,6 +1,6 @@
 {
  "version": "golden-v1",
- "description": "Golden prompts for the eval-driven loop (spec 8.2). Failures found in production are appended with a new version; existing ids never change meaning.",
+ "description": "Golden prompts for the eval-driven loop (spec 8.2). Failures found in production are appended with a new version; existing ids never change meaning. 2026-11-14: identity_probe cases measure Gemini visual identity QA against deliberately inconsistent reference pairs (existing ids unchanged).",
  "fast_subset": [
   "slice-robot-noodles",
   "gag-cat-vacuum",
@@ -134,7 +134,8 @@
     "three_characters",
     "dialogue_heavy"
    ],
-   "policy": "allow"
+   "policy": "allow",
+   "identity_probe": true
   },
   {
    "id": "crowd-market",
@@ -856,7 +857,8 @@
     "near_identical_characters",
     "identity_stress"
    ],
-   "policy": "allow"
+   "policy": "allow",
+   "identity_probe": true
   },
   {
    "id": "multi-four-heist",
@@ -935,6 +937,39 @@
     "lettering_stress"
    ],
    "policy": "allow"
+  },
+  {
+   "id": "identity-swap-probe",
+   "prompt": "A tall knight in silver armour and a tiny green dragon with a red scarf share a picnic, as a 3 panel strip.",
+   "expect": {
+    "format": "strip",
+    "pages": 1
+   },
+   "tags": [
+    "two_characters",
+    "identity_qa",
+    "inconsistent_probe"
+   ],
+   "policy": "allow",
+   "identity_probe": true,
+   "note": "Visually distinct pair: after generation, each panel is checked against the OTHER character's references (must not pass)."
+  },
+  {
+   "id": "identity-lookalikes",
+   "prompt": "Two sisters with the same curly red hair, one in a yellow raincoat and one in a blue raincoat, race paper boats down a gutter, as a 3 panel strip.",
+   "expect": {
+    "format": "strip",
+    "pages": 1
+   },
+   "tags": [
+    "two_characters",
+    "identity_qa",
+    "lookalikes",
+    "inconsistent_probe"
+   ],
+   "policy": "allow",
+   "identity_probe": true,
+   "note": "Look-alike pair differing by clothing only: the swap probe must still be caught (clothing mismatch)."
   }
  ]
 }

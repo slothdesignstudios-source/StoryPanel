@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import pytest
 from sqlalchemy import select, text
 
 from storypanel.db.models import Export
@@ -29,6 +30,7 @@ async def _export(
     return next(e for e in p["exports"] if e["id"] == export_id)  # type: ignore[no-any-return]
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_failed_export_can_be_retried_more_than_once(
     client: Any, headers: dict[str, str], worker: Any
 ) -> None:
@@ -60,6 +62,7 @@ async def test_failed_export_can_be_retried_more_than_once(
     assert export.attempt == 3
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_duplicate_and_concurrent_retries_start_one_workflow(client: Any, headers: dict[str, str],
                                                                    worker: Any) -> None:  # fmt: skip
     p = await run_to_completion(client, headers)

@@ -231,6 +231,30 @@ class VisionQAReport(Strict):
     fix_notes: list[str]
 
 
+# Gemini visual identity QA: a categorical judgment from comparing the panel with the approved
+# reference images. Deliberately not a similarity score: it is never written to the embedding
+# column and never compared with embedding thresholds.
+class IdentityMismatch(Strict):
+    aspect: Literal["face", "hair", "clothing", "colors", "body", "accessory", "species", "other"]
+    expected: str
+    observed: str
+
+
+class CharacterIdentityFinding(Strict):
+    id: str
+    present: bool
+    matches_reference: Literal["yes", "no", "uncertain"]
+    mismatches: list[IdentityMismatch]
+    evidence: str  # what in the panel supports the judgment (short)
+    confidence: Literal["high", "medium", "low"]
+
+
+class IdentityVisualReport(Strict):
+    characters: list[CharacterIdentityFinding]
+    outcome: Literal["pass", "repair", "manual_review"]
+    notes: list[str]
+
+
 class SafetyVerdict(Strict):
     allowed: bool
     categories: list[str]

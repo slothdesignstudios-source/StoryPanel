@@ -24,6 +24,7 @@ export default function NewComic() {
   const [length, setLength] = useState("");
   const [style, setStyle] = useState("");
   const [audience, setAudience] = useState("");
+  const [provider, setProvider] = useState<string | null>(null);
   const meta = useQuery({ queryKey: ["meta"], staleTime: Infinity, queryFn: async () => (await api.GET("/v1/meta")).data! });
   const estimate = useQuery({
     queryKey: pk("estimate", length),
@@ -37,6 +38,7 @@ export default function NewComic() {
           ...(length === "strip" ? { format: "strip" as const } : length ? { pages: Number(length), format: "western_page" as const } : {}),
           ...(style ? { style_preset: style } : {}),
           ...(audience ? { audience: audience as "all_ages" | "teen" | "mature" } : {}),
+          ...(chosenProvider ? { image_provider: chosenProvider as "openai" | "gemini" | "fal" } : {}),
         },
       })).data!,
     onSuccess: (p) => {
@@ -50,6 +52,9 @@ export default function NewComic() {
   const promptError = (unsupported.length ? unsupportedLetteringMessage(unsupported) : null)
     ?? err?.fields.find((f) => f.field === "prompt")?.message ?? (err?.code === "moderation_blocked" ? err.message : null);
   const tooShort = prompt.trim().length < 10;
+  const providers = (meta.data?.image_providers ?? []).filter((p) => p.available || p.id !== "fal");
+  const chosenProvider = provider ?? meta.data?.default_image_provider ?? null;
+  const chosenUnavailable = providers.some((p) => p.id === chosenProvider && !p.available);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -73,6 +78,23 @@ export default function NewComic() {
               {STARTERS.map((s) => <Button key={s.label} type="button" size="sm" onClick={() => setPrompt(s.prompt)}>{s.label}</Button>)}
             </div>
           </div>
+          {providers.length > 0 && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-semibold">Illustration provider</legend>
+              <p className="text-sm text-muted">Used for every image of this comic (characters, panels, fixes and edits). It can&apos;t be changed later.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {providers.map((p) => (
+                  <label key={p.id} className={cn("flex cursor-pointer items-start gap-3 rounded-md border-2 border-line p-3", !p.available && "cursor-not-allowed opacity-60", chosenProvider === p.id && p.available && "border-ink")}>
+                    <input type="radio" name="image_provider" value={p.id} className="mt-1" checked={chosenProvider === p.id} disabled={!p.available} onChange={() => setProvider(p.id)} aria-describedby={`provider-${p.id}-note`} />
+                    <span>
+                      <span className="block font-semibold">{p.label}{p.id === meta.data?.default_image_provider ? " (default)" : ""}</span>
+                      <span id={`provider-${p.id}-note`} className="block text-sm text-muted">{p.available ? (p.model ?? "") : p.reason}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           <div className="rounded-md border-2 border-line">
             <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold" aria-expanded={open} aria-controls="options" onClick={() => setOpen((v) => !v)}>
               Options (all optional: we&apos;ll pick sensible defaults or ask)
@@ -117,7 +139,7 @@ export default function NewComic() {
             </Notice>
           )}
           {create.isError && !promptError && <Notice tone="danger" title="We couldn't start your comic">{describeError(create.error)}</Notice>}
-          <Button type="submit" variant="primary" size="lg" busy={create.isPending} disabled={tooShort || estimate.data?.sufficient === false}>Create my cast</Button>
+          <Button type="submit" variant="primary" size="lg" busy={create.isPending} disabled={tooShort || chosenUnavailable || estimate.data?.sufficient === false}>Create my cast</Button>
         </form>
       </Card>
     </div>

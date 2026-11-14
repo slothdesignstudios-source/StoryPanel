@@ -1,8 +1,9 @@
 # Run StoryPanel locally, and run the first live comic on your own machine
 
-The live smoke test bills **your** Anthropic, fal and Voyage accounts directly. Nothing here deploys
-anything or contacts Clerk, Stripe, AWS or Render. The commands are for **Windows with WSL 2 (Ubuntu
-24.04)**; native Ubuntu 24.04 works the same, without step 1.
+The live smoke test bills **your** Anthropic, OpenAI and Google Gemini accounts directly. **No fal or
+Voyage account is needed**: both are disabled by configuration. Nothing here deploys anything or contacts
+Clerk, Stripe, AWS or Render. The commands are for **Windows with WSL 2 (Ubuntu 24.04 or newer)**.
+Native Ubuntu works the same, without step 1.
 
 > Status: verified end to end with *simulated* providers only. No live provider call has ever been made
 > with this code. Your run is the first, so read §6 before starting it.
@@ -11,23 +12,29 @@ anything or contacts Clerk, Stripe, AWS or Render. The commands are for **Window
 - Windows 10/11 with WSL 2, about 6 GB free disk space, and 8 GB RAM or more.
 - API keys:
   - **Anthropic:** console.anthropic.com → API keys.
-  - **fal:** fal.ai → Dashboard → Keys.
-  - **Voyage AI:** dash.voyageai.com → API keys.
-- Recommended before any paid run: an Anthropic **workspace spend limit** for the key you use (Console →
-  Settings → Spend limits) and a small prepaid fal balance. These are the only limits enforced by the
-  providers themselves. The app's own cap stops it from *starting* new paid work, but cannot stop a
-  provider job that is already running.
+  - **OpenAI:** platform.openai.com → API keys (a project key).
+  - **Google Gemini:** aistudio.google.com → Get API key, on a project with billing enabled.
+- Recommended before any paid run: an Anthropic **workspace spend limit** and an OpenAI **project
+  budget** for the keys you use. Google billing budgets only send alerts, so watch Gemini usage in AI
+  Studio. These are the only limits the providers enforce themselves. The app's own cap stops it from
+  *starting* new paid work, but cannot stop a request that is already running.
 
 ## 1. Install WSL and the tools (once)
 In PowerShell as administrator:
 ```powershell
-wsl --install -d Ubuntu-24.04
+wsl --install -d Ubuntu
 ```
-Restart if asked, open "Ubuntu 24.04" from the Start menu and create your Linux user. Everything below
+Restart if asked, open "Ubuntu" from the Start menu and create your Linux user. Everything below
 runs **inside Ubuntu**.
 
 ```bash
-sudo apt update && sudo apt install -y git curl build-essential postgresql-16 postgresql-16-pgvector postgresql-client redis-server poppler-utils
+sudo apt update && sudo apt install -y git curl build-essential postgresql postgresql-client redis-server poppler-utils
+```
+
+Then install pgvector for whichever PostgreSQL version Ubuntu installed. That is 16 on 24.04 and
+newer on later releases. `scripts/native-services.sh` finds the version itself.
+```bash
+PGV=$(ls /usr/lib/postgresql | sort -V | tail -1) && sudo apt install -y "postgresql-$PGV-pgvector"
 ```
 
 The project starts its own Postgres on port 5432, so stop the system one (and keep it off):
@@ -92,11 +99,14 @@ The first start builds the web app, which takes a few minutes. Then open **http:
 your Windows browser (WSL forwards the port) and sign in with any email; this is the development
 sign-in. Images, text and costs are fake.
 
-The same flow the paid test uses, rehearsed for free:
+The same flow the paid test uses, rehearsed for free, once per image provider:
 ```bash
-bash -c 'ROOT=$PWD; . scripts/stack-env.sh; SP_MAX_CHARACTERS=2 services/backend/.venv/bin/python scripts/live-smoke.py run --simulated --run-id rehearsal'
+bash -c 'ROOT=$PWD; . scripts/stack-env.sh; SP_MAX_CHARACTERS=2 services/backend/.venv/bin/python scripts/live-smoke.py run --simulated --image-provider openai --run-id rehearsal-openai'
 ```
-Expected: `"panels": 3`, three `ok` exports, and evidence in `docs/evidence/smoke/rehearsal/`. That
+```bash
+bash -c 'ROOT=$PWD; . scripts/stack-env.sh; SP_MAX_CHARACTERS=2 services/backend/.venv/bin/python scripts/live-smoke.py run --simulated --image-provider gemini --run-id rehearsal-gemini'
+```
+Expected: `"panels": 3`, three `ok` exports, and evidence in `docs/evidence/smoke/rehearsal-<provider>/`. That
 folder is **simulated** evidence and must never be mixed with a live run's.
 
 Stop everything:
@@ -105,26 +115,34 @@ scripts/native-stack.sh stop && scripts/native-services.sh stop
 ```
 
 ## 5. Set up the keys (`.env`)
-Create `~/storypanel/.env`; it is git-ignored. Put **only** these three lines in it, with your values,
+Create `~/storypanel/.env`; it is git-ignored. Put **only** these lines in it, with your values,
 using an editor rather than the shell history:
 ```bash
 nano ~/storypanel/.env
 ```
 ```
 SP_ANTHROPIC_API_KEY=sk-ant-...
-SP_FAL_KEY=...
-SP_VOYAGE_API_KEY=pa-...
+SP_OPENAI_API_KEY=sk-proj-...
+SP_GEMINI_API_KEY=AIza...
+# optional: SP_IMAGE_PROVIDER_DEFAULT=gemini
 ```
+If an older `.env` still has `SP_FAL_KEY` or `SP_VOYAGE_API_KEY`, they are ignored and can be removed.
 ```bash
 chmod 600 ~/storypanel/.env
 ```
-`scripts/live-env.sh` and `SP_STACK_LIVE=1` read only these three variables from `.env`, parsing the
-file rather than executing it. All other live settings, which are public, are committed in
+`scripts/live-env.sh` and `SP_STACK_LIVE=1` read only these variables from `.env`, parsing the file
+rather than executing it. All other live settings, which are public, are committed in
 `config/live-smoke.env`:
-- **Models:** `claude-sonnet-5-5`, `claude-haiku-5-5`, `fal-ai/nano-banana-2`,
-  `fal-ai/nano-banana-2/edit`, `fal-ai/esrgan`, `voyage-multimodal-3.5`.
-- **Prices:** `packages/pricing/pricing.2026-11-12.json`.
-- **Constraints:** two characters, no automatic refusal fallback.
+- **Text:** `claude-sonnet-5-5`, `claude-haiku-5-5`.
+- **Images:** OpenAI `gpt-image-2.5-sunburst` by default, or Gemini `gemini-3.1-flash-image` (chosen
+  per comic on the New comic page, or with `--image-provider` in the smoke test).
+- **Identity QA:** Gemini `gemini-3.8-flash`.
+- **Exports:** local resampling, with an effective-DPI report.
+- **Disabled:** fal, Voyage.
+- **Prices:** `packages/pricing/pricing.2026-11-14.json`. The OpenAI and Gemini rows are unverified,
+  so check them first.
+- **Constraints:** two characters, no automatic refusal fallback, no automatic resend after an image
+  timeout.
 
 Never commit `.env`, paste it anywhere, or include it in shared files.
 
@@ -140,25 +158,34 @@ scripts/native-stack.sh stop; scripts/native-services.sh start && SP_STACK_LIVE=
 scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py preflight | tee preflight.txt
 ```
 It checks:
-- that every provider host is reachable;
-- the settings and price table;
-- that your Anthropic key works and the models exist (Models API, free);
-- **fal's official prices for the three fal models** (pricing API, free); a mismatch is a FAIL, so
-  correct the table before spending;
+- that `api.anthropic.com`, `api.openai.com` and `generativelanguage.googleapis.com` are reachable;
+- the settings, including that fal and Voyage are off, and the price table (it warns about
+  unverified prices);
+- that each key works and can see its models, using free model lookups (Anthropic Models API, OpenAI
+  `models.retrieve`, Gemini `models.get`);
 - a storage round trip;
 - that the local API runs live providers.
 
-The Voyage key cannot be checked for free; the run uses it first.
+OpenAI and Gemini have no free pricing API: compare their table rows with the providers' pricing pages
+yourself.
 
 **Only continue if it ends with `preflight: PASS`.**
 
 ### 6c. Look at the cost model
 ```bash
-scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py estimate
+scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py estimate --image-provider openai
 ```
-Expected cost is about USD 1.14. A clean run needs a cap of at least USD 2.21. A USD 5.00 cap still
-leaves room for every panel using both repair rounds and every call failing once (USD 3.94). Details
-and the itemised table: `docs/smoke-test-cost.md`.
+```bash
+scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py estimate --image-provider gemini
+```
+
+| Images from | Expected cost | Smallest cap for a clean run | Suggested cap |
+|---|---|---|---|
+| OpenAI | about USD 3.32 | USD 4.52 | USD 8.00 |
+| Gemini | about USD 1.19 | USD 1.72 | USD 4.00 |
+
+Prices are unverified. The suggested cap covers every panel using both repair rounds. Details and the
+itemised tables are in `docs/smoke-test-cost.md`.
 
 ### 6d. The paid run
 **Scope:** one comic from a fixed prompt (a lighthouse keeper and a seagull, a 3-panel strip):
@@ -166,19 +193,22 @@ and the itemised table: `docs/smoke-test-cost.md`.
 - a script that must have exactly 3 panels (checked before any panel image is paid for);
 - three panels with safety and identity checks, and up to two repair rounds each;
 - one instruction edit of panel 1;
-- PDF, PNG and CBZ exports.
+- PDF, PNG and CBZ exports (no paid call; local resampling with an effective-DPI report).
 
 ```bash
-scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py run --approve-usd 5.00 --run-id smoke-1 | tee smoke-1.txt
+scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py run --image-provider openai --approve-usd 8.00 --run-id smoke-1 | tee smoke-1.txt
 ```
+For Gemini images use `--image-provider gemini --approve-usd 4.00` instead.
 - `--approve-usd` becomes a lifetime spending cap on the smoke user. Before each paid call the app
   reserves that call's maximum, and refuses it if the reservation would cross the cap. The step that
   is refused fails, and the run stops; nothing already spent is undone.
 - **Charges can still exceed the cap:**
-  - upscaling (fal ESRGAN, billed per compute second) is cancelled at its reserved 150 s, but fal may
-    finish and bill a job that is already running;
-  - the fal and Voyage prices are unverified (preflight checks fal's);
+  - an image call may use more output tokens than its reservation assumed (no provider lets the caller
+    cap them); the overshoot is counted afterwards;
+  - the OpenAI and Gemini prices are unverified;
   - Anthropic may add more input to a call than the 4,000 tokens assumed.
+- An image call that times out is **not** re-sent. It stays counted as an unresolved potential charge
+  and the panel offers "retry".
 - If it stops part-way, do **not** start another run. Reconcile first (6e) and send me the results, then
   decide together. A new `--run-id` gets a new cap of its own, so spending adds up across runs.
 
@@ -186,13 +216,14 @@ scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py run 
 ```bash
 scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py reconcile --run-id smoke-1
 ```
-This asks the providers about any request still open and writes
-`docs/evidence/smoke/smoke-1/reconciled.json`. It lists every charge still **unresolved**, with its
-provider request id; upscaling always starts unresolved, because its compute time isn't reported in
-the response. To confirm charges, look the request ids up in the provider dashboards (fal: Usage /
-Billing; Anthropic: Console → Usage) and import them:
+This closes any request still open and writes `docs/evidence/smoke/smoke-1/reconciled.json`. That
+file lists every charge still **unresolved**, with its attempt id and, where there is one, its
+provider request id. A timed-out image call has no request id. To confirm charges, find them in the
+provider dashboards (Anthropic: Console → Usage; OpenAI: Usage; Gemini: AI Studio → Usage) and import
+them. In the `request_id` column, use the request id, or `attempt:<attempt id>` for a call that
+has none:
 ```bash
-printf 'provider,request_id,usd,source\nfal,<request id>,<usd>,fal usage page <date>\n' > charges.csv
+printf 'provider,request_id,usd,source\nopenai,attempt:<attempt id>,<usd>,OpenAI usage page <date>\n' > charges.csv
 ```
 ```bash
 scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py reconcile --run-id smoke-1 --charges charges.csv

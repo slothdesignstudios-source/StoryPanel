@@ -1,54 +1,131 @@
-# Providers: contracts, what was verified, and how
+# Providers: who does what, contracts, what was verified
 
-**No live call to any provider has been made** (no credentials, and provider hosts are outside the sandbox
-allowlist). "Schema-verified" means checked offline against the provider's published machine-readable schema or
-official SDK. See [`blockers.md`](blockers.md) B1–B2 for what a live run needs.
+StoryPanel runs on three providers. **fal and Voyage are disabled by default.** Their adapters are
+kept in the code, but nothing constructs or calls them, and no key is needed.
 
-## Selected models and their contracts
-| Capability | Endpoint / model | Contract source | Verified facts | Not verified |
-|---|---|---|---|---|
-| Story, script | `claude-sonnet-5-5` | `anthropic` SDK 2.7 (`messages.parse`, `output_format`, `output_config.effort`, `fallbacks`), Anthropic model table | Model id exists; SDK accepts our call shape; refusal → `stop_reason: "refusal"`; server-side refusal fallback (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) is enabled for this model and the *served* model is the one priced | A real request; schema limits with our Pydantic schemas |
-| Intake, moderation, vision QA, image safety | `claude-haiku-5-5` | same | Model id exists; accepts images as base64 blocks; no server-side fallback on Haiku (so none is sent) | Judgement quality; bounding-box accuracy |
-| Text-to-image | `fal-ai/nano-banana-2` | `@fal-ai/client` 1.10.1 `endpoints.d.ts` (`NanoBanana2Input` → `NanoBananaOutput`) | Fields `prompt`, `aspect_ratio` (15 values), `resolution`, `num_images`, `output_format`, `seed`, `safety_tolerance`, `limit_generations`; result `images[].url` | Behaviour |
-| Multi-reference edit (panels, sheets, fixes) | `fal-ai/nano-banana-2/edit` | same (`NanoBanana2EditInput`) | As above plus required `image_urls: string[]` | Reference limit of 14 comes from fal's comparison page and a third-party listing, not the schema. We send at most 4 |
-| Fallback edit / text-to-image | `fal-ai/bytedance/seedream/v5/lite/edit`, `…/text-to-image` | same (`SeedDream50LiteEditInput`, `SeedDream50LiteT2IInput` → `images[].url`) | "up to 10 image inputs"; `image_size` as width/height with total pixels between 2560×1440 and 3072×3072; no seed field | Behaviour; that it keeps a comparable style |
-| Region repair (inpainting) | `fal-ai/flux-pro/v1/fill` | same (`FluxProFillInput` → `FluxProNewOutput`) | `image_url`, `mask_url` (must match image size), `prompt`, `seed`, `safety_tolerance`, `output_format`; `has_nsfw_concepts[]` is honoured as a block | Mask polarity (we send white = repaint) and seam quality |
-| Upscaling | `fal-ai/esrgan` | same (`esrganInput` → `image.url`) | `image_url`, `scale` (default 2), `model` (we use `RealESRGAN_x4plus_anime_6B`), `output_format` | Output quality on comic art |
-| Identity embeddings | `voyage-multimodal-3.5` | `voyageai` SDK 0.5 (`multimodal_embed`, `output_dimension`); AWS Marketplace listing and model directories for dimensions | Images are accepted only by multimodal models; output dimension 256/512/1024/2048, default 1024; billed per pixel | Voyage's own docs (unreachable here); similarity behaviour on drawn characters |
+| Capability | Provider | Model (configurable) | Setting |
+|---|---|---|---|
+| Story Bible, script, script repair | Anthropic | `claude-sonnet-5-5` | `SP_TEXT_MODEL_STORY` |
+| Intake, moderation | Anthropic | `claude-haiku-5-5` | `SP_TEXT_MODEL_LIGHT` |
+| Image safety, panel layout/content checks (vision) | Anthropic | `claude-haiku-5-5` | `SP_VISION_MODEL` |
+| Character sheets, locations, panels, instruction edits (default) | OpenAI | `gpt-image-2.5-sunburst` | `SP_OPENAI_IMAGE_MODEL`, `SP_OPENAI_IMAGE_QUALITY` |
+| Same, when a comic is created with Gemini | Google Gemini API | `gemini-3.1-flash-image` | `SP_GEMINI_IMAGE_MODEL`, `SP_GEMINI_IMAGE_SIZE` |
+| Visual character-consistency QA | Google Gemini API | `gemini-3.8-flash` | `SP_GEMINI_QA_MODEL`, `SP_IDENTITY_QA=gemini_visual` |
+| Print exports | none (local) | Lanczos resampling + effective-DPI report | `SP_EXPORT_UPSCALE=local` |
 
-The contract table lives in `providers/fal_profiles.py`. `tests/test_providers.py` builds every request body for every
-endpoint × 6 aspect ratios × 3 audiences and checks field names, required fields and enum values against
-`tests/fixtures/fal_schema_fields.json`, which is extracted by script from fal's package. Live mode refuses to start
-with any fal endpoint that has no entry, and with an embedding model that is not on the image-capable list.
+Model ids have **no defaults** in live mode. Startup lists every missing setting. `docs/provider-verification.md`
+records where each id and price came from and what is still unverified.
 
-## Transport behaviour (fal queue API, from the official Python client)
-- `submit` returns a request id immediately; we persist it before waiting.
-- `status` returns `Queued`, `InProgress` or `Completed`; a failed job is `Completed` with `error`/`error_type`
-  and is treated as a definitive failure (content-policy errors become a moderation block, not a retry).
-- HTTP 404 on status means the id is unknown: nothing was produced, a new submission is safe.
-- `cancel` is a `PUT` to the request's cancel URL; we call it when a workflow is cancelled mid-request.
-- Result URLs are downloaded with an SSRF guard (HTTPS, public addresses only, no redirects, 30 MB cap), then
-  decoded, bounds-checked and re-encoded.
+## Image provider per comic
+- The creator picks **OpenAI** (default, `SP_IMAGE_PROVIDER_DEFAULT`) or **Gemini** on the New comic page.
+  Choices not in `SP_IMAGE_PROVIDERS` are shown disabled with the reason.
+- The choice and the model id are stored on the comic (`projects.image_provider`, `image_model`) and on
+  every paid attempt. Every later image for that comic uses them: sheets, panels, QA repairs, edits and
+  retries, including after a restart or a configuration change. If the stored provider is later
+  disabled, the comic's image work is refused with a clear message. It is never moved to the other
+  provider.
+- **A refusal is never routed to another provider.** It is recorded on the attempt and shown to the user.
+- Comics created before this change (provider NULL) were drawn with fal. They stay readable and
+  exportable; generating more images for them needs fal re-enabled.
 
-## Fallback behaviour
-- **Image**: five retryable provider errors within 60 s open a circuit breaker for the primary model for 120 s.
-  While open, *new* submissions go to the configured fallback; requests already accepted stay where they are.
-  Content refusals never count. Fallback output may differ in look; panels made on it are recorded with its model id.
-- **Text**: refusal fallback is server-side and automatic where supported. There is no second text provider.
+## Contracts (from the official SDKs installed: `openai` 3.51.0, `google-genai` 3.3.0)
+**OpenAI Images (`providers/openai_image.py`)**
+- `images.generate` for images with no input; `images.edit` with up to 16 input images for
+  reference-conditioned work. The base image (edits, repairs) goes first, then approved references,
+  capped at `SP_IMAGE_MAX_REFERENCES` + 1.
+- Size is an explicit `WxH`: both sides divisible by 16, aspect between 1:3 and 3:1, at most
+  3840×2160. The app maps each panel aspect to the nearest valid size (`size_for`). Output is base64
+  PNG. Usage is reported as text/image input tokens and image output tokens.
+- The `mask` parameter is **not used**. Repairs are instruction edits of the whole panel. The app then
+  keeps only the repaired region by compositing locally (`pipeline/repair.py`). This is not
+  provider-side masked inpainting, and an inpaint request is refused with a clear error.
+- A safety identifier is a one-way hash of the user id, never the id or email.
+- `x-request-id` is recorded as the provider request id.
+
+**Gemini image (`providers/gemini.py: GeminiImageProvider`)**
+- `generate_content` with `response_modalities=["IMAGE"]`, an `image_config` aspect ratio from the
+  SDK's list, and `image_size` 1K or 2K. Input images are sent inline: base image first, then
+  references, with the same cap. There are no pixel masks, and repairs work as with OpenAI.
+- Refusals: a blocked prompt (`prompt_feedback.block_reason`), a non-STOP finish reason, or no image
+  part. Each is recorded as a refusal, not a retry.
+- Usage comes from `usage_metadata` by modality. Thinking tokens are counted as text output.
+
+**Gemini visual identity QA (`GeminiVisionProvider`, `pipeline/qa.py`)**
+- `generate_content` with `response_mime_type="application/json"` and `response_json_schema` from
+  `IdentityVisualReport`, plus minimal thinking and a 4,096-token output cap. The panel is sent with
+  the approved portrait and front view of each expected character.
+- For each character the model reports: present or missing, matches the reference (yes/no/uncertain),
+  any mismatches with the aspect, expected and observed values, evidence, confidence, and an overall
+  pass/repair/manual_review.
+- The app derives its own outcome from the findings and keeps whichever outcome is stricter.
+  - Mismatches and missing characters lead to a bounded repair on the same provider. Their notes go
+    into the repair prompt.
+  - An uncertain result, a model error or an invalid answer leads to **manual review**: the panel is
+    kept, flagged "needs attention" and not repainted. It never passes silently.
+- This is categorical judgment, not a similarity score. Nothing is written to pgvector, and no Voyage
+  thresholds apply.
+
+**Anthropic** (unchanged): `messages.parse` structured outputs, refusal stop reason, a server-side
+refusal fallback where the model supports it (switched off for the smoke test), and images as base64
+blocks.
+
+## Paid-request safety for synchronous image calls (`metering.generate_image_sync`)
+OpenAI and Gemini answer in a single call. There is no queue id to poll later and no way to cancel.
+- **Reserve before sending.** The reservation covers the prompt bytes, the input images and the price
+  entry's output assumptions. It is checked against every spend ceiling in one serialised
+  transaction.
+- **SDK retries are off** (`max_retries=0`, `HttpRetryOptions(attempts=1)`). Every resend is a
+  visible, separately reserved attempt.
+- **Store before success.** The image is stored as a `provider_result` asset before the attempt is
+  marked succeeded. A retried activity reuses it and never pays twice.
+- **Ambiguous outcomes are never re-sent.** A timeout, a dropped connection, an unexpected exception,
+  or a worker that died mid-call (attempt found `submitting` on resume) ends as `ambiguous`/`unresolved`
+  at the full reservation. The user sees "retry", which starts a new operation.
+- **Outcomes:**
+
+  | Outcome | Attempt status / cost basis | What happens next |
+  |---|---|---|
+  | Success with complete usage | settled from usage × price | done |
+  | Success with incomplete usage | stays unresolved at the reservation | needs reconciliation |
+  | Refusal or bad output | `failed`, counted from usage, or by policy if there is none | no retry, no reroute |
+  | 5xx | `failed`, counted by policy | a new attempt is allowed |
+  | 429 or other 4xx (not processed) | `released` | none |
+
+- **Reconciliation** never queries a synchronous provider: there is nothing to query. Open synchronous
+  attempts become `ambiguous` and are resolved from the dashboard with
+  `live-smoke.py reconcile --charges`, using the request id or `attempt:<id>`.
+- **Account deletion** removes stored provider results and keeps the cost rows.
+- **Metrics** (no prompts or images): calls, latency, refusals, rate limits, cost by basis, and
+  `provider_unresolved_usd{provider}`. Also `identity_visual{outcome}` and the
+  `provider_print_dpi` histogram.
+
+## Retained, disabled: fal and Voyage
+`SP_FAL_ENABLED=false` and `SP_VOYAGE_ENABLED=false` by default. While disabled:
+- the registry does not construct either adapter (a test checks this in a fresh interpreter);
+- startup, preflight, health checks, workers, exports and the smoke test need no fal or Voyage key;
+- reconciliation leaves old fal attempts as they are (`provider_disabled`), and account deletion does
+  not call fal;
+- settings that would reach them are refused at startup with the variable to change:
+  `SP_IMAGE_PROVIDERS` containing fal, `SP_REPAIR_MODE=inpaint`, `SP_EXPORT_UPSCALE=fal`,
+  `SP_IDENTITY_QA=voyage_embedding`, and fallback models.
+
+To use them again, set the flag, the key and the model ids. The earlier contracts are still in
+`providers/fal_profiles.py`, with schema tests against `@fal-ai/client` 1.10.1. Tests of those paths
+opt in with the `fal_voyage` fixture.
 
 ## Pricing and commercial terms
-Prices are operator data with a source and a verification date (`packages/pricing/pricing.example.json`).
-Only the three Anthropic rows are taken from a first-party table; **every fal and Voyage figure is an unverified
-estimate with an empty `verified_at`, so the example file is rejected as-is**. Live mode will not start, and no
-billable call is dispatched, until each configured model has a non-zero (or explicitly free), current price.
+Prices are operator data with a source and a verification date
+(`packages/pricing/pricing.2026-11-14.json`). Live mode refuses to dispatch a call without a current
+price. **The OpenAI and Gemini prices are UNVERIFIED** (search summaries; the official pages are
+blocked from the build sandbox). Check them before a paid run.
 
-Commercial-use and data terms were **not reviewed**: confirm for each provider whether outputs may be used
-commercially, whether inputs are used for training (and opt out), and sign a data-processing agreement. Google-model
-outputs via fal may carry an invisible SynthID watermark; that is the provider's, not ours.
+Commercial-use and data terms were **not reviewed**: confirm for each provider whether outputs may be
+used commercially and whether inputs are used for training. Gemini image outputs carry Google's
+SynthID watermark *(per Google's announcements; unverified here)*.
 
 ## Before the first live run
-1. Provide keys and model ids (B1) and a verified price file (B5).
-2. `uv run python -m storypanel.evals.harness --subset fast --live --max-usd 5` and read the comics.
-3. Check: inpaint mask polarity, reference fidelity with 2–3 characters, upscale quality, embedding similarity
-   spread. Calibrate `SP_IDENTITY_SIMILARITY_THRESHOLD` (0.55 is a placeholder).
-4. Run the bake-off (`evals/rubrics.json`) to confirm primary and fallback.
+1. Put the three keys in the untracked `.env` ([`setup-checklist.md`](setup-checklist.md)).
+2. Run `scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py preflight`. It is
+   free and checks the hosts, keys, model ids and price table.
+3. Read [`smoke-test-cost.md`](smoke-test-cost.md) and approve a cap. Then follow
+   [`first-live-comic.md`](first-live-comic.md).

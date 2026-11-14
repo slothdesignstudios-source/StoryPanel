@@ -28,6 +28,9 @@ _SENSITIVE_KEY = re.compile(
 _SENSITIVE_VALUE = [
     re.compile(r"\b(sk|pk|rk|whsec)_(live|test)_[A-Za-z0-9]{8,}"),
     re.compile(r"\bsk-ant-[A-Za-z0-9_-]{8,}"),
+    re.compile(r"\bsk-(proj|svcacct|admin)-[A-Za-z0-9_-]{16,}"),  # OpenAI project/service keys
+    re.compile(r"\bsk-[A-Za-z0-9]{32,}"),  # OpenAI legacy keys
+    re.compile(r"\bAIza[0-9A-Za-z_-]{30,}"),  # Google (Gemini API) keys
     re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}"),  # JWTs
     re.compile(r"([?&](X-Amz-Signature|X-Amz-Credential|Signature|sig|token)=)[^&\s\"']+", re.I),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}", re.I),

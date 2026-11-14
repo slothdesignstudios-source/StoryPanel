@@ -77,6 +77,17 @@ async def purge_project(project_id: uuid.UUID, reason: str = "project_deleted") 
             return 0
         keys = list((await db.execute(select(Asset.storage_key).where(
             Asset.project_id == project_id))).scalars())  # fmt: skip
+        # Images a synchronous provider delivered for this comic are kept as owner-level assets
+        # (so a retry never pays twice); they go with the comic. The attempt rows (financial
+        # records) keep their costs and ids; their asset reference simply no longer resolves.
+        result_ids = list((await db.execute(text(
+            "select result_asset_id from provider_attempts where project_id = :p and result_asset_id is not null"),
+            {"p": project_id})).scalars())  # fmt: skip
+        if result_ids:
+            keys += list(
+                (await db.execute(select(Asset.storage_key).where(Asset.id.in_(result_ids)))).scalars()
+            )
+            await db.execute(delete(Asset).where(Asset.id.in_(result_ids)))
         await delete_objects_durably(db, keys, owner_id=project, reason=reason)
         await credits.close_for_project(db, project_id)
         # panel_versions/character_refs hold RESTRICT references to assets: remove them first.

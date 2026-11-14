@@ -48,6 +48,8 @@ class CreateProject(In):
     format: Literal["western_page", "strip"] | None = None
     style_preset: str | None = Field(default=None, max_length=60)
     audience: Literal["all_ages", "teen", "mature"] | None = None
+    # Image provider for the whole comic (sheets, panels, repairs, edits). Default: the server's.
+    image_provider: Literal["openai", "gemini", "fal"] | None = None
 
 
 class Answers(In):
@@ -156,7 +158,20 @@ class LayoutOut(Out):
     rects: list[list[int]]
 
 
+class ImageProviderOut(Out):
+    id: str
+    label: str
+    model: str | None
+    available: bool
+    reason: str | None  # why it cannot be chosen, when unavailable
+    capabilities: list[str]
+
+
 class MetaOut(Out):
+    image_providers: list[ImageProviderOut]
+    default_image_provider: str
+    identity_qa: str
+    export_resampling: str
     styles: list[StyleOut]
     default_style: str
     default_pages: int
@@ -248,6 +263,7 @@ class ExportOut(Out):
     download_url: str | None
     error: dict[str, Any] | None
     edit_version: int
+    print_quality: dict[str, Any] | None = None  # effective DPI per panel and warnings
 
 
 class ProgressOut(Out):
@@ -272,6 +288,8 @@ class ProjectSummary(Out):
     updated_at: datetime
     cover_url: str | None
     failure: dict[str, Any] | None
+    image_provider: str | None  # null: created before per-comic providers (drawn with fal)
+    image_model: str | None
 
 
 class ProjectOut(ProjectSummary):

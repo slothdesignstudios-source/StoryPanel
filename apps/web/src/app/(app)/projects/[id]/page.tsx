@@ -24,6 +24,8 @@ function Stage({ project }: { project: Project }) {
   }
 }
 
+const PROVIDER_LABEL: Record<string, string> = { openai: "OpenAI", gemini: "Google Gemini", fal: "fal" };
+
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -56,6 +58,7 @@ export default function ProjectPage() {
           <h1 className="truncate text-3xl font-bold">{project.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge tone={statusTone(project.status)}>{STATUS_LABEL[project.status] ?? project.status}</Badge>
+            <span className="text-xs text-muted">Illustrated with {PROVIDER_LABEL[project.image_provider ?? "fal"] ?? project.image_provider}{project.image_model ? ` (${project.image_model})` : ""}</span>
             {ACTIVE.has(project.status) && <span className="text-xs text-muted" role="status">{stream === "live" ? "Live updates on" : stream === "reconnecting" ? "Reconnecting… your comic is still running" : "Connecting…"}</span>}
           </div>
         </div>

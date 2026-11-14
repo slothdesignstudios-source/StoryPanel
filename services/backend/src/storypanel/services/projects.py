@@ -94,9 +94,11 @@ async def create_project(db: AsyncSession, *, user_id: uuid.UUID, plan: str, bod
     if active >= 5:
         raise AppError(ErrorCode.QUOTA_EXCEEDED,
                        "You have 5 comics in progress. Finish or cancel one to start another.")  # fmt: skip
+    image_provider, image_model = choose_image_provider(body.image_provider)
     project = Project(id=uuid.uuid4(), owner_id=user_id, prompt=body.prompt, answers=answers or None,
                       pages_requested=body.pages or s.default_pages,
-                      format=body.format or "western_page", style_preset=body.style_preset)  # fmt: skip
+                      format=body.format or "western_page", style_preset=body.style_preset,
+                      image_provider=image_provider, image_model=image_model)  # fmt: skip
     project.workflow_id = f"comic-{project.id}"
     db.add(project)
     await db.flush()
@@ -342,7 +344,40 @@ def summary(project: Project, cover_key: str | None = None) -> dict[str, Any]:
             "format": project.format, "style_preset": project.style_preset,
             "pages_requested": project.pages_requested, "created_at": project.created_at,
             "updated_at": project.updated_at, "cover_url": _url(cover_key),
-            "failure": _public_failure(project.failure)}  # fmt: skip
+            "failure": _public_failure(project.failure), "image_provider": project.image_provider,
+            "image_model": project.image_model}  # fmt: skip
+
+
+PROVIDER_LABELS = {"openai": "OpenAI", "gemini": "Google Gemini", "fal": "fal"}
+
+
+def image_provider_options() -> list[api.ImageProviderOut]:
+    """Every image provider the product knows, with whether this deployment can use it and why not."""
+    s = get_settings()
+    out = []
+    for pid in ("openai", "gemini", "fal"):
+        reason = None
+        if pid == "fal" and not s.fal_enabled:
+            reason = "fal is disabled on this server."
+        elif pid not in s.image_providers:
+            reason = f"{PROVIDER_LABELS[pid]} is not enabled on this server."
+        elif s.provider_mode == "live" and pid != "fal" and getattr(s, f"{pid}_api_key") is None:
+            reason = f"No {PROVIDER_LABELS[pid]} API key is configured on the server."
+        caps = ["generate", "reference_edit"] + (["mask_inpaint"] if pid == "fal" else [])
+        out.append(api.ImageProviderOut(id=pid, label=PROVIDER_LABELS[pid], model=s.image_model_for(pid),
+                                        available=reason is None, reason=reason, capabilities=caps))  # fmt: skip
+    return out
+
+
+def choose_image_provider(requested: str | None) -> tuple[str, str]:
+    """The provider and model a new comic is created with (stored on the comic for its lifetime)."""
+    s = get_settings()
+    choice = requested or s.image_provider_default
+    option = next(o for o in image_provider_options() if o.id == choice)
+    if not option.available or option.model is None:
+        raise AppError(ErrorCode.VALIDATION, option.reason or f"{option.label} is not available.",
+                       fields=[{"field": "image_provider", "message": option.reason or "Choose another provider."}])  # fmt: skip
+    return choice, option.model
 
 
 def _public_failure(failure: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -475,5 +510,6 @@ async def list_exports(db: AsyncSession, project_id: uuid.UUID) -> list[api.Expo
         url = storage.signed_url(key, filename=f"{title}.{ext}") if key and e.status == "ready" else None
         out.append(api.ExportOut(id=str(e.id), format=e.format, status=e.status,
                                  created_at=e.created_at, download_url=url, error=e.error,
-                                 edit_version=e.revision.get("edit_version", 0)))  # fmt: skip
+                                 edit_version=e.revision.get("edit_version", 0),
+                                 print_quality=e.print_quality))  # fmt: skip
     return out

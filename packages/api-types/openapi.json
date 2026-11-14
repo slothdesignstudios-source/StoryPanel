@@ -424,6 +424,17 @@
       "title": "Pages",
       "type": "integer"
      },
+     "panels": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Panels"
+     },
      "setting": {
       "title": "Setting",
       "type": "string"
@@ -572,6 +583,22 @@
        }
       ],
       "title": "Format"
+     },
+     "image_provider": {
+      "anyOf": [
+       {
+        "enum": [
+         "openai",
+         "gemini",
+         "fal"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Provider"
      },
      "pages": {
       "anyOf": [
@@ -898,6 +925,18 @@
       "title": "Id",
       "type": "string"
      },
+     "print_quality": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Print Quality"
+     },
      "status": {
       "title": "Status",
       "type": "string"
@@ -939,6 +978,17 @@
      "pages": {
       "title": "Pages",
       "type": "integer"
+     },
+     "panels": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Panels"
      },
      "panels_per_page": {
       "title": "Panels Per Page",
@@ -1056,6 +1106,61 @@
      "h"
     ],
     "title": "Geometry",
+    "type": "object"
+   },
+   "ImageProviderOut": {
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     },
+     "capabilities": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "model": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     }
+    },
+    "required": [
+     "id",
+     "label",
+     "model",
+     "available",
+     "reason",
+     "capabilities"
+    ],
+    "title": "ImageProviderOut",
     "type": "object"
    },
    "LayoutOut": {
@@ -1258,6 +1363,10 @@
       "title": "Credit Prices",
       "type": "object"
      },
+     "default_image_provider": {
+      "title": "Default Image Provider",
+      "type": "string"
+     },
      "default_pages": {
       "title": "Default Pages",
       "type": "integer"
@@ -1265,6 +1374,21 @@
      "default_style": {
       "title": "Default Style",
       "type": "string"
+     },
+     "export_resampling": {
+      "title": "Export Resampling",
+      "type": "string"
+     },
+     "identity_qa": {
+      "title": "Identity Qa",
+      "type": "string"
+     },
+     "image_providers": {
+      "items": {
+       "$ref": "#/components/schemas/ImageProviderOut"
+      },
+      "title": "Image Providers",
+      "type": "array"
      },
      "limits": {
       "additionalProperties": {
@@ -1290,6 +1414,10 @@
      }
     },
     "required": [
+     "image_providers",
+     "default_image_provider",
+     "identity_qa",
+     "export_resampling",
      "styles",
      "default_style",
      "default_pages",
@@ -1894,6 +2022,28 @@
       "title": "Id",
       "type": "string"
      },
+     "image_model": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Model"
+     },
+     "image_provider": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Provider"
+     },
      "locations": {
       "items": {
        "$ref": "#/components/schemas/LocationOut"
@@ -1987,6 +2137,8 @@
      "updated_at",
      "cover_url",
      "failure",
+     "image_provider",
+     "image_model",
      "prompt",
      "brief",
      "questions",
@@ -2046,6 +2198,28 @@
       "title": "Id",
       "type": "string"
      },
+     "image_model": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Model"
+     },
+     "image_provider": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Provider"
+     },
      "pages_requested": {
       "title": "Pages Requested",
       "type": "integer"
@@ -2085,7 +2259,9 @@
      "created_at",
      "updated_at",
      "cover_url",
-     "failure"
+     "failure",
+     "image_provider",
+     "image_model"
     ],
     "title": "ProjectSummary",
     "type": "object"
@@ -2646,6 +2822,7 @@
   },
   "/v1/billing/checkout": {
    "post": {
+    "description": "Start Checkout. A repeated request with the same Idempotency-Key returns the same\nsession; a subscription is refused while one is already live (use the portal).",
     "operationId": "checkout_v1_billing_checkout_post",
     "requestBody": {
      "content": {
@@ -3161,7 +3338,7 @@
   },
   "/v1/me": {
    "delete": {
-    "description": "Delete the account and all of its comics, images and exports.",
+    "description": "Delete the account and all of its comics, images and exports.\n\nThe account is blocked immediately; cancellation, draining, verified content deletion,\nsubscription cancellation and identity deletion then run as a durable job (finished\nby the maintenance loop if anything is still in progress).",
     "operationId": "delete_account_v1_me_delete",
     "responses": {
      "204": {

@@ -86,8 +86,8 @@ async def run_panel(*, panel_id: str, kind: str, request_key: str, intent_seq: i
             versions.append(made["version_id"])
             verdict = await act("qa_panel", {"version_id": made["version_id"],
                                              "attempt": attempt}, IMAGE)  # fmt: skip
-            if verdict["status"] == "pass":
-                break
+            if verdict["status"] in ("pass", "review"):
+                break  # review: an uncertain identity judgment is not fixed by repainting
             notes = verdict.get("fix_notes", [])
         return await act("finalize_panel", final, DB)
     except ActivityError as exc:

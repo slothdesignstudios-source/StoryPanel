@@ -323,6 +323,7 @@ async def test_only_provider_reported_charges_are_labelled_confirmed() -> None:
     assert await _attempts(ctx.project_id) == [(1, "succeeded", Decimal("0.039"), "provider_confirmed")]
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_upscale_resume_uses_the_persisted_model(monkeypatch: pytest.MonkeyPatch) -> None:
     import io
 

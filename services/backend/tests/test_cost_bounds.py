@@ -117,6 +117,7 @@ async def _rows(pid: str | None) -> list[ProviderAttempt]:
             ProviderAttempt.project_id == uuid.UUID(pid)).order_by(ProviderAttempt.attempt_no))).scalars())  # fmt: skip
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_compute_billed_request_is_cancelled_once_its_reserved_time_is_used(
     compute_billed_upscale: Any,
 ) -> None:
@@ -142,6 +143,7 @@ async def test_compute_billed_request_is_cancelled_once_its_reserved_time_is_use
     assert len([s for s in fake.control.models_used if s == "fake-upscale"]) == 1  # never resubmitted
 
 
+@pytest.mark.usefixtures("fal_voyage")
 async def test_reconciliation_cancels_an_abandoned_compute_billed_request(
     compute_billed_upscale: Any,
 ) -> None:

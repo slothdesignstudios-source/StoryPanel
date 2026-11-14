@@ -6,7 +6,7 @@ Every step lists what proves it worked. Stop at the first failed check.
 ## 0. Prerequisites (blockers B1, B3–B7)
 - GitHub repository with this code; Actions enabled; CI green on `main`.
 - Accounts: Render workspace, AWS account, Temporal Cloud namespace `storypanel-staging`, Clerk development instance,
-  Stripe test mode, Anthropic, fal, Voyage.
+  Stripe test mode, Anthropic, OpenAI, Google Gemini (fal and Voyage are not needed).
 - A private pricing file with verified prices (B5).
 
 ## 1. Push and let CI run
