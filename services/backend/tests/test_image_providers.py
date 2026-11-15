@@ -457,7 +457,7 @@ def test_disabled_fal_and_voyage_are_never_constructed_or_imported() -> None:
     import sys
     from pathlib import Path
 
-    table = Path(__file__).resolve().parents[3] / "packages/pricing/pricing.2026-11-14.json"
+    table = Path(__file__).resolve().parents[3] / "packages/pricing/pricing.2026-11-15.json"
     code = (
         "import json,sys; from storypanel.config import Settings; from storypanel.providers.registry import build_providers\n"
         f"s=Settings(_env_file=None, provider_mode='live', anthropic_api_key='x', openai_api_key='x', gemini_api_key='x',"

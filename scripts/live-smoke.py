@@ -23,8 +23,8 @@ from `provider_attempts`: reserved estimate, calculated cost, unresolved potenti
 provider-confirmed charges, kept separate.
 
 Spending safety (paid run):
-- refuses unless SP_PROVIDER_MODE=live and --approve-usd >= the smallest cap with which a clean run
-  can finish (see `estimate`); the approved amount is an application admission limit, not a
+- refuses unless SP_PROVIDER_MODE=live and --approve-usd >= the estimated reservation requirement
+  under documented assumptions (see `estimate`); the approved amount is an application admission limit, not a
   provider-enforced ceiling (docs/smoke-test-cost.md lists what can be billed beyond it);
 - the approved amount is persisted as a lifetime SpendCap on the smoke user (same serialised
   reservation as every ceiling; survives restarts, re-use the same --run-id). Every paid call
@@ -157,11 +157,17 @@ async def preflight() -> int:
         if unverified:
             print(f"  [WARN] prices not confirmed from the official page: {', '.join(unverified)} "
                   "(check them on the provider's pricing page before a paid run)")
+        assumed = sorted(f"{e['provider']}/{e['model']}" for e in raw["entries"]
+                         if "assumptions" in str(e.get("verification", "")) and (e["provider"], e["model"]) in used)
+        if assumed:
+            print(f"  [INFO] token counts per image not published, reservation assumptions used: {', '.join(assumed)}")
     except Exception as exc:
         table = {}
         check("price table parses", False, _safe_err(exc))
     # 3. Object storage and the API the run will drive.
     await _storage_and_api(check)
+    # 3b. The running stack: worker mode, durable workflow state, key file hygiene, per-attempt records.
+    await _stack_checks(check)
     # 4. Settings as the live run will load them (needs the keys).
     try:
         s: Settings = get_settings()
@@ -294,6 +300,105 @@ async def _database(check: Any) -> None:
         check("database reachable", False, _safe_err(exc))
 
 
+def _proc_env(pid: int, names: tuple[str, ...]) -> dict[str, str] | None:
+    """Only the named variables of a running process (Linux / WSL); nothing else is kept or printed."""
+    try:
+        raw = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return None
+    out = {}
+    for item in raw:
+        k, _, v = item.decode(errors="replace").partition("=")
+        if k in names:
+            out[k] = v
+    return out
+
+
+def _pid(name: str) -> int | None:
+    f = Path(os.environ.get("SP_RUN", "/tmp/storypanel-run")) / f"{name}.pid"  # noqa: S108 - native-stack.sh's default
+    try:
+        pid = int(f.read_text().strip())
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return None
+
+
+async def _stack_checks(check: Any) -> None:
+    """Free, read-only checks of the running local stack (scripts/native-stack.sh)."""
+    _process_and_file_checks(check)
+    await _record_checks(check)
+
+
+def _process_and_file_checks(check: Any) -> None:
+    import shutil
+    import subprocess
+
+    # The worker makes every paid call: it must run live providers too, with no simulated scenario.
+    wpid = _pid("worker")
+    if wpid is None:
+        check("worker process running (scripts/native-stack.sh)", False, "no live worker pid in $SP_RUN/worker.pid")
+    else:
+        wenv = _proc_env(wpid, ("SP_PROVIDER_MODE", "SP_FAKE_SCENARIO", "SP_FAL_ENABLED", "SP_VOYAGE_ENABLED"))
+        if wenv is None:
+            print("  [SKIP] worker environment: /proc not readable here; check the worker log instead")
+        else:
+            check("worker runs live providers", wenv.get("SP_PROVIDER_MODE") == "live",
+                  wenv.get("SP_PROVIDER_MODE", "unset (defaults to fake)"))
+            check("worker has no simulated-provider scenario", not wenv.get("SP_FAKE_SCENARIO"))
+            check("worker: fal and Voyage disabled",
+                  not _truthy(wenv.get("SP_FAL_ENABLED")) and not _truthy(wenv.get("SP_VOYAGE_ENABLED")))
+    # Workflow state survives a restart only with a file-backed Temporal dev server.
+    tpid = _pid("temporal")
+    if tpid is None:
+        check("Temporal dev server running", False, "no live pid in $SP_RUN/temporal.pid")
+    else:
+        try:
+            argv = Path(f"/proc/{tpid}/cmdline").read_bytes().split(b"\0")
+            db = next((argv[i + 1].decode() for i, a in enumerate(argv[:-1]) if a in (b"--db-filename", b"-f")), None)
+            check("Temporal keeps workflow state on disk (survives a restart)", bool(db) and Path(db).exists(),
+                  db or "started in memory: paused comics would be lost on restart")
+        except OSError:
+            print("  [SKIP] Temporal command line: /proc not readable here")
+    # Keys: only in the untracked, git-ignored .env, readable by you alone; never in committed config.
+    envf = ROOT / ".env"
+    git = shutil.which("git") or "git"
+    if envf.exists():
+        ignored = subprocess.run([git, "-C", str(ROOT), "check-ignore", "-q", ".env"]).returncode == 0  # noqa: S603
+        tracked = bool(subprocess.run([git, "-C", str(ROOT), "ls-files", ".env"], capture_output=True,  # noqa: S603
+                                      text=True).stdout.strip())  # fmt: skip
+        check(".env is git-ignored and not tracked", ignored and not tracked)
+        mode = envf.stat().st_mode & 0o777
+        check(".env readable only by you", not mode & 0o077, f"mode {oct(mode)}; fix: chmod 600 .env")
+    else:
+        print("  [INFO] no .env at the repository root: keys come from the process environment")
+    committed = (ROOT / "config/live-smoke.env").read_text()
+    check("no key in committed config", not any(f"{k}=" in committed for k in
+          ("SP_ANTHROPIC_API_KEY", "SP_OPENAI_API_KEY", "SP_GEMINI_API_KEY")))  # fmt: skip
+
+
+async def _record_checks(check: Any) -> None:
+    """Costs and QA results are recorded per attempt."""
+    try:
+        from sqlalchemy import text
+
+        from storypanel.db.session import transaction
+
+        need = {"provider_attempts": {"attempt_no", "status", "cost_estimate_usd", "cost_counted_usd",
+                                      "cost_calculated_usd", "cost_basis", "input_tokens", "output_tokens",
+                                      "latency_ms", "provider_request_id"},
+                "provider_usage": {"stage", "target_id", "model"},
+                "panel_versions": {"attempt", "qa_status", "qa_scores", "cost_usd"}}  # fmt: skip
+        async with transaction() as db:
+            for table_name, cols in need.items():
+                have = set((await db.execute(text(
+                    "select column_name from information_schema.columns where table_name = :t"),
+                    {"t": table_name})).scalars())  # fmt: skip
+                check(f"per-attempt records: {table_name}", cols <= have, ", ".join(sorted(cols - have)))
+    except Exception as exc:
+        check("per-attempt record tables", False, _safe_err(exc))
+
+
 async def _storage(check: Any) -> None:
     try:
         from storypanel import storage
@@ -343,7 +448,10 @@ def cost_model(image_provider: str = "openai") -> dict[str, Any]:
     def setting(name: str) -> Any:
         return env.get(f"SP_{name.upper()}") or getattr(base, name)
 
-    table = pricing.parse_table(json.loads((ROOT / env["SP_PRICING_FILE"]).read_text()))
+    raw_table = json.loads((ROOT / env["SP_PRICING_FILE"]).read_text())
+    table = pricing.parse_table(raw_table)
+    # expect_* fields: what a call is EXPECTED to use (estimate only); reserve_* is what it holds before it is sent
+    expect = {(e["provider"], e["model"]): e for e in raw_table["entries"]}
     fake_table = pricing.parse_table(pricing.SIMULATED)
     prof = json.loads(PROFILE.read_text())
     sizes = prof["sizes"]
@@ -381,10 +489,13 @@ def cost_model(image_provider: str = "openai") -> dict[str, Any]:
         prompt = max(LIVE_IMAGE_PROMPT_BYTES, int(sz.get("max_prompt_bytes", 0)))
         reserve = pricing.image_reservation(pr, prompt_bytes=prompt, input_images=inputs)
         exp_inputs = min(inputs, int(sz.get("max_input_images", inputs)))
+        ex = expect.get((pr.provider, pr.model), {})
+        exp_in = int(ex.get("expect_input_tokens_per_image", pr.assumption("reserve_input_tokens_per_image")))
+        exp_out = int(ex.get("expect_output_image_tokens", pr.assumption("reserve_output_image_tokens")))
         u = pricing.ImageUsage(input_text_tokens=prompt // 4 + pricing.TEXT_OVERHEAD_TOKENS,
-                               input_image_tokens=exp_inputs * pr.assumption("reserve_input_tokens_per_image"),
+                               input_image_tokens=exp_inputs * exp_in,
                                output_text_tokens=pr.assumption("reserve_output_text_tokens"),
-                               output_image_tokens=pr.assumption("reserve_output_image_tokens"))  # fmt: skip
+                               output_image_tokens=exp_out)  # fmt: skip
         expected = pricing.multimodal_cost(pr, u)
         assert expected is not None
         return {"stage": stage, "model": pr.model,
@@ -392,7 +503,8 @@ def cost_model(image_provider: str = "openai") -> dict[str, Any]:
                         f"/ image out ${pr.image_output_usd}",
                 "quantity": f"<= {prompt:,} prompt B + {inputs} input image(s) x "
                             f"{pr.assumption('reserve_input_tokens_per_image'):,} + "
-                            f"{pr.assumption('reserve_output_image_tokens'):,} image out tokens",
+                            f"{pr.assumption('reserve_output_image_tokens'):,} image out tokens reserved "
+                            f"(expected: {exp_in:,} per input image, {exp_out:,} out)",
                 "reserve": reserve, "expected": expected, "nominal": nominal, "maximum": maximum, "why": why,
                 "source": pr.source}  # fmt: skip
 
@@ -490,10 +602,11 @@ def _provider_markdown(image_provider: str) -> list[str]:
     for r in m["rows"]:
         lines.append(f"| {r['stage']} | `{r['model']}` | {r['unit']} | {r['quantity']} | {r['reserve']:.4f} | "
                      f"{r['nominal']} | {r['maximum']} | {r['expected_total']:.4f} | {r['max_reserve']:.4f} | {r['why']} |")
-    lines += ["", f"- **Estimated cost of a clean run: USD {t['expected_total']:.2f}** (assumed output sizes; "
-              "UNVERIFIED OpenAI/Gemini prices)",
-              f"- **Smallest cap with which a clean run can finish: USD {t['min_cap_nominal']:.2f}** "
-              f"(expected total + USD {t['headroom']:.2f} for reservations open at the same time)",
+    lines += ["", f"- **Estimated cost of a clean run: USD {t['expected_total']:.2f}** (verified per-token rates; "
+              "tokens per image are assumptions where the provider publishes none)",
+              f"- **Estimated reservation requirement under documented assumptions: USD {t['min_cap_nominal']:.2f}** "
+              f"(expected total + USD {t['headroom']:.2f} for reservations open at the same time). A cap below this "
+              "is likely to stop a clean run; a cap above it does not guarantee that the run finishes",
               f"- Reservations if every bounded retry, QA round and activity attempt were used: USD {t['max_reserve']:.2f} "
               "(the approved cap stops the run long before this)",
               "", f"**Does a USD {cap:.2f} cap hold the bad cases?** Counted spend by scenario (exports cost nothing):", "",
@@ -515,7 +628,7 @@ def cost_markdown() -> str:
 
 
 def estimate(image_provider: str = "openai", verbose: bool = True) -> Decimal:
-    """Prints the itemised model; returns the smallest cap that lets a clean run finish."""
+    """Prints the itemised model; returns the estimated reservation requirement (documented assumptions)."""
     m = cost_model(image_provider)
     t = m["totals"]
     if verbose:
@@ -524,10 +637,11 @@ def estimate(image_provider: str = "openai", verbose: bool = True) -> Decimal:
         for r in m["rows"]:
             print(f"  {r['stage']:40} {r['model']:24} {r['reserve']:9.4f} {r['nominal']:>4} {r['maximum']:>4} "
                   f"{r['expected_total']:9.4f} {r['max_reserve']:9.4f}")
-        print(f"  ESTIMATED cost of a clean run (assumed output sizes):          USD {t['expected_total']:.2f}")
-        print(f"  smallest cap that lets a clean run finish (+ in-flight holds):  USD {t['min_cap_nominal']:.2f}")
+        print(f"  ESTIMATED cost of a clean run (expected token counts):           USD {t['expected_total']:.2f}")
+        print(f"  estimated reservation requirement (documented assumptions):     USD {t['min_cap_nominal']:.2f}")
         print(f"  reservations if every retry/QA round/attempt were used:          USD {t['max_reserve']:.2f}")
-        print("  OpenAI and Gemini prices are UNVERIFIED (search summaries of the official pages); check them first.")
+        print("  Per-token rates verified on the official pages (2026-11-15). Tokens per OpenAI image are NOT published:")
+        print("  input 7,000 per reference image and output 6,500 are reservation assumptions (see the price table).")
         print("  The cap you approve is an APPLICATION admission limit, not a provider-enforced ceiling;")
         print("  see docs/smoke-test-cost.md for what can be billed beyond it.")
     return Decimal(t["min_cap_nominal"]).quantize(Decimal("0.01"))
@@ -551,8 +665,8 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str, image_provi
             return 2
         need = estimate(image_provider, verbose=False)
         if approve is None or approve < need:
-            print(f"refusing: --approve-usd {approve} is below USD {need:.2f}, the smallest cap with which a clean "
-                  "run can finish (not a guaranteed upper bound on provider charges)", file=sys.stderr)
+            print(f"refusing: --approve-usd {approve} is below USD {need:.2f}, the estimated reservation requirement "
+                  "under documented assumptions (not a guaranteed upper bound on provider charges)", file=sys.stderr)
             return 2
     email = f"smoke-{run_id}@example.com"
     started = time.monotonic()

@@ -1,0 +1,28 @@
+Source: https://developers.openai.com/api/docs/guides/image-generation (fetched 2026-11-15)
+ Cost and latency 
+ GPT-Image-2.6 costs 
+ Image output costs $30 per million billable tokens. Use the calculator to estimate the output cost for one image.
+ See image generation pricing for text and image rates per million tokens.
+ Markup-guided edits use the same token rates as other edits, with no extra fee. For SVG output, you pay the image model’s rate for the reference image and the authoring model’s rate for the tokens it uses to produce the SVG. The total depends on how many tokens each model uses.
+ GPT-Image-2.5 costs 
+ Responses API requests include the mainline model’s token usage in addition to image generation costs.
+ Both GPT-Image-2.5 models use the same token rates: $8 per million image input tokens, $2 per million cached image input tokens, $30 per million image output tokens, $5 per million text input tokens, and $1.25 per million cached text input tokens. See pricing .
+ Use the response’s usage to measure token consumption for your prompts, sizes, and quality settings. Equal token rates don’t mean equal cost per image: token consumption can differ by model and quality setting. For older-model pricing examples, see Earlier GPT Image models .
+ Cached input pricing 
+ For GPT-Image-2 and GPT-Image-2.5, cached input pricing applies only to the image generation tool in the Responses API. It doesn’t apply to direct Images API requests, including /v1/images/edits .
+ Cached image generation inputs are reflected in billing, but their cached token counts aren’t included in the Responses API output. The response’s usage can’t verify these cache hits.
+ Image input fidelity 
+ The input_fidelity parameter controls how strongly a model preserves details from input images during edits and reference-image workflows. For gpt-image-2 , omit this parameter; the API doesn’t allow changing it because the model processes every image input at high fidelity automatically.
+ Because gpt-image-2 always processes image inputs at high fidelity, image
+input tokens can be higher for edit requests that include reference images. To
+understand the cost implications, refer to the vision
+costs 
+ Setting | 
+ Options | 
+ Recommended sizes | 
+ 1024x1024 (square), 1536x1024 (landscape), 1024x1536 (portrait) | 
+ Quality | 
+ low , medium , high , xhigh , max , auto | 
+ Both models also support custom dimensions as WIDTHxHEIGHT strings, such as 1536x864 . Width and height must be multiples of 16, the aspect ratio must be between 1:3 and 3:1, and neither edge may exceed 3840 pixels. The total pixel count must be between 655,360 and 8,294,400 (4K). Resolutions above 2560x1440 are experimental.
+
+Calculator source /_astro/GptImageTokenCalculator.react.7TppeEsP.js (data, not executed): base={low:16,medium:24,high:48,xhigh:64,max:96} for gpt-image-2.5 and 2.6; tokens = ceil(f*(2e6+w*h)/4e6) with f = base x round(base/(long/short)); 2.6 multiplied by {low:4.2,medium:3.3,high:1}. Reproduces the page's displayed 823 tokens for 2.6/low/1024x1024.

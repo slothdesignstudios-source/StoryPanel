@@ -1,0 +1,6 @@
+Source: https://developers.openai.com/api/docs/deprecations (fetched 2026-11-15)
+ Oct 23, 2026 | 
+ gpt-image-1 | 
+ gpt-image-2.5-sunburst or gpt-image-2.5-flare | 
+ Apr 22, 2026 | 
+ Oct 23, 2026 | 

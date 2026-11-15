@@ -1,0 +1,119 @@
+Source: https://ai.google.dev/gemini-api/docs/pricing -> https://aistudio.google.com/docs/pricing (fetched 2026-11-15)
+## Gemini 3.8 Flash {% id="gemini-3.8-flash" %}
+{% two-column-layout %}
+ {% left-column class="center-vertically" %}
+ *[`gemini-3.8-flash`](/docs/models/gemini-3.8-flash)*
+ {% /left-column %}
+ {% right-column class="center-vertically right-align" %}
+ {% button href="https://aistudio.google.com/prompts/new_chat?model=gemini-3.8-flash" variant="ais" %}
+ Try it in Google AI Studio
+ {% /button %}
+ {% /right-column %}
+{% /two-column-layout %}
+{% hr /%}
+Our most intelligent Flash model, engineered for long-horizon software
+engineering, autonomous agents, and complex enterprise workflows.
+{% tabs %}
+ {% tab title="Standard" %}
+ {% table %}
+ * Feature
+ * Free Tier
+ * Paid Tier, per 1M tokens in USD
+ ---
+ * Input price
+ * Free of charge
+ * $0.75 through December 31, 2026. 
+ $1.50 starting January 1, 2027.
+ ---
+ * Output price (including thinking tokens)
+ * Free of charge
+ * $3.75 through December 31, 2026. 
+ $7.50 starting January 1, 2027.
+ ---
+ * Context caching price
+ * Free of charge
+ * $0.075 through December 31, 2026. 
+ $0.15 starting January 1, 2027. 
+ $0.50 / 1,000,000 tokens per hour (storage price) through December 31, 2026. 
+ $1.00 / 1,000,000 tokens per hour (storage price) starting January 1, 2027.
+ ---
+ * Grounding with Google Search
+ * Not available
+ * 5,000 free search requests per month (shared across all Gemini 3 and newer models),
+ then $14 per 1,000 requests (subject to a [daily cap](/docs/pricing#pricing-for-tools) of 1,500 requests per day).
+ ---
+ * Grounding with Google Maps
+ * Not available
+ * 5,000 requests per month (free, shared across all Gemini 3 and newer models), then $14 / 1,000
+ search queries.
+ ---
+ * Used to improve our products
+## Gemini 3.1 Flash Image (Nano Banana 2) 🍌 {% id="gemini-3.1-flash-image" %}
+{% two-column-layout %}
+ {% left-column class="center-vertically" %}
+ *[`gemini-3.1-flash-image`](/docs/models/gemini-3.1-flash-image)*
+ {% /left-column %}
+ {% right-column class="center-vertically right-align" %}
+ {% button href="https://aistudio.google.com/prompts/new_chat?model=gemini-3.1-flash-image" variant="ais" %}
+ Try it in Google AI Studio
+ {% /button %}
+ {% /right-column %}
+{% /two-column-layout %}
+{% hr /%}
+Designed for speed and efficiency, the Gemini 3.1 Flash Image generation model
+is effective for quick, interactive responses and high throughput.
+{% tabs %}
+ {% tab title="Standard" %}
+ {% table %}
+ * Feature
+ * Free Tier
+ * Paid Tier, per 1M tokens in USD
+ ---
+ * Input price
+ * Not available
+ * $0.50 (text/image)
+ ---
+ * Output price
+ * Not available
+ * $3 (text and thinking) 
+ $60.00 (images) 
+ Equivalent to $0.045 per 0.5K image{% sup /%} 
+ $0.067 per 1K image{% sup /%}, 
+ $0.101 per 2K image{% sup /%}, 
+ and $0.151 per 4K image{% sup /%}.
+ ---
+ * Grounding with Google Web and Image Search{% sup %}**{% /sup %}
+ * Not available{% sup %}**{% /sup %}
+ * 5,000 free search requests per month (shared across all Gemini 3 and newer models),
+ then $14 per 1,000 requests for text and image-based grounding (subject to a [daily cap](/docs/pricing#pricing-for-tools) of 1,500 requests per day).
+ ---
+ * Used to improve our products
+ * [Yes](/docs/terms)
+ * [No](/docs/terms)
+ {% /table %}
+ {% /tab %}
+{% /tabs %}
+{% sup %}*{% /sup %} Image output is priced at $60 per 1,000,000 tokens. Output
+images at 0.5K (512px) consume 747 tokens and are equivalent to $0.045 per
+image. Output images at 1K (1024x1024px) consume 1120 tokens and are equivalent
+to $0.067 per image. Output images at 2K (2048x2048px) consume 1680 tokens and
+are equivalent to $0.101 per image. Output images at 4K (4096x4096px) consume
+2520 tokens and are equivalent to $0.151 per image.
+## Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) 🍌 {% id="gemini-3.1-flash-lite-image" %}
+{% two-column-layout %}
+ {% left-column class="center-vertically" %}
+ *[`gemini-3.1-flash-lite-image`](/docs/models/gemini-3.1-flash-lite-image)*
+ {% /left-column %}
+ {% right-column class="center-vertically right-align" %}
+ {% button href="https://aistudio.google.com/prompts/new_chat?model=gemini-3.1-flash-lite-image" variant="ais" %}
+ Try it in Google AI Studio
+ {% /button %}
+ {% /right-column %}
+{% /two-column-layout %}
+{% hr /%}
+Designed as the efficiency specialist of the image generation family, the Gemini
+3.1 Flash Lite Image model is designed for ultra-low latency and cost-effective
+image generation and editing.
+{% tabs %}
+ {% tab title="Standard" %}
+ {% table %}

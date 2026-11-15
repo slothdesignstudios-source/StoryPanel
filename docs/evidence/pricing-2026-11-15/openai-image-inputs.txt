@@ -1,0 +1,14 @@
+Source: https://developers.openai.com/api/docs/guides/images-vision (fetched 2026-11-15)
+ GPT Image model inputs 
+ GPT Image models use separate image-token pricing for generation and editing. The vision calculator does not estimate their input or output costs. For current rates, see image generation pricing ; for generation and editing workflows, see the Image generation guide .
+ GPT Image 1 
+ gpt-image-1 was shut down on October 23, 2026. The following input-token rules are retained for historical cost comparisons. See the deprecation notice for replacement models.
+ For legacy requests, use tile-based image sizing, but scale the shortest side down to 512px instead of 768px. Token use depends on the image dimensions and the input_fidelity parameter in the Images API .
+ When input fidelity is set to low, the base cost is 65 image tokens, and each tile costs 129 image tokens.
+When using high input fidelity, we add a set number of tokens based on the image’s aspect ratio in addition to the image tokens described above.
+ If your image is square, we add 4160 extra input image tokens.
+ If it is closer to portrait or landscape, we add 6240 extra tokens.
+ For historical image input-token prices, see the GPT Image 1 model page .
+ Limitations 
+ Vision models can make mistakes. Account for these limitations when designing your application:
+ Medical images : The model is not suitable for interpreting specialized medical images like CT scans and shouldn’t be used for medical advice.

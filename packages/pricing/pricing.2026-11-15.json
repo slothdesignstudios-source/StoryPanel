@@ -1,0 +1,67 @@
+{
+ "_note": "Checked 2026-11-15. Anthropic prices: official page fetched 2026-11-12 (docs/evidence/pricing-2026-11-12/). OpenAI and Gemini prices: official pages fetched 2026-11-15 (docs/evidence/pricing-2026-11-15/). VERIFIED there: the per-token rates below. NOT documented, so still ASSUMPTIONS: how many tokens gpt-image-2.5-sunburst counts per input (reference) image and per output image (OpenAI: 'use the response's usage to measure token consumption'). reserve_* fields are what each call holds before it is sent (neither API lets a caller cap image tokens); expect_* fields are only for the estimate; settled costs always use the usage each provider reports.",
+ "entries": [
+  {
+   "provider": "anthropic",
+   "model": "claude-sonnet-5-5",
+   "unit": "per_mtok",
+   "input_usd": "2.00",
+   "output_usd": "10.00",
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "verified_at": "2026-11-12",
+   "verification": "official page fetched 2026-11-12 (docs/evidence/pricing-2026-11-12/anthropic-pricing.txt)"
+  },
+  {
+   "provider": "anthropic",
+   "model": "claude-haiku-5-5",
+   "unit": "per_mtok",
+   "input_usd": "0.10",
+   "output_usd": "0.50",
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing (prompts up to 100K tokens)",
+   "verified_at": "2026-11-12",
+   "verification": "official page fetched 2026-11-12"
+  },
+  {
+   "provider": "openai",
+   "model": "gpt-image-2.5-sunburst",
+   "unit": "per_mtok_multimodal",
+   "input_usd": "5.00",
+   "image_input_usd": "8.00",
+   "output_usd": "30.00",
+   "image_output_usd": "30.00",
+   "reserve_input_tokens_per_image": 7000,
+   "reserve_output_image_tokens": 6500,
+   "reserve_output_text_tokens": 0,
+   "source": "https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst ; https://developers.openai.com/api/docs/guides/image-generation (GPT-Image-2.5: $8/M image input, $2 cached, $30/M image output, $5/M text input, $1.25 cached; text output not billed; standard processing). Token counts per image are not published for 2.5: reserve 7,000 per input image (above the only documented rule, gpt-image-1 high fidelity, at most about 6,563 for the app's image sizes) and 6,500 per output image; expect 628 output tokens (the docs' calculator formula at medium, largest size used, 1536x1536; the model page says that calculator does not estimate 2.5).",
+   "verified_at": "2026-11-15",
+   "verification": "VERIFIED rates (official model page and image guide, fetched 2026-11-15). Tokens per input and output image are not published for this model: the reserve_*/expect_* values are assumptions.",
+   "expect_input_tokens_per_image": 7000,
+   "expect_output_image_tokens": 628
+  },
+  {
+   "provider": "gemini",
+   "model": "gemini-3.1-flash-image",
+   "unit": "per_mtok_multimodal",
+   "input_usd": "0.50",
+   "image_input_usd": "0.50",
+   "output_usd": "3.00",
+   "image_output_usd": "60.00",
+   "reserve_input_tokens_per_image": 1120,
+   "reserve_output_image_tokens": 1120,
+   "reserve_output_text_tokens": 4000,
+   "source": "https://ai.google.dev/gemini-api/docs/pricing (paid tier: input $0.50/M text/image; output $3/M text and thinking, $60/M images; a 1K output image is 1,120 tokens = $0.067; Gemini 3 input images count 1,120 tokens at the default media resolution, docs/media-resolution)",
+   "verified_at": "2026-11-15",
+   "verification": "VERIFIED (official pricing and media-resolution pages, fetched 2026-11-15). Thinking tokens are not capped by the API: 4,000 reserved."
+  },
+  {
+   "provider": "gemini",
+   "model": "gemini-3.8-flash",
+   "unit": "per_mtok",
+   "input_usd": "1.50",
+   "output_usd": "7.50",
+   "source": "https://ai.google.dev/gemini-api/docs/pricing (paid tier: $0.75 input / $3.75 output incl. thinking per 1M tokens through 2026-12-31; $1.50 / $7.50 from 2027-01-01. The 2027 rate is used here, so estimates overstate cost by 2x until then). Input images: 1,120 tokens at the default media resolution (docs/media-resolution); the app reserves more (Anthropic's visual-token rule).",
+   "verified_at": "2026-11-15",
+   "verification": "VERIFIED (official pricing page, fetched 2026-11-15)."
+  }
+ ]
+}

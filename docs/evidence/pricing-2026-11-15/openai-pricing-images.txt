@@ -1,0 +1,32 @@
+Source: https://developers.openai.com/api/docs/pricing (fetched 2026-11-15, text extract)
+ gpt-6.1-sol | $12.00 | $60.00 | $0.60 | $15.00 | $30.00 | 
+ Regional processing (data residency) endpoints are charged a 10% uplift for models released on or after March 5, 2026. FedRAMP endpoints are also charged a 10% uplift. Priority processing was renamed Fast mode on July 30, 2026. GPT-5.6 Sol’s promotional pricing is available until November 30, 2026.
+ Multimodal models
+ Prices per 1M tokens unless noted. 
+ Images
+ Speed
+ Standard Batch 
+ Standard
+ Model | Modality | Input | Output | Cached input | 
+ gpt-image-2.6-sunburst | Image | $8.00 | $30.00 | $2.00 | 
+ Text | $5.00 | - | $1.25 | 
+ gpt-image-2.6-flare | Image | $8.00 | $30.00 | $2.00 | 
+ Text | $5.00 | - | $1.25 | 
+ All models 
+ Batch
+ Model | Modality | Input | Output | Cached input | 
+ gpt-image-2.6-sunburst | Image | $4.00 | $15.00 | $1.00 | 
+ Text | $2.50 | - | $0.625 | 
+ gpt-image-2.6-flare | Image | $4.00 | $15.00 | $1.00 | 
+ Text | $2.50 | - | $0.625 | 
+ gpt-image-2.5-sunburst | Image | $4.00 | $15.00 | $1.00 | 
+ Text | $2.50 | - | $0.625 | 
+ gpt-image-2.5-flare | Image | $4.00 | $15.00 | $1.00 | 
+ Text | $2.50 | - | $0.625 | 
+ All models 
+ For image generation cost estimates, use the calculator in the image generation guide .
+ Audio
+ GPT-Live
+ Model | Price per minute | 
+ gpt-live-1 | $0.05 | 
+ GPT-Live-1 voice sessions are billed per second,
