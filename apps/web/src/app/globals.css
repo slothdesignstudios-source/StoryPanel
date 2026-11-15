@@ -29,7 +29,7 @@
   --shadow-panel-sm: 2px 2px 0 0 var(--color-ink);
 }
 
-html { background: var(--color-paper); color: var(--color-ink); }
+html { background: var(--color-paper); color: var(--color-ink); scroll-padding-top: 5rem; /* keeps focused fields clear of the sticky header */ }
 body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; min-height: 100dvh; }
 h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
 
