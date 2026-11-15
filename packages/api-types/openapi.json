@@ -2814,19 +2814,96 @@
     "type": "object"
    },
    "ReviewItem": {
+    "description": "One item approval must acknowledge. `key` is bound to this exact content: the version, the\ncheck result and the message. Any change produces a new key, so an older confirmation (another\ntab, before an edit or a re-check) is refused by the server.",
     "properties": {
+     "beat": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Beat"
+     },
+     "character": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Character"
+     },
+     "issue": {
+      "title": "Issue",
+      "type": "string"
+     },
      "key": {
       "title": "Key",
+      "type": "string"
+     },
+     "kind": {
+      "title": "Kind",
       "type": "string"
      },
      "message": {
       "title": "Message",
       "type": "string"
+     },
+     "page": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Page"
+     },
+     "panel": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Panel"
+     },
+     "rule_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rule Id"
+     },
+     "rule_text": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rule Text"
      }
     },
     "required": [
      "key",
-     "message"
+     "message",
+     "kind",
+     "issue"
     ],
     "title": "ReviewItem",
     "type": "object"

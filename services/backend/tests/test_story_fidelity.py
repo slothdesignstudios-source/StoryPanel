@@ -260,12 +260,12 @@ async def test_uncertain_and_unavailable_checks_need_a_recorded_acknowledgement(
     p = await wait_checked(client, pid, headers)
     assert p["script"]["consistency"]["status"] == "unavailable"
     keys = [k["key"] for k in p["script"]["review_required"]]
-    assert keys == ["consistency_unavailable@script"]
+    assert [k.split("#")[0] for k in keys] == ["consistency_unavailable@script"]
     r = await client.post(f"/v1/projects/{pid}/script/approve",
                           json={"script_version": p["script_version"], "acknowledged": keys}, headers=headers)  # fmt: skip
     assert r.status_code == 200, r.text
     assert await overrides(pid, "script") == [
-        {"key": "consistency_unavailable@script", "message": p["script"]["review_required"][0]["message"]}
+        {"key": keys[0], "message": p["script"]["review_required"][0]["message"]}
     ]
 
 
@@ -394,3 +394,78 @@ async def test_missing_required_element_is_repaired_uncertain_goes_to_review(
     assert any(
         "Draw this clearly" in str(r.prompt) for r in fake.control.sync_requests
     )  # the fix note was used
+
+
+# ------------------------------------------------------------------ acknowledgements are bound to content
+@pytest.mark.workflow
+async def test_acknowledgements_are_labelled_and_bound_to_the_version_and_check(
+    client: Any, headers: dict[str, str], worker: Any
+) -> None:
+    fake.control.consistency_uncertain = {"apron_always"}
+    pid, p = await to_script_gate(client, headers)
+    v = p["script_version"]
+    items = p["script"]["review_required"]
+    assert items and all(i["page"] == 1 and i["panel"] and i["rule_id"] == "apron_always" for i in items)
+    assert all(
+        i["rule_text"] and i["kind"] and i["issue"] and not i["issue"].startswith("Panel") for i in items
+    )
+    assert len({(i["page"], i["panel"]) for i in items}) == len(items)  # every item names a different panel
+    old_keys = [i["key"] for i in items]
+    # another tab saves an edit: a new version with the same kind of findings
+    script = p["script"]["content"]
+    script["pages"][0]["panels"][0]["mood"] = "warm, a little nervous"
+    r = await client.patch(
+        f"/v1/projects/{pid}/script", headers=headers, json={"base_version": v, "script": script}
+    )
+    assert r.status_code == 200
+    p = await wait_checked(client, pid, headers)
+    new_keys = [i["key"] for i in p["script"]["review_required"]]
+    assert new_keys and not set(new_keys) & set(old_keys)  # same findings, new version: new keys
+    # the first tab still shows the old version
+    r = await client.post(f"/v1/projects/{pid}/script/approve", json={"script_version": v, "acknowledged": old_keys},
+                          headers=headers)  # fmt: skip
+    assert r.status_code == 409 and r.json()["error"]["code"] == "version_conflict"
+    # confirmations made before the edit do not approve the edited version
+    r = await client.post(f"/v1/projects/{pid}/script/approve",
+                          json={"script_version": v + 1, "acknowledged": old_keys}, headers=headers)  # fmt: skip
+    assert r.status_code == 422 and "out of date" in r.json()["error"]["message"]
+    r = await client.post(f"/v1/projects/{pid}/script/approve",
+                          json={"script_version": v + 1, "acknowledged": new_keys[:-1]}, headers=headers)  # fmt: skip
+    assert r.status_code == 422  # every item must be confirmed
+    r = await client.post(f"/v1/projects/{pid}/script/approve",
+                          json={"script_version": v + 1, "acknowledged": new_keys}, headers=headers)  # fmt: skip
+    assert r.status_code == 200
+    assert [o["key"] for o in await overrides(pid, "script")] == new_keys
+
+
+@pytest.mark.workflow
+async def test_sheet_confirmation_is_bound_to_the_cast_version(
+    client: Any, headers: dict[str, str], worker: Any
+) -> None:
+    fake.control.sheet_flags = {"kiro"}
+    pid = await start(client, headers)
+    p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_cast_approval"
+                       and all((c["sheet_check"] or {}).get("status") not in (None, "pending") for c in p["characters"]))  # fmt: skip
+    kiro = next(c for c in p["characters"] if c["slug"] == "kiro")
+    old = kiro["review"]["key"]
+    assert kiro["review"]["character"] == "Kiro" and kiro["review"]["kind"] == "Reference sheet flagged"
+    rules = [
+        {
+            k: v
+            for k, v in r.items()
+            if k in ("id", "text", "applies_to", "target", "strength", "visual", "source")
+        }
+        for r in p["bible"]["continuity_rules"]
+    ][:1]  # the Bible changes: one rule removed
+    r = await client.put(f"/v1/projects/{pid}/continuity-rules", headers=headers,
+                         json={"cast_version": p["cast_version"], "rules": rules})  # fmt: skip
+    assert r.status_code == 200
+    p = r.json()
+    new = next(c for c in p["characters"] if c["slug"] == "kiro")["review"]["key"]
+    assert new != old
+    r = await client.post(f"/v1/projects/{pid}/characters/approve",
+                          json={"cast_version": p["cast_version"], "acknowledged": [old]}, headers=headers)  # fmt: skip
+    assert r.status_code == 422
+    r = await client.post(f"/v1/projects/{pid}/characters/approve",
+                          json={"cast_version": p["cast_version"], "acknowledged": [new]}, headers=headers)  # fmt: skip
+    assert r.status_code == 200

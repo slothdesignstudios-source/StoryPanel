@@ -167,7 +167,8 @@ async def patch_script(project_id: uuid.UUID, body: api.PatchScript, request: Re
     async with transaction() as db:
         project = await repo.get_project(db, project_id, owner_id=user.id, lock=True)
         row = await projects.patch_script(db, project, body)
-        out = projects.script_out_of(row)
+        bible = await repo.latest_bible(db, project.id)
+        out = projects.script_out_of(row, {r.id: r.text for r in (bible.continuity_rules if bible else [])})
     await _after_commit(request, db)
     return out
 

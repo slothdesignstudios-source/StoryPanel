@@ -1523,12 +1523,33 @@ export interface components {
             /** Panel Ids */
             panel_ids: string[];
         };
-        /** ReviewItem */
+        /**
+         * ReviewItem
+         * @description One item approval must acknowledge. `key` is bound to this exact content: the version, the
+         *     check result and the message. Any change produces a new key, so an older confirmation (another
+         *     tab, before an edit or a re-check) is refused by the server.
+         */
         ReviewItem: {
+            /** Beat */
+            beat?: string | null;
+            /** Character */
+            character?: string | null;
+            /** Issue */
+            issue: string;
             /** Key */
             key: string;
+            /** Kind */
+            kind: string;
             /** Message */
             message: string;
+            /** Page */
+            page?: number | null;
+            /** Panel */
+            panel?: number | null;
+            /** Rule Id */
+            rule_id?: string | null;
+            /** Rule Text */
+            rule_text?: string | null;
         };
         /** ReviseCharacter */
         ReviseCharacter: {

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Plus, Trash2, Wand2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, Dialog, DialogClose, DialogContent, DialogTrigger, Field, Input, Notice, Select, Spinner, Textarea, cn } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
@@ -185,6 +185,58 @@ function CharacterCard({ project, c }: { project: Project; c: Character }) {
   );
 }
 
+type ReviewItem = Project["characters"][number]["review"] & object;
+
+/** Confirmations for review items. They start unchecked, and clear whenever the set of items
+ *  changes (an edit, a re-check, another tab's save): every key is bound to its content, so the
+ *  server would refuse an old confirmation anyway. */
+function useAcks(items: { key: string }[]) {
+  const [acks, setAcks] = useState<string[]>([]);
+  const fingerprint = items.map((i) => i.key).join("|");
+  useEffect(() => setAcks([]), [fingerprint]);
+  return { acks, setAcks, all: items.every((i) => acks.includes(i.key)) };
+}
+
+/** While a sticky bottom bar is on screen, the browser keeps focused and scrolled-to elements clear of
+ *  it: scroll-padding-bottom follows the bar's measured height (it wraps on small screens). */
+function useStickyClearance() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const apply = () => { root.style.scrollPaddingBottom = `${Math.ceil(el.getBoundingClientRect().height) + 32}px`; };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.scrollPaddingBottom = ""; };
+  }, []);
+  return ref;
+}
+
+function ReviewList({ items, acks, setAcks }: { items: NonNullable<ReviewItem>[]; acks: string[]; setAcks: (a: string[]) => void }) {
+  return (
+    <ul className="space-y-2 text-sm">
+      {items.map((r) => {
+        const where = [r.page ? `Page ${r.page}` : null, r.panel ? `Panel ${r.panel}` : null, r.character].filter(Boolean).join(" · ");
+        return (
+          <li key={r.key} className="rounded-md border-2 border-line p-2">
+            <label className="flex items-start gap-2">
+              <input type="checkbox" className="mt-1" checked={acks.includes(r.key)} onChange={(e) => setAcks(e.target.checked ? [...acks, r.key] : acks.filter((k) => k !== r.key))} />
+              <span>
+                <span className="block font-semibold">{where ? `${where}: ` : ""}{r.kind}</span>
+                {r.rule_text && <span className="block">Rule: “{r.rule_text}”</span>}
+                {r.beat && <span className="block">Beat: {r.beat}</span>}
+                <span className="block text-muted">{r.issue}</span>
+              </span>
+            </label>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 type SheetItem = { item: string; note?: string; visible?: string; depicted_correctly?: string };
 
 /** The reference-sheet review: flags for the user to look at. Nothing is redrawn automatically. */
@@ -267,13 +319,13 @@ function RulesWithDraft({ project }: { project: Project }) {
 
 export function Cast({ project }: { project: Project }) {
   const refresh = useRefresh(project.id);
-  const [acks, setAcks] = useState<string[]>([]);
+  const reviews = project.characters.flatMap((c) => (c.review ? [c.review] : []));
+  const { acks, setAcks, all: allAcked } = useAcks(reviews);
   const approve = useMutation({
     mutationFn: async () => (await api.POST("/v1/projects/{project_id}/characters/approve", { ...path(project.id), body: { cast_version: project.cast_version, acknowledged: acks } })).data,
     onSuccess: refresh,
     onError: (e) => { if (e instanceof ApiError && e.status === 409) refresh(); },
   });
-  const reviews = project.characters.flatMap((c) => (c.review ? [c.review] : []));
   const reviewing = project.characters.some((c) => (c.sheet_check as { status?: string } | null)?.status === "pending");
   const updating = project.characters.some((c) => c.revising || c.sheet_status !== "ready") || reviewing;
   const waiting = project.approved_cast_version === project.cast_version;
@@ -292,16 +344,14 @@ export function Cast({ project }: { project: Project }) {
           {reviews.length === 0 ? (
             <Button variant="primary" size="lg" busy={approve.isPending || waiting} disabled={updating || unsaved} onClick={() => approve.mutate()}>{waiting ? "Starting the script" : "Approve cast and write the script"}</Button>
           ) : (
-            <Dialog>
+            <Dialog onOpenChange={(open) => { if (open) setAcks([]); }}>
               <DialogTrigger asChild><Button variant="primary" size="lg" busy={approve.isPending || waiting} disabled={updating || unsaved}>{waiting ? "Starting the script" : "Approve cast and write the script"}</Button></DialogTrigger>
               <DialogContent title="Approve with flagged sheets?" description="These sheets were flagged or couldn't be reviewed. Every panel is drawn from them, so problems here repeat across the comic. Confirm each one to approve anyway; your choice is recorded.">
-                <ul className="space-y-2 text-sm">
-                  {reviews.map((r) => <li key={r.key}><label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={acks.includes(r.key)} onChange={(e) => setAcks(e.target.checked ? [...acks, r.key] : acks.filter((k) => k !== r.key))} /><span>{r.message}</span></label></li>)}
-                </ul>
+                <ReviewList items={reviews} acks={acks} setAcks={setAcks} />
                 {approve.isError && <Notice tone="danger" title="Couldn't approve">{describeError(approve.error)}</Notice>}
                 <div className="mt-4 flex justify-end gap-3">
                   <DialogClose asChild><Button variant="ghost">Go back and revise</Button></DialogClose>
-                  <Button variant="primary" busy={approve.isPending} disabled={!reviews.every((r) => acks.includes(r.key))} onClick={() => approve.mutate()}>Approve anyway</Button>
+                  <Button variant="primary" busy={approve.isPending} disabled={!allAcked} onClick={() => approve.mutate()}>Approve anyway</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -347,7 +397,7 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
   const dialogue = panel.dialogue ?? [];
   const setLine = (i: number, patch: Partial<DialogueItem>) => onChange({ ...panel, dialogue: dialogue.map((d, n) => (n === i ? { ...d, ...patch } : d)) });
   return (
-    <fieldset className={cn("space-y-3 rounded-md border-2 p-4", errors.length ? "border-danger" : "border-line")}>
+    <fieldset onFocusCapture={(e) => (e.target as HTMLElement).scrollIntoView?.({ block: "nearest" })} className={cn("space-y-3 rounded-md border-2 p-4", errors.length ? "border-danger" : "border-line")}>
       <legend className="px-1 text-sm font-bold">{label}{panel.emphasis === "large" && <Badge tone="action" className="ml-2">Large panel</Badge>}</legend>
       <div className="grid gap-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)] md:grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)_minmax(10rem,1.4fr)]">
         <Field label="Shot">{(ids) => <Select {...ids} value={panel.shot} onChange={(e) => onChange({ ...panel, shot: e.target.value as PanelSpec["shot"] })}><option value="wide">Wide</option><option value="medium">Medium</option><option value="close_up">Close-up</option></Select>}</Field>
@@ -424,8 +474,8 @@ export function ScriptReview({ project }: { project: Project }) {
     mutationFn: async () => (await api.PATCH("/v1/projects/{project_id}/script", { ...path(project.id), body: { base_version: base, script: draft } })).data!,
     onSuccess: () => { refresh(); void qc.invalidateQueries({ queryKey: pk("estimate", project.id) }); toast.success("Script saved as a new version"); },
   });
-  const [acks, setAcks] = useState<string[]>([]);
-  useEffect(() => setAcks([]), [script.version]);
+  const { acks, setAcks, all: allAcked } = useAcks(script.review_required);
+  const barRef = useStickyClearance();
   const approve = useMutation({
     mutationFn: async () => (await api.POST("/v1/projects/{project_id}/script/approve", { ...path(project.id), body: { script_version: script.version, acknowledged: acks } })).data,
     onSuccess: refresh,
@@ -473,7 +523,7 @@ export function ScriptReview({ project }: { project: Project }) {
           </div>
         </section>
       ))}
-      <div className="sticky bottom-4 z-20">
+      <div ref={barRef} data-sticky-approval className="sticky bottom-4 z-20">
         <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
           <div className="text-sm">
             {estimate.data ? <p className="font-semibold">Drawing {estimate.data.breakdown.panels ?? "these"} panels holds {estimate.data.credits} credits <span className="font-normal text-muted">(you have {estimate.data.available})</span></p> : <Spinner label="Calculating cost" />}
@@ -481,21 +531,19 @@ export function ScriptReview({ project }: { project: Project }) {
           </div>
           <div className="flex gap-3">
             <Button busy={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>Save changes</Button>
-            <Dialog>
+            <Dialog onOpenChange={(open) => { if (open) setAcks([]); }}>
               <DialogTrigger asChild><Button variant="primary" disabled={dirty || save.isPending || checking || script.has_errors || waiting || estimate.data?.sufficient === false} busy={waiting}>{waiting ? "Starting illustration" : "Approve and draw"}</Button></DialogTrigger>
               <DialogContent title="Start drawing?" description={`This approves script version ${script.version} and holds ${estimate.data?.credits ?? "the"} credits. ${estimate.data?.note ?? ""}`}>
                 {review.length > 0 && (
                   <div className="mt-2 space-y-2">
                     <p className="text-sm font-semibold">Review before drawing. Confirm each item to approve anyway; your choice is recorded with this version.</p>
-                    <ul className="space-y-2 text-sm">
-                      {review.map((r) => <li key={r.key}><label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={acks.includes(r.key)} onChange={(e) => setAcks(e.target.checked ? [...acks, r.key] : acks.filter((k) => k !== r.key))} /><span>{r.message}</span></label></li>)}
-                    </ul>
+                    <ReviewList items={review} acks={acks} setAcks={setAcks} />
                   </div>
                 )}
                 {approve.isError && <Notice tone="danger" title="Couldn't start">{approve.error instanceof ApiError && approve.error.code === "insufficient_credits" ? <>You don&apos;t have enough credits. <Link className="underline" href="/billing">Add credits</Link></> : describeError(approve.error)}</Notice>}
                 <div className="mt-4 flex justify-end gap-3">
                   <DialogClose asChild><Button variant="ghost">Not yet</Button></DialogClose>
-                  <Button variant="primary" busy={approve.isPending} disabled={!review.every((r) => acks.includes(r.key))} onClick={() => approve.mutate()}>Approve and draw</Button>
+                  <Button variant="primary" busy={approve.isPending} disabled={!allAcked} onClick={() => approve.mutate()}>Approve and draw</Button>
                 </div>
               </DialogContent>
             </Dialog>

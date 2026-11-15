@@ -219,8 +219,20 @@ class EstimateOut(Out):
 
 
 class ReviewItem(Out):
+    """One item approval must acknowledge. `key` is bound to this exact content: the version, the
+    check result and the message. Any change produces a new key, so an older confirmation (another
+    tab, before an edit or a re-check) is refused by the server."""
+
     key: str
     message: str
+    kind: str  # short label of the problem
+    page: int | None = None  # 1-based
+    panel: int | None = None  # 1-based
+    rule_id: str | None = None
+    rule_text: str | None = None
+    beat: str | None = None
+    character: str | None = None
+    issue: str  # the specific finding, without the location prefix
 
 
 class CharacterOut(Out):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from datetime import UTC, datetime
@@ -208,14 +209,31 @@ async def patch_bible(db: AsyncSession, project: Project, body: api.PatchBible) 
     await events.emit(db, project.id, "bible.updated", {"cast_version": project.cast_version})
 
 
-def script_out_of(row: Script) -> api.ScriptOut:
+def script_out_of(row: Script, rules: dict[str, str] | None = None) -> api.ScriptOut:
     return api.ScriptOut(version=row.version, source=row.source, beats=row.beats,  # type: ignore[arg-type]
                          content=row.content, issues=row.issues,  # type: ignore[arg-type]
                          has_errors=any(i.get("severity") == "error" for i in row.issues),
-                         consistency=row.consistency, review_required=script_review(row))  # fmt: skip
+                         consistency=row.consistency, review_required=script_review(row, rules))  # fmt: skip
 
 
-def sheet_review(c: Character) -> api.ReviewItem | None:
+def _bound_key(base: str, *parts: object) -> str:
+    """A review key bound to the content it confirms (see api.ReviewItem)."""
+    digest = hashlib.sha256("|".join(str(p) for p in parts).encode()).hexdigest()[:12]
+    return f"{base}#{digest}"
+
+
+REVIEW_KINDS = {
+    "rule_uncertain": "Couldn't confirm a continuity rule is kept",
+    "beat_not_expressed": "Panel doesn't seem to show its beat",
+    "beat_uncertain": "Couldn't confirm the panel shows its beat",
+    "rule_conflict": "Continuity rules conflict",
+    "consistency_incomplete": "Panel wasn't checked against the Story Bible",
+    "consistency_unavailable": "Script wasn't checked against the Story Bible",
+}
+_ISSUE_PATH = re.compile(r"^pages\[(\d+)\]\.panels\[(\d+)\](?:\.rule:([a-z0-9_]+)|\.beat:(.+))?$")
+
+
+def sheet_review(c: Character, cast_version: int = 0) -> api.ReviewItem | None:
     """What approving the cast acknowledges for this character's current sheet, if anything."""
     check = c.sheet_check or {}
     if check.get("sheet_version") != c.sheet_version or check.get("status") not in ("flagged", "unavailable"):
@@ -230,23 +248,47 @@ def sheet_review(c: Character) -> api.ReviewItem | None:
         if check.get("whole_figures") == "no" or check.get("layout_unverified"):
             bits.append("a turnaround view may be cut off")
         msg = f"{c.name}'s reference sheet was flagged: " + "; ".join(bits or ["see the sheet review"]) + "."
-    return api.ReviewItem(key=f"sheet:{c.slug}:v{c.sheet_version}", message=msg)
+    kind = "Reference sheet not reviewed" if check["status"] == "unavailable" else "Reference sheet flagged"
+    return api.ReviewItem(key=_bound_key(f"sheet:{c.slug}:v{c.sheet_version}", cast_version, check.get("checked_at"), msg),
+                          message=msg, kind=kind, character=c.name, issue=msg.split(": ", 1)[-1])  # fmt: skip
 
 
-def script_review(row: Script) -> list[api.ReviewItem]:
-    """Review-level items of one script version that approval must acknowledge explicitly."""
-    items = [api.ReviewItem(key=f"{i['code']}@{i['path']}", message=i["message"])
-             for i in row.issues if i.get("severity") == "review"]  # fmt: skip
+def script_review(row: Script, rules: dict[str, str] | None = None) -> list[api.ReviewItem]:
+    """Review-level items of one script version that approval must acknowledge explicitly, each
+    labelled with page, panel, rule or beat, and keyed to this version and check result."""
+    rules = rules or {}
+    checked = (row.consistency or {}).get("checked_at")
+    items = []
+    for i in row.issues:
+        if i.get("severity") != "review":
+            continue
+        m = _ISSUE_PATH.match(i["path"])
+        page, panel, rule_id, beat = (
+            (int(m[1]) + 1, int(m[2]) + 1, m[3], m[4]) if m else (None, None, None, None)
+        )
+        message = i["message"]
+        issue = message.split(": ", 1)[1] if m and ": " in message else message
+        items.append(api.ReviewItem(
+            key=_bound_key(f"{i['code']}@{i['path']}", row.version, checked, message), message=message,
+            kind=REVIEW_KINDS.get(i["code"], i["code"].replace("_", " ")), page=page, panel=panel,
+            rule_id=rule_id, rule_text=rules.get(rule_id or ""), beat=beat, issue=issue))  # fmt: skip
     if row.consistency is None:  # written before the check existed: not checked
-        items.append(api.ReviewItem(key="consistency_unavailable@script",
-                                    message="This version wasn't checked against the Story Bible."))  # fmt: skip
+        msg = "This version wasn't checked against the Story Bible (it was written before the check existed)."
+        items.append(api.ReviewItem(key=_bound_key("consistency_unavailable@script", row.version, msg), message=msg,
+                                    kind=REVIEW_KINDS["consistency_unavailable"], issue=msg))  # fmt: skip
     return items
 
 
 def _acknowledge(required: list[api.ReviewItem], acknowledged: list[str], what: str) -> list[dict[str, str]]:
+    """Every current review item must be confirmed by its exact key. Keys from an older version or
+    check result never match, so a stale confirmation cannot approve changed content."""
     missing = [r for r in required if r.key not in set(acknowledged)]
     if missing:
-        raise AppError(ErrorCode.VALIDATION, f"Review the flagged items and confirm to approve {what} anyway.",
+        stale = bool(set(acknowledged) - {r.key for r in required})
+        raise AppError(ErrorCode.VALIDATION,
+                       ("These confirmations are out of date: the content or its check changed. Review the items "
+                        f"again to approve {what}.") if stale else
+                       f"Review the flagged items and confirm to approve {what} anyway.",
                        fields=[{"field": "acknowledged", "message": r.message} for r in missing][:20])  # fmt: skip
     return [{"key": r.key, "message": r.message} for r in required]
 
@@ -331,7 +373,8 @@ async def approve_cast(db: AsyncSession, project: Project, version: int, user_id
     if any((c.sheet_check or {}).get("status") == "pending" and (c.sheet_check or {}).get("sheet_version")
            == c.sheet_version for c in cast):  # fmt: skip
         raise AppError(ErrorCode.CONFLICT, "Still reviewing the reference sheets. Try again in a moment.")
-    overrides = _acknowledge([r for c in cast if (r := sheet_review(c))], acknowledged or [], "the cast")
+    overrides = _acknowledge([r for c in cast if (r := sheet_review(c, project.cast_version))], acknowledged or [],
+                             "the cast")  # fmt: skip
     await record_approval(db, project.id, "cast", version, user_id, overrides=overrides or None)
     await events.emit(db, project.id, "cast.approved", {"cast_version": version})
     await outbox.enqueue(db, "signal", f"approve:cast:{project.id}:{version}", {
@@ -402,7 +445,9 @@ async def approve_script(db: AsyncSession, project: Project, version: int, user_
         raise AppError(
             ErrorCode.CONFLICT, "Still checking this version against the Story Bible. Try again in a moment."
         )
-    overrides = _acknowledge(script_review(row), acknowledged or [], "this script")
+    bible = await repo.latest_bible(db, project.id)
+    rules = {r.id: r.text for r in (bible.continuity_rules if bible else [])}
+    overrides = _acknowledge(script_review(row, rules), acknowledged or [], "this script")
     panels = sum(len(p.panels) for p in script.pages)
     # Spending gate: the full illustration price is held now, charged per delivered panel.
     await credits.reserve(db, project.owner_id, panels * s.credits_per_panel, purpose="panels",
@@ -577,7 +622,7 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
                          sheet_version=c.sheet_version, revising=bool(c.pending_revision),
                          images=images.get(c.slug, {}),
                          sheet_check=c.sheet_check if (c.sheet_check or {}).get("sheet_version") == c.sheet_version else None,
-                         review=sheet_review(c))
+                         review=sheet_review(c, project.cast_version))
         for c in await repo.cast_rows(db, pid)]  # fmt: skip
     loc_rows = (await db.execute(
         select(Location, Asset.storage_key).outerjoin(Asset, Asset.id == Location.reference_asset_id)
@@ -588,7 +633,7 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
     script_out = None
     row = await repo.script_row(db, pid, project.script_version or None)
     if row is not None:
-        script_out = script_out_of(row)
+        script_out = script_out_of(row, {r.id: r.text for r in (bible.continuity_rules if bible else [])})
     approved = dict((await db.execute(
         select(Approval.kind, func.max(Approval.content_version))
         .where(Approval.project_id == pid, Approval.status == "approved").group_by(Approval.kind))).all())  # fmt: skip
