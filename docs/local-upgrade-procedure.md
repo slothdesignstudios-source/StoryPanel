@@ -1,50 +1,35 @@
 # Local upgrade procedure (your WSL installation)
 
-**Status:** prepared and rehearsed here, not run on your machine. Your computer is not connected to
-this session, so its actual commit, schema and processes are not known yet. Step 1 finds them out
-read-only. Nothing in steps 1–2 changes your installation. Step 3 onward does, and needs your go-ahead
-after you have seen step 1's output.
+**This session has no connection to your computer.** You run every command, and I tailor the next
+steps to what step 1 shows. Steps 2–7 below are a **draft**: do not run them until I have adapted them
+to your inspection output. Your `.env` and data are kept throughout. The database is never reset,
+dropped or recreated.
 
-Rehearsal on this machine:
-- `scripts/upgrade-verify.sh c6a45b1`: an old version, comics paused at both gates, a completed comic, migration, takeover; 27 checks pass;
-- `scripts/restart-check.py`: pass;
-- the recovery tests: `tests/test_lost_workflows.py`, 3 pass.
+## 1. Inspect (read-only, no secrets, about one minute)
 
-**Never:** reset, drop or recreate the `storypanel` database; delete `/tmp/storypanel-data`; or run
-`--apply` before reading the dry run.
+1. Save the attached `inspect-install.sh` from the chat to your Windows **Downloads** folder.
+   Keep the name exactly `inspect-install.sh`; if the browser saved it as `inspect-install (1).sh`,
+   rename it.
+2. In your Ubuntu (WSL) terminal, run this one command:
 
-## 1. Look (read-only)
+   ```bash
+   tr -d '\r' < "$(wslpath "$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')")/Downloads/inspect-install.sh" > ~/inspect-install.sh && bash ~/inspect-install.sh ~/storypanel > ~/storypanel-inspect.txt 2>&1; cat ~/storypanel-inspect.txt
+   ```
 
-A second checkout of the new version, next to yours. Your own checkout and running app are not
-touched:
+   It copies the script into your WSL home folder (removing Windows line endings if any), runs it
+   against `~/storypanel`, and saves the report to `~/storypanel-inspect.txt`.
+3. Paste the printed report into the chat.
 
-```bash
-git -C ~/storypanel fetch origin && git -C ~/storypanel worktree add ~/storypanel-next origin/main
-```
+What it does:
+- It only reads: `git` metadata, process information, `psql` queries in a read-only transaction,
+  and the Temporal workflow list.
+- It writes only two files in your WSL home folder: the script copy and the report.
+- From `.env` it prints only variable **names** and the file mode, never values.
 
-```bash
-~/storypanel-next/scripts/inspect-install.sh ~/storypanel > ~/storypanel-inspect-before.txt; cat ~/storypanel-inspect-before.txt
-```
+If `cmd.exe` is not available in your WSL, use this path instead, replacing `<you>` with your
+Windows user name: `/mnt/c/Users/<you>/Downloads/inspect-install.sh`.
 
-It prints:
-- your commit and local changes;
-- whether Temporal keeps state in memory;
-- the API and worker provider mode;
-- `.env` mode and variable names (never values);
-- database encoding, schema revision and size;
-- comics by status, with each running or waiting comic and whether its workflow still exists;
-- open credit holds and unresolved potential charges;
-- free disk space.
-
-**Send me that output.** I will confirm or adjust the steps below to what it shows. In particular:
-
-| If the report shows | Then |
-|---|---|
-| `server_encoding: SQL_ASCII` | step 3b (copy to a new UTF-8 database) is needed |
-| a schema revision other than 0011 | I check the migration path from that revision first |
-| comics in `queued`, `planning`, `scripting` or `illustrating` | wait until they reach an approval or finish before step 4. Stopping cuts off their paid calls |
-| `temporal: state IN MEMORY` | every waiting comic loses its workflow at step 4. Step 6 lists them, and you choose which to resume |
-| `.env` mode other than 600, or `git-ignored: NO` | fix that first (`chmod 600 ~/storypanel/.env`) |
+**Steps 2–7: draft, tailored after step 1.**
 
 ## 2. Back up (changes nothing)
 

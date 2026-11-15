@@ -14,10 +14,10 @@ Native Ubuntu works the same, without step 1.
   - **Anthropic:** console.anthropic.com → API keys.
   - **OpenAI:** platform.openai.com → API keys (a project key).
   - **Google Gemini:** aistudio.google.com → Get API key, on a project with billing enabled.
-- Recommended before any paid run: an Anthropic **workspace spend limit** and an OpenAI **project
-  budget** for the keys you use. Google billing budgets only send alerts, so watch Gemini usage in AI
-  Studio. These are the only limits the providers enforce themselves. The app's own cap stops it from
-  *starting* new paid work, but cannot stop a request that is already running.
+- Optional, before a paid run: a provider-side spend limit for each key. What each setting actually
+  does is in [`smoke-test-cost.md`](smoke-test-cost.md) §5. Alerts and budgets only notify. Even the
+  enforcing limits act with a delay and do not stop a request that is already running. The app's own
+  cap stops it from *starting* new paid work; it cannot stop a running request either.
 
 ## 1. Install WSL and the tools (once)
 In PowerShell as administrator:

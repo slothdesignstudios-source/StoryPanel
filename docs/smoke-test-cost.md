@@ -162,6 +162,20 @@ request id where the provider shows one. A timed-out call has no request id. Mat
 model, put `attempt:<attempt_id>` in the `request_id` column, and enter `0` if the dashboard shows
 no charge.
 
-**For a hard ceiling**, set provider-side limits yourself: an Anthropic workspace spend limit and an
-OpenAI project budget for the keys you use. Google billing budgets only alert. None of these stops a
-request that is already running.
+## 5. Provider-side spend controls (official documentation, fetched 2026-11-15)
+
+These are separate from the application cap. They act on your provider accounts, not on StoryPanel,
+and this repository configures none of them. Excerpts: `docs/evidence/spend-limits-2026-11-15/`.
+
+| Provider | Setting | Documented effect | Documented limitation |
+|---|---|---|---|
+| OpenAI | **Spend alert** (organisation or project) | Sends a notification; "API traffic continues" | Does not enforce anything |
+| OpenAI | **Hard spend limit** (organisation or project; "Enforce a hard limit") | Affected requests return 429 (`project_spend_limit_exceeded` / `organization_spend_limit_exceeded`) | "Enforcement is not instantaneous… recorded spend can slightly exceed the configured amount" |
+| Anthropic | **Monthly spend limit** set by you (organisation, or a workspace) | Requests return HTTP 400 ("You have reached your specified … API usage limits") | Enforcement timing and in-flight requests are not documented |
+| Google Gemini | **Project spend cap** in AI Studio (experimental) | Spending is capped per project | "Subject to overages for around a 10 minute latency period"; not available for invoiced accounts |
+
+No provider documents stopping a request that is already running, and each setting needs
+permissions on your account, which this session cannot check. None of them is a strict ceiling:
+OpenAI and Google document a lag, and Anthropic documents no timing. If you set one, set it at or
+just above the application cap. Only the **USD 8 application cap** is enforced by StoryPanel, before
+each call, and §4 lists what can exceed it.

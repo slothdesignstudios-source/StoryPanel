@@ -1,0 +1,60 @@
+Source: https://ai.google.dev/gemini-api/docs/billing -> aistudio.google.com/docs/billing (fetched 2026-11-15)
+## Spend caps  {% id="spend-caps" %}
+
+The Gemini API supports monthly spend caps at both the billing account tier and
+project levels. These controls are designed to protect your account from
+unexpected overages, and the ecosystem to ensure service availability.
+
+*Note that spend caps are not available for [Invoiced (or Offline)](https://docs.cloud.google.com/billing/docs/concepts#billing_account_types)
+accounts.*
+
+### Project spend caps  {% id="project-spend-caps" %}
+
+Experimental: The feature is experimental and limited in scope. You are subject
+to overages for around a 10 minute latency period.
+
+You can set your own [project-level](/docs/api-key#google-cloud-projects) spend caps in AI Studio.
+This is useful if you have multiple projects under the same billing
+account and want to ensure each has access to enough of the cumulative spending
+limit.
+
+Accounts with the project editor, owner, or admin [roles](https://docs.cloud.google.com/iam/docs/roles-overview) can set spend caps per
+project in AI Studio on the [Spend](https://aistudio.google.com/spend) page
+under **Monthly spend cap** > **Edit spend cap**.
+
+For details on the specific Google Cloud IAM permissions required to view or edit spend caps and billing information in AI Studio, see the [AI Studio troubleshooting guide](/docs/troubleshoot-ai-studio#iam-permissions).
+
+If you [move a project to a different billing account](https://docs.cloud.google.com/billing/docs/how-to/modify-project#change_the_billing_account_for_a_project),
+any spend cap you already set for that project will persist, but any accumulated
+spend will reset to $0 for the new billing cycle.
+
+Long-running tasks like [batch mode](/docs/batch-api) completions and
+agent sessions may incur overages beyond your project spend cap.
+
+Billing data processing times can be delayed in AI Studio, up to around 10
+minutes. You may experience overages beyond your project cap if billing data
+hasn't processed before more charges are accrued.
+
+### Billing account tier spend caps  {% id="tier-spend-caps" %}
+
+Each [tier](/docs/billing#about-billing) has a maximum monthly spend limit:
+
+| Usage tier | Spend cap |
+| :--- | :--- |
+| **Free** | N/A |
+| **Tier 1** | $250 |
+| **Tier 2** | $2,000 |
+| **Tier 3** | $20,000 - $100,000 |
+
+Monthly usage caps are enforced for the Gemini API at the [billing account](/docs/billing#cloud-billing) level. While default limits are preset, you can [request an
+increase](https://docs.google.com/forms/d/e/1FAIpQLSdiP6BWJyNNN65lnwnlOr-5Kv0MOFp0jLQyqi_ixVCfddqWBw/viewform)
+to accommodate higher usage. Total spend is aggregated across all linked
+projects that have the Gemini API service enabled. After the cumulative account
+total reaches the tier limit, service is paused for all projects linked to that
+billing account until the start of the next billing cycle (the 1st of each
+month).
+
+#### Evaluate your billing account spend  {% id="evaluate-spend" %}
+
+To evaluate your historical monthly spending to determine if the new [Billing
+Account tier spend caps](/docs/billing#tier-spend-caps) will impact your ongoing projects,

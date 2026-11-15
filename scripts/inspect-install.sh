@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 # Read-only report on a running local StoryPanel installation. Changes nothing, makes no paid call,
-# prints no secret (for .env only the variable NAMES are listed, never values).
+# prints no secret (for .env only the variable NAMES are listed, never values). Self-contained: it
+# needs only bash, git and psql, plus the temporal CLI if present, and no checkout of the new version.
 #
-#   scripts/inspect-install.sh [install-dir]          default: ~/storypanel
-#
-# Run it from a separate checkout of the new version (e.g. a git worktree) so the installation's
-# own checkout stays untouched:
-#   git -C ~/storypanel fetch origin && git -C ~/storypanel worktree add ~/storypanel-next origin/main
-#   ~/storypanel-next/scripts/inspect-install.sh ~/storypanel
+#   bash inspect-install.sh [install-dir]          default: ~/storypanel
 set -uo pipefail
 DIR="${1:-$HOME/storypanel}"
 PGHOST="${PGHOST:-127.0.0.1}" PGPORT="${PGPORT:-5432}" PGUSER="${PGUSER:-storypanel}" DB="${DB:-storypanel}"
@@ -62,12 +58,15 @@ echo "unresolved provider attempts (potential charges): $(q "select count(*) || 
 
 h "Temporal (read-only listing)"
 if [ -n "$TEMPORAL_BIN" ]; then
-  running=$("$TEMPORAL_BIN" workflow list --address 127.0.0.1:7233 --query 'ExecutionStatus="Running"' --limit 1000 2>&1)
+  if ! running=$("$TEMPORAL_BIN" workflow list --address 127.0.0.1:7233 --query 'ExecutionStatus="Running"' --limit 1000 2>&1); then
+    echo "  Temporal at 127.0.0.1:7233 did not answer: cannot tell which workflows exist ($(echo "$running" | head -1 | cut -c1-120))"
+  else
   echo "$running" | head -40 | sed 's/^/  /'
   waiting=$(q "select workflow_id from projects where deleted_at is null and workflow_id is not null and status not in ('completed','partially_completed','failed','cancelled','blocked','expired')")
   missing=$(comm -23 <(echo "$waiting" | sort -u | grep .) <(echo "$running" | awk '$1=="Running"{print $2}' | sort -u))
   echo "running or waiting comics: $(echo "$waiting" | grep -c .); with no running workflow now: $(echo "$missing" | grep -c .)"
   echo "$missing" | grep . | sed 's/^/  no workflow: /' | head -40
+  fi
 else echo "temporal CLI not found: skipped"; fi
 echo "file-backed state: $([ -f "$SP_DATA/temporal.db" ] && echo "$SP_DATA/temporal.db exists" || echo none)"
 
