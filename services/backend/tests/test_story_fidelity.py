@@ -473,3 +473,36 @@ async def test_sheet_confirmation_is_bound_to_the_cast_version(
     r = await client.post(f"/v1/projects/{pid}/characters/approve",
                           json={"cast_version": p["cast_version"], "acknowledged": [new]}, headers=headers)  # fmt: skip
     assert r.status_code == 200
+
+
+async def test_beat_check_judges_panel_content_not_only_the_tag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A correctly tagged panel can still fail the beat check: the check sends what the panel
+    shows (action, lettering) and the beat's meaning, and a "not expressed" verdict becomes a
+    review item even though the declared coverage is complete."""
+    from storypanel.domain.schemas import Beat, DialogueItem
+    from storypanel.providers import metering
+    from storypanel.providers.base import CallContext
+
+    sent: dict[str, str] = {}
+
+    async def judge(**kw: Any) -> ScriptConsistencyReport:
+        sent["user"] = kw["user"]
+        return ScriptConsistencyReport.model_validate({"panels": [{"page": 1, "panel": 1, "rules": [], "beats": [
+            {"beat": "twist", "expressed": "no", "reason": "nothing unexpected happens"}]}], "conflicts": []})  # fmt: skip
+
+    monkeypatch.setattr(metering, "structured", judge)
+    p = panel(
+        beats=["twist"],
+        action="Kiro stirs the soup",
+        dialogue=[DialogueItem(type="speech", speaker="kiro", text="Soup again.")],
+    )
+    script = ComicScript(pages=[PageSpec(panels=[p])])
+    beats = BeatSheet(structure="kishotenketsu",
+                      beats=[Beat(name="twist", summary="Kiro reveals the soup is for the girl", pages=[1])])  # fmt: skip
+    assert not [i for i in beat_coverage(script, beats) if i.severity == "error"]  # the tag alone is fine
+    issues = await consistency.check_script(script, beats, [], CallContext("t", "u", "p"))
+    for content in ("action: Kiro stirs the soup", "Soup again.", "Kiro reveals the soup is for the girl",
+                    "claims beats: twist"):  # fmt: skip
+        assert content in sent["user"], content
+    (issue,) = issues
+    assert issue.code == "beat_not_expressed" and issue.severity == "review" and "twist" in issue.message

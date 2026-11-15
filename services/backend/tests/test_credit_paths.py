@@ -227,3 +227,26 @@ async def test_holds_made_before_hold_history_are_marked_unavailable(
     assert h["history"] == "unavailable" and h["remaining"] == 2 and c["holds_without_history"] == 1
     legacy_charge = next(a for a in c["activity"] if a["type"] == "charge")
     assert legacy_charge["held_change"] == 0 and legacy_charge["available_change"] == -1
+
+
+async def test_hold_history_cannot_be_rewritten(client: Any, headers: dict[str, str], worker: Any) -> None:
+    """Hold, settle and release events are append-only in the database (trigger from 0012), like
+    the ledger: an UPDATE or DELETE is refused whoever issues it."""
+    from sqlalchemy import text
+
+    from storypanel.db.models import CreditReservationEvent
+
+    pid, p = await to_script_gate(client, headers)
+    async with transaction() as db:
+        before = [(e.kind, e.amount) for e in (await db.execute(select(CreditReservationEvent))).scalars()]
+    assert before  # the script hold was recorded
+    for stmt in (
+        "update credit_reservation_events set amount = 999",
+        "delete from credit_reservation_events",
+    ):
+        with pytest.raises(Exception, match="append-only"):
+            async with transaction() as db:
+                await db.execute(text(stmt))
+    async with transaction() as db:
+        after = [(e.kind, e.amount) for e in (await db.execute(select(CreditReservationEvent))).scalars()]
+    assert after == before
