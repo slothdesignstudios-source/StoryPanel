@@ -366,3 +366,19 @@ Still open:
 - The 12-credit drop: needs the owner's `reconcile-comic.sql` output.
 - "Wide last" showing equal panels: needs the layout id from that output.
 - Live verification of every check's judgment quality and of lettering on real art.
+
+## Verification and visible fixes 2026-11-15 (from 7040061)
+
+No paid calls, no deployment. Levels as above. Nothing is live-provider-verified.
+
+| # | Item | Commit | Evidence | Level |
+|---|---|---|---|---|
+| 1 | Confirmations: labelled per page, panel, rule and issue; start unchecked; clear on reopen and on any change; keys bound on the server to version, check result and message (stale or partial confirmations refused, also from another tab) | 5258b00 | `test_story_fidelity` (2 new), `e2e/review-dialog.spec.ts`, screenshots 05c, 08, 08b | sim, browser |
+| 2 | Script fields and validation messages never under the sticky bar or header (reproduced at 1280×720 and on a Pixel 7) | a157480 | `e2e/sticky.spec.ts` (desktop and mobile), screenshot 16 | browser |
+| 3 | Readable lettering floor of 15 units (6.48 pt on the 6×9 in page; 30 px in the PNG); overflow flagged instead of shrinking (before: down to 11 units = 4.75 pt); editor, PNG and PDF agree; exports report lettering size; strip PDFs warn | bddf5fa | `test_lettering_legibility`, `text.test.ts`, `e2e/legibility.spec.ts`, `e2e/lettering.spec.ts`, screenshots 13, 15 | sim, pixel, browser. No real art |
+| 4 | Rule changes mark older sheet and panel checks as stale (fingerprints). A stale sheet needs confirmation; legacy results are reported as unknown. Phase 2 audit, plus 2 tests for points that had none | 55c8066, 5901b91 | `test_stale_checks`, `docs/phase2-audit.md`, screenshot 14 | sim |
+| 5 | Cancellation: no new paid request once a cancel is recorded (also for ended, deleted, or owner-deleted comics); late results kept, never charged, in either order; deterministic race test | 4a9d759 | `test_cancellation_race` (fails without the guard) | sim |
+| 6 | Upgrade from c6a45b1 (0011): replay, migration, legacy reporting, paused comics finish, ledger reconciles; SQL_ASCII → UTF-8 on copies. Found and fixed: the local Temporal kept workflows in memory (approvals after a restart did nothing); lost comics can be listed and resumed; signals keyed per workflow run | 6ab88a7, db8ae41, c5db1c0 | `docs/upgrade-verification.md`, `docs/evidence/upgrade/` (27 checks pass), `test_lost_workflows` | sim (real Postgres and Temporal) |
+| 7 | Proposed live test (prop rule, distinct shots, script edit, all exports), simulated with both providers; cost model updated | 06da962 | `docs/live-test-proposal.md`, `docs/evidence/smoke/sim-fidelity-*` | sim |
+
+Still open: see [`blockers.md`](blockers.md) → "Remaining blockers (2026-11-15)".

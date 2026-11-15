@@ -129,7 +129,7 @@ and a seagull, as a 3-panel strip):
 7. One instruction edit of panel 1.
 8. PDF, PNG and CBZ exports. These make no paid call: local resampling, with effective-DPI and
    lettering-size reports. A 6-inch strip PDF reports lettering below 6.48 pt (expected; see
-   `docs/remaining-blockers.md`).
+   `docs/blockers.md`).
 
 The approved amount becomes a lifetime spending cap on the smoke user. If the next reservation would
 cross it, the run stops.
