@@ -5,6 +5,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SP_RUN="${SP_RUN:-/tmp/storypanel-run}"
+SP_DATA="${SP_DATA:-/tmp/storypanel-data}"  # same place as scripts/native-services.sh keeps Postgres
 mkdir -p "$SP_RUN"
 . "$ROOT/scripts/stack-env.sh"   # SP_STACK_LIVE=1: live providers from config/live-smoke.env + .env
 TEMPORAL_BIN="${TEMPORAL_BIN:-$(command -v temporal || ls /tmp/temporal-sdk-python-* 2>/dev/null | head -1)}"
@@ -15,7 +16,11 @@ case "${1:-start}" in
     cd "$ROOT/services/backend"
     launch s3 uv run moto_server -H 127.0.0.1 -p 9000
     [ -n "$TEMPORAL_BIN" ] || { echo "temporal CLI not found; set TEMPORAL_BIN" >&2; exit 1; }
-    launch temporal "$TEMPORAL_BIN" server start-dev --ip 127.0.0.1 --port 7233 --headless --log-level warn
+    # A file-backed store: workflows paused at an approval gate survive a stack restart. Without it the
+    # dev server keeps them in memory, and an approval sent after a restart has nothing to resume.
+    mkdir -p "$SP_DATA"
+    launch temporal "$TEMPORAL_BIN" server start-dev --ip 127.0.0.1 --port 7233 --headless --log-level warn \
+      --db-filename "$SP_DATA/temporal.db"
     uv run alembic upgrade head >"$SP_RUN/migrate.log" 2>&1
     sleep 3
     launch api uv run uvicorn storypanel.api.app:app_factory --factory --host 127.0.0.1 --port 8000

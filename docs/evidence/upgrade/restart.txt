@@ -1,0 +1,11 @@
+Local stack restart with a comic paused at the cast approval (simulated providers), 2026-11-15.
+
+Before (Temporal dev server in memory, scripts/native-stack.sh at 4a9d759):
+  comic created, paused at awaiting_cast_approval; stack stopped and started
+  POST /characters/approve -> 200
+  after 120 s: still awaiting_cast_approval (timeout); api.log: outbox_target_gone (signal had no workflow)
+
+After (--db-filename $SP_DATA/temporal.db):
+  comic b51dd980-... created, paused at awaiting_cast_approval; stack stopped and started
+  POST /characters/approve -> 200
+  PASS after a stack restart, the paused comic resumed at the next gate: awaiting_script_approval
