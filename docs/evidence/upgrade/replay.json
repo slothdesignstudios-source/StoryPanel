@@ -1,0 +1,14 @@
+[
+ {
+  "check": "replay ComicWorkflow-comic-15971345-f913-4bb7-9faa-3d649ef5c691",
+  "ok": true
+ },
+ {
+  "check": "replay ComicWorkflow-comic-9b5f45b6-99e5-4127-a07a-de30a5fc4b10",
+  "ok": true
+ },
+ {
+  "check": "replay ComicWorkflow-comic-b282b282-dc01-46e1-ae0c-256ce6f979af",
+  "ok": true
+ }
+]

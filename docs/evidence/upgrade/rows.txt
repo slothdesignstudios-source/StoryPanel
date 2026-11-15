@@ -1,0 +1,36 @@
+PASS every pre-upgrade table keeps its row count
+added by the migration: credit_reservation_events (0 rows)
+-- rows after the migration
+account_deletions 0
+approvals 3
+assets 105
+audit_log 6
+balloons 7
+billing_subscriptions 0
+character_refs 66
+characters 6
+credit_ledger 10
+credit_purchases 0
+credit_reservation_events 0
+credit_reservations 4
+exports 0
+idempotency_keys 3
+jobs 4
+locations 6
+outbox 6
+pages 1
+panel_feedback 0
+panel_versions 4
+panels 4
+pending_object_deletions 0
+project_events 45
+projects 3
+provider_attempts 80
+provider_usage 80
+scripts 2
+signup_grants 2
+spend_caps 0
+story_bibles 3
+subscription_entitlements 0
+users 1
+webhook_events 0

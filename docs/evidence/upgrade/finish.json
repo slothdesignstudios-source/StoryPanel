@@ -1,0 +1,119 @@
+[
+ {
+  "check": "every comic keeps its status after the upgrade",
+  "ok": true,
+  "detail": {
+   "cast_gate": "awaiting_cast_approval",
+   "script_gate": "awaiting_script_approval",
+   "completed": "completed"
+  }
+ },
+ {
+  "check": "sheets drawn before reviews existed: no review, nothing to confirm, rules currency unknown",
+  "ok": true
+ },
+ {
+  "check": "old Story Bible reads with no continuity rules and its world rules unchanged",
+  "ok": true
+ },
+ {
+  "check": "script written before the Bible check: reported as not checked, confirmation required",
+  "ok": true,
+  "detail": [
+   "Script wasn't checked against the Story Bible"
+  ]
+ },
+ {
+  "check": "holds made before the hold history existed are listed as history unavailable",
+  "ok": true,
+  "detail": {
+   "holds": [
+    {
+     "id": "9e334c80-be16-4925-b95a-6fe1f72356b9",
+     "purpose": "plan",
+     "label": "Cast, sheets and script",
+     "project_id": "9b5f45b6-99e5-4127-a07a-de30a5fc4b10",
+     "project_title": "Noodles After Midnight",
+     "held": 8,
+     "charged": 6,
+     "remaining": 2,
+     "opened_at": "2026-11-15T16:18:06.947432Z",
+     "history": "unavailable"
+    }
+   ],
+   "without_history": 4
+  }
+ },
+ {
+  "check": "balance and held credits unchanged by the upgrade",
+  "ok": true,
+  "detail": {
+   "after": {
+    "id": "c8e2ce44-4741-45f5-bf0d-d0388b615923",
+    "email": "upgrade-check@example.com",
+    "plan": "free",
+    "balance": 174,
+    "available": 172,
+    "reserved": 2
+   },
+   "before": {
+    "balance": 174,
+    "reserved": 2
+   }
+  }
+ },
+ {
+  "check": "comic paused at the cast gate before the upgrade can be approved after it",
+  "ok": true,
+  "detail": "{\"request_id\":\"cast:1\",\"status\":\"accepted\"}"
+ },
+ {
+  "check": "its script, written after the upgrade, gets the new Story Bible check",
+  "ok": true,
+  "detail": {
+   "status": "done",
+   "checked_at": "2026-11-15T16:18:23.684858+00:00"
+  }
+ },
+ {
+  "check": "and its script can be approved",
+  "ok": true,
+  "detail": "{\"request_id\":\"script:1\",\"status\":\"accepted\"}"
+ },
+ {
+  "check": "approving the pre-upgrade script without confirming 'not checked' is refused",
+  "ok": true,
+  "detail": 422
+ },
+ {
+  "check": "with the confirmation it is approved (recorded as an override)",
+  "ok": true,
+  "detail": "{\"request_id\":\"script:1\",\"status\":\"accepted\"}"
+ },
+ {
+  "check": "both paused comics finish with the new code",
+  "ok": true,
+  "detail": {
+   "cast_gate": "completed",
+   "script_gate": "completed"
+  }
+ },
+ {
+  "check": "the comic completed before the upgrade still reads with every panel",
+  "ok": true
+ },
+ {
+  "check": "its panel checks predate rule fingerprints: reported unknown, not current",
+  "ok": true
+ },
+ {
+  "check": "the pre-upgrade comic exports with the new code",
+  "ok": true,
+  "detail": "{\"id\":\"9062221f-e2a0-498a-8f23-17d86c0e73fc\",\"format\":\"pdf\",\"status\":\"queued\",\"created_at\":\"2026-11-15T16:18:26.861318Z\",\"download_url\":null,\"error\":null,\"edit_version\":0,\"print_quality\":null}"
+ },
+ {
+  "check": "no credits left held at the end",
+  "ok": true,
+  "detail": []
+ }
+]

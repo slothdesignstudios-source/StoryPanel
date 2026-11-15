@@ -1,0 +1,8 @@
+server_encoding of the SQL_ASCII copy: SQL_ASCII
+PASS the SQL_ASCII database rejects non-ASCII JSON: ERROR:  unsupported Unicode escape sequence
+PASS restore into UTF-8 (invalid bytes would stop the restore with an error, never be dropped silently)
+PASS every table has the same row count in the UTF-8 copy
+PASS non-ASCII text arrives intact: Café on the pier: ñandú, Ærø, «olé», 漫画
+PASS the UTF-8 copy migrates to 0014 (head)
+PASS the UTF-8 database stores non-ASCII JSON
+server_encoding of the new copy: UTF8
