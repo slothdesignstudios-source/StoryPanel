@@ -250,8 +250,9 @@ async def test_approvals_are_scoped_to_exact_versions(
         f"/v1/projects/{pid}/characters/approve", json={"cast_version": v1}, headers=headers
     )
     assert busy.status_code == 409  # a revision is in flight
+    # the revised sheet is reviewed before the cast can be approved: wait for that review too
     p = await wait_for(client, pid, headers, lambda p: p["cast_version"] == v1 + 1 and not any(
-        c["revising"] for c in p["characters"]))  # fmt: skip
+        c["revising"] or (c["sheet_check"] or {}).get("status") == "pending" for c in p["characters"]))  # fmt: skip
     assert next(c for c in p["characters"] if c["slug"] == slug)["sheet_version"] == 2
     assert "(revised)" in next(c for c in p["characters"] if c["slug"] == slug)["spec"]["visual"]["outfit"]
     stale = await client.post(
