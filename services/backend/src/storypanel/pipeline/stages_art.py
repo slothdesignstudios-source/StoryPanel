@@ -608,7 +608,8 @@ async def stage_export_page(export_id: uuid.UUID, page_index: int) -> dict[str, 
                                           kind="export_page", image=rendered)  # fmt: skip
             export.pages_done = {**(export.pages_done or {}), str(page_index): str(asset.id)}
             export.print_quality = merge_print_quality(export.print_quality, page_index, quality,
-                                                      "external_upscale" if external_upscale else "local_resample")  # fmt: skip
+                                                      "external_upscale" if external_upscale else "local_resample",
+                                                      letters=lettering_sizes(page_index, page))  # fmt: skip
     for q in quality:
         metrics.provider_print_dpi.observe(q["dpi"])
     return {"skipped": False}
@@ -638,8 +639,30 @@ def print_resolution(page_index: int, n: int, image: bytes, rect: tuple[float, .
     }
 
 
+def lettering_sizes(page_index: int, page: dict[str, Any]) -> list[dict[str, Any]]:
+    """Smallest lettering per panel at the export sizes: points when printed at the PDF trim width,
+    pixels in the exported PNG/CBZ page."""
+    from storypanel.pipeline import lettering
+
+    width = float(page["size"][0])
+    rows = []
+    for n, p in enumerate(page["panels"]):
+        sizes = [float(b["geometry"]["text_size"]) for b in p["balloons"]
+                 if b["type"] != "sfx" and b.get("geometry", {}).get("text_size") is not None]  # fmt: skip
+        if sizes:
+            rows.append({"page": page_index + 1, "panel": n + 1, "text_size": min(sizes),
+                         "pt": lettering.printed_pt(min(sizes), width),
+                         "px": round(min(sizes) * EXPORT_WIDTH / width, 1)})  # fmt: skip
+    return rows
+
+
 def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels: list[dict[str, Any]],
-                        method: str) -> dict[str, Any]:  # fmt: skip
+                        method: str, letters: list[dict[str, Any]] | None = None) -> dict[str, Any]:  # fmt: skip
+    from storypanel.pipeline.lettering import MIN_PRINT_PT
+
+    lrows = [r for r in (current or {}).get("lettering", []) if r["page"] != page_index + 1] + (letters or [])
+    lrows.sort(key=lambda r: (r["page"], r["panel"]))
+    small = [r for r in lrows if r["pt"] < MIN_PRINT_PT]
     rows = [r for r in (current or {}).get("panels", []) if r["page"] != page_index + 1] + panels
     rows.sort(key=lambda r: (r["page"], r["panel"]))
     low = [r for r in rows if r["dpi"] < DPI_LOW]
@@ -650,7 +673,13 @@ def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels:
                         "they will look blurry in print. Fine on screen.")  # fmt: skip
     if soft:
         warnings.append(f"{len(soft)} panel(s) between {DPI_LOW} and {DPI_GOOD} DPI: may look soft in print.")
-    return {"method": method, "print_width_in": PRINT_WIDTH_IN,
+    if small:
+        low_pt = min(r["pt"] for r in small)
+        warnings.append(f"Lettering in {len(small)} panel(s) prints at {low_pt:g} pt at a {PRINT_WIDTH_IN:g}-inch "
+                        f"width, below the {MIN_PRINT_PT:g} pt readable size. Fine on screen. To print it readably, "
+                        f"print at least {PRINT_WIDTH_IN * MIN_PRINT_PT / low_pt:.1f} in wide.")  # fmt: skip
+    return {"lettering": lrows, "min_letter_pt": min((r["pt"] for r in lrows), default=None),
+            "min_letter_px": min((r["px"] for r in lrows), default=None), "method": method, "print_width_in": PRINT_WIDTH_IN,
             "note": "Panels are resampled locally (Lanczos); this does not add detail." if method == "local_resample"
             else "Panels were upscaled by an external model.",
             "min_dpi": min((r["dpi"] for r in rows), default=None), "panels": rows, "warnings": warnings}  # fmt: skip

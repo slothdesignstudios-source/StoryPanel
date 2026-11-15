@@ -195,6 +195,7 @@ function BalloonTools({ balloon, geometry, pageSize, onGeometry, onText, onDelet
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2"><h3 className="text-lg font-bold capitalize">{balloon.type === "sfx" ? "Sound effect" : balloon.type}</h3>{FLAG_LABELS.filter(([f]) => balloon.flags.includes(f)).map(([f, label]) => <Badge key={f} tone="warn">{label}</Badge>)}</div>
+      {balloon.flags.includes("overflow") && <p role="note" className="text-sm text-warn">This text is already at the smallest readable size and still doesn&apos;t fit, so it spills out of the balloon. Shorten the text, make the balloon larger, or move it where there&apos;s more room.</p>}
       <Field label="Text" hint={`${words} of 25 words. ${LETTERING_SUPPORTED_SUMMARY}`} error={words > 25 ? "Balloons hold at most 25 words. Shorten this line." : unsupported.length ? unsupportedLetteringMessage(unsupported) : null}>
         {(ids) => <Textarea {...ids} className="min-h-20 font-comic text-base" maxLength={300} value={textValue} onChange={(e) => onText(e.target.value)} />}
       </Field>
@@ -221,7 +222,7 @@ function BalloonTools({ balloon, geometry, pageSize, onGeometry, onText, onDelet
 // ------------------------------------------------------------------ editor
 /** Lettering problems the server flags; each needs the user to move or shorten the balloon. */
 const FLAG_LABELS: [string, string][] = [
-  ["overflow", "Text doesn't fit"],
+  ["overflow", "Text doesn't fit at a readable size"],
   ["overlaps_lettering", "Overlaps other lettering"],
   ["tail_crosses_lettering", "Tail crosses other lettering"],
   ["unsupported_characters", "Contains characters that can't be printed"],
@@ -230,7 +231,7 @@ const FLAG_LABELS: [string, string][] = [
 ];
 
 
-type PrintQualityReport = { min_dpi?: number | null; warnings?: string[]; note?: string; print_width_in?: number } | null | undefined;
+type PrintQualityReport = { min_dpi?: number | null; min_letter_pt?: number | null; min_letter_px?: number | null; warnings?: string[]; note?: string; print_width_in?: number } | null | undefined;
 
 /** Effective print resolution of the exported panels (local resampling never adds detail). */
 function PrintQuality({ q }: { q: PrintQualityReport }) {
@@ -238,6 +239,7 @@ function PrintQuality({ q }: { q: PrintQualityReport }) {
   return (
     <div className="w-full text-xs text-muted">
       <span>Lowest panel resolution: {q.min_dpi} DPI at a {q.print_width_in ?? 6}-inch print width. {q.note}</span>
+      {q.min_letter_pt != null && <span> Smallest lettering: {q.min_letter_pt} pt at that width, {q.min_letter_px} px in the image files.</span>}
       {(q.warnings ?? []).map((w) => <p key={w} role="note" className="font-semibold text-warn">{w}</p>)}
     </div>
   );
@@ -371,7 +373,7 @@ export function Editor({ project }: { project: Project }) {
                 <li key={p.id}>
                   <button type="button" aria-pressed={panelId === p.id && !balloonId} onClick={() => set({ panelId: p.id, balloonId: null })} className={cn("w-full rounded-md px-2 py-1 text-left font-semibold hover:bg-ink/5", panelId === p.id && !balloonId && "bg-sun")}>Panel {p.index + 1}{p.status !== "ok" && <span className="ml-2 font-normal text-warn">{p.busy ? "redrawing" : p.status === "needs_attention" ? QA_STATE_LABEL[p.qa_state ?? ""] ?? "needs attention" : p.status.replace("_", " ")}</span>}</button>
                   <ul className="ml-3 border-l-2 border-line pl-2">
-                    {p.balloons.map((b) => <li key={b.id}><button type="button" aria-pressed={balloonId === b.id} onClick={() => set({ panelId: p.id, balloonId: b.id })} className={cn("w-full truncate rounded-md px-2 py-1 text-left hover:bg-ink/5", balloonId === b.id && "bg-sun")}><span className="text-muted">{b.type}: </span>{texts[b.id] ?? b.text}</button></li>)}
+                    {p.balloons.map((b) => <li key={b.id}><button type="button" aria-pressed={balloonId === b.id} onClick={() => set({ panelId: p.id, balloonId: b.id })} className={cn("w-full truncate rounded-md px-2 py-1 text-left hover:bg-ink/5", balloonId === b.id && "bg-sun")}><span className="text-muted">{b.type}: </span>{b.flags.includes("overflow") && <span className="font-semibold text-warn">doesn&apos;t fit · </span>}{texts[b.id] ?? b.text}</button></li>)}
                   </ul>
                 </li>
               ))}

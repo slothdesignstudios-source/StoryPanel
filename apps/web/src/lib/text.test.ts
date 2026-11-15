@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitText, innerBox, wordCount, wrap } from "./text";
+import { READABLE_MIN, fitText, innerBox, wordCount, wrap } from "./text";
 
 describe("balloon text fitting", () => {
   it("wraps greedily and never drops words", () => {
@@ -14,6 +14,12 @@ describe("balloon text fitting", () => {
     const tight = fitText("a much longer line of dialogue than this little box can hold", "x", 60, 30, 22);
     expect(tight.size).toBeLessThan(22);
     expect(tight.fits).toBe(false);
+  });
+  it("never sets text below the readable size: it reports the overflow instead", () => {
+    const tight = fitText("a much longer line of dialogue than this little box can hold", "x", 60, 30, 22);
+    expect(tight.size).toBe(READABLE_MIN);
+    expect(tight.fits).toBe(false);
+    expect(fitText("Hi", "x", 200, 60, 10).size).toBe(READABLE_MIN); // a stored size below the floor is raised
   });
   it("uses the ellipse inset for speech and padding for captions", () => {
     innerBox("speech", 100, 100).forEach((v) => expect(v).toBeCloseTo(66));

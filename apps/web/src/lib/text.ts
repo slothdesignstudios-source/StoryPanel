@@ -4,6 +4,8 @@ export const LINE_HEIGHT = 1.16;
 export const ELLIPSE_INSET = 0.66;
 export const THOUGHT_INSET = 0.58;
 export const BOX_PAD = 10;
+/** Smallest readable lettering in page units (lettering.READABLE_MIN): text is never set smaller. */
+export const READABLE_MIN = 15;
 
 let ctx: CanvasRenderingContext2D | null = null;
 function measure(text: string, font: string, size: number): number {
@@ -33,8 +35,8 @@ export function innerBox(type: string, w: number, h: number): [number, number] {
   return type === "speech" || type === "thought" ? [w * inset, h * inset] : [Math.max(1, w - 2 * BOX_PAD), Math.max(1, h - 2 * BOX_PAD)];
 }
 
-export function fitText(text: string, font: string, boxW: number, boxH: number, maxSize: number, minSize = 9) {
-  let size = maxSize;
+export function fitText(text: string, font: string, boxW: number, boxH: number, maxSize: number, minSize = READABLE_MIN) {
+  let size = Math.max(maxSize, minSize);
   for (;;) {
     const lines = wrap(text, font, size, boxW);
     const width = Math.max(...lines.map((l) => measure(l, font, size)));

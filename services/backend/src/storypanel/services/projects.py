@@ -37,7 +37,7 @@ from storypanel.domain.states import ProjectStatus as S
 from storypanel.domain.validation import has_errors, validate_script
 from storypanel.errors import AppError, ErrorCode, invalid_state, not_found, version_conflict
 from storypanel.obs import metrics
-from storypanel.pipeline import moderation, qa, story
+from storypanel.pipeline import lettering, moderation, qa, story
 from storypanel.pipeline.stages_art import panel_rect
 from storypanel.pipeline.stages_plan import initial_consistency, record_approval
 from storypanel.services import credits, events, outbox, repo
@@ -702,9 +702,12 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
 
 
 def balloon_out(b: Balloon) -> api.BalloonOut:
+    flags = list(b.flags or [])
+    if b.type != "sfx" and "overflow" not in flags and lettering.below_readable(b.geometry or {}):
+        flags.append("overflow")  # set below the readable floor before it existed: shown, not re-shrunk
     return api.BalloonOut(id=str(b.id), panel_id=str(b.panel_id), order_index=b.order_index,
                           type=b.type, speaker_id=b.speaker_id, text=b.text, geometry=b.geometry,
-                          flags=b.flags, user_edited=b.user_edited, version=b.version)  # fmt: skip
+                          flags=flags, user_edited=b.user_edited, version=b.version)  # fmt: skip
 
 
 async def list_exports(db: AsyncSession, project_id: uuid.UUID) -> list[api.ExportOut]:

@@ -19,6 +19,16 @@ from storypanel.catalog import font_path
 Rect = tuple[float, float, float, float]  # x, y, w, h
 
 FONT_MAX, FONT_MIN = 22.0, 15.0
+# Smallest readable lettering, in page units. Text is never set smaller: when it cannot fit at
+# this size the balloon is flagged "overflow" (shorten, move or enlarge it). What it means at the
+# intended outputs (all exports scale the page to a fixed width):
+#   6 x 9 in page (1000 units at 432 pt): 15 x 0.432 = 6.48 pt printed; 30 px in the 2000 px PNG.
+#   strip (1600 units): 18.75 px in the 2000 px PNG; 4.05 pt if printed 6 in wide (below the
+#   floor, reported as a print warning; see readable_print_pt).
+# A chosen floor, not a reader study.
+READABLE_MIN = FONT_MIN
+PRINT_WIDTH_PT = 432.0  # = render.PDF_TRIM_WIDTH_PT (6 in), repeated here to avoid an import cycle
+MIN_PRINT_PT = round(READABLE_MIN * PRINT_WIDTH_PT / 1000.0, 2)  # 6.48 pt: the floor on the page format
 SFX_FONT = 54.0
 LINE_HEIGHT = 1.16
 TARGET_ASPECT = 1.3
@@ -455,7 +465,8 @@ def typeset(
     stored: `text_size` (the fitted size, never above `font_size`) and `lines` (the exact
     line breaks). The browser and the server renderer both draw these stored lines with the
     same font files and never re-wrap, so a balloon breaks identically on screen and on paper.
-    Returns the updated geometry and its flags ("overflow" if even the minimum size cannot fit).
+    Returns the updated geometry and its flags ("overflow" if it cannot fit at READABLE_MIN: the
+    text is never shrunk below the readable floor; the user shortens, moves or resizes instead).
     """
     g = dict(geometry)
     g.setdefault("font_size", FONT_MAX)
@@ -467,10 +478,21 @@ def typeset(
         return g, missing
     iw, ih = inner_box(kind, float(g["w"]), float(g["h"]))
     size, lines, fits = fit_text(
-        " ".join(text.split()), font, iw, ih, float(g["font_size"]), min_size=FONT_MIN - 4
+        " ".join(text.split()), font, iw, ih, max(float(g["font_size"]), READABLE_MIN), min_size=READABLE_MIN
     )
     g.update(text_size=size, lines=lines, typeset=TYPESET_VERSION)
     return g, missing + ([] if fits else ["overflow"])
+
+
+def printed_pt(text_size: float, page_width: float) -> float:
+    """Letter size in points when the page is printed at the PDF trim width."""
+    return round(text_size * PRINT_WIDTH_PT / page_width, 2)
+
+
+def below_readable(geometry: dict[str, Any]) -> bool:
+    """Stored typesetting smaller than the floor (balloons set before the floor existed)."""
+    size = geometry.get("text_size")
+    return size is not None and float(size) < READABLE_MIN - 1e-6
 
 
 def check_geometry(kind: str, text: str, geometry: dict[str, Any], font: str = "comic_neue") -> list[str]:
