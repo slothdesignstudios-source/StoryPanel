@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Read-only report on a local StoryPanel installation. Changes nothing, makes no paid call, contacts
-# no external service, and prints no secret: from process environments and .env it prints only
-# variable NAMES or yes/no, never a database URL, password or key. Needs bash, git, psql, python3,
-# curl, and the temporal CLI (for workflow status).
+# Read-only report on a local StoryPanel installation. Changes nothing and makes no paid call. It
+# contacts only endpoints verified to be on this machine (127.0.0.1, localhost, ::1 or a local
+# socket); any other configured database, Temporal or storage address is reported as "external
+# endpoint skipped". It prints no secret: from process environments and .env only variable NAMES or
+# yes/no, never a database URL, password or key. Needs bash, git, psql, python3, curl and the
+# temporal CLI (for workflow status).
 #
 #   bash inspect-install.sh [install-dir]          default: ~/storypanel
 set -uo pipefail
@@ -10,6 +12,9 @@ DIR="${1:-$HOME/storypanel}"
 SP_RUN="${SP_RUN:-/tmp/storypanel-run}" SP_DATA="${SP_DATA:-/tmp/storypanel-data}"
 TEMPORAL_BIN="${TEMPORAL_BIN:-$(command -v temporal || ls /tmp/temporal-sdk-python-* 2>/dev/null | head -1)}"
 h() { printf '\n== %s\n' "$1"; }
+is_local() {  # host (or empty / a socket directory) -> success only for this machine
+  case "$1" in ""|/*|127.0.0.1|localhost|::1|"[::1]") return 0 ;; *) return 1 ;; esac
+}
 pidof_run() { local f="$SP_RUN/$1.pid"; [ -f "$f" ] && kill -0 "$(cat "$f")" 2>/dev/null && cat "$f"; }
 
 # Settings the app processes really use (worker first, then API), read from /proc. The python helper
@@ -68,13 +73,15 @@ if [ -n "$CFG_PID" ]; then
   echo "  SP_DATABASE_URL configured: $HAS_DB_URL"
   echo "  SP_PROVIDER_MODE: ${CFG_SP_PROVIDER_MODE:-unset (fake)}; SP_FAKE_SCENARIO set: $CFG_FAKE_SCENARIO_SET"
   echo "  SP_FAL_ENABLED: ${CFG_SP_FAL_ENABLED:-unset}; SP_VOYAGE_ENABLED: ${CFG_SP_VOYAGE_ENABLED:-unset}"
-  echo "  SP_TEMPORAL_ADDRESS: ${CFG_SP_TEMPORAL_ADDRESS:-unset (127.0.0.1:7233)}; SP_TEMPORAL_NAMESPACE: ${CFG_SP_TEMPORAL_NAMESPACE:-unset (default)}"
+  ta="${CFG_SP_TEMPORAL_ADDRESS:-127.0.0.1:7233}"
+  echo "  SP_TEMPORAL_ADDRESS: $(is_local "${ta%:*}" && echo "$ta" || echo "external (not shown)"); SP_TEMPORAL_NAMESPACE: ${CFG_SP_TEMPORAL_NAMESPACE:-unset (default)}"
   echo "  SP_S3_BUCKET: ${CFG_SP_S3_BUCKET:-unset (storypanel-assets)}; SP_PRICING_FILE: ${CFG_SP_PRICING_FILE:-unset}"
 else
   echo "no running worker or API: using the local defaults for the checks below"
 fi
 export PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
 TADDR="${CFG_SP_TEMPORAL_ADDRESS:-127.0.0.1:7233}" TNS="${CFG_SP_TEMPORAL_NAMESPACE:-default}"
+THOST="${TADDR%:*}"
 BUCKET="${CFG_SP_S3_BUCKET:-storypanel-assets}" S3URL="${CFG_SP_S3_ENDPOINT_URL:-}"
 
 h ".env (names only)"
@@ -84,25 +91,30 @@ if [ -f "$DIR/.env" ]; then
 else echo "no .env"; fi
 
 h "database (read-only queries)"
-q() { psql -X -q -At -F ' | ' -c "set default_transaction_read_only = on" -c "$1" 2>&1; }
-if ! psql -X -q -At -c "select 1" >/dev/null 2>&1; then
+# q: one read-only query; output only on success (exit status 1 and nothing on stdout otherwise)
+q() { psql -X -q -At -F ' | ' -v ON_ERROR_STOP=1 -c "set default_transaction_read_only = on" -c "$1" 2>/dev/null; }
+show() { local out; out=$(q "$1") && echo "$out" || echo "unknown (query failed)"; }
+if ! is_local "$PGHOST"; then
+  echo "database: external endpoint skipped (only a database on this machine is inspected)"
+  DB_OK=no
+elif ! psql -X -q -At -c "select 1" >/dev/null 2>&1; then
   echo "database: NOT reachable with the configured settings; the checks below are unknown"
   DB_OK=no
 else
   DB_OK=yes
-  echo "server_encoding: $(q 'show server_encoding'); collation: $(q 'select datcollate from pg_database where datname = current_database()')"
-  echo "schema revision: $(q 'select version_num from alembic_version')"
-  echo "size: $(q "select pg_size_pretty(pg_database_size(current_database()))")"
-  echo "comics by status (excluding deleted):"; q "select status, count(*) from projects where deleted_at is null group by 1 order by 1" | sed 's/^/  /'
-  echo "open credit holds: $(q "select count(*) || ' holds, ' || coalesce(sum(amount - settled),0) || ' credits' from credit_reservations where status = 'open'")"
-  echo "users: $(q 'select count(*) from users'); stored assets (rows): $(q 'select count(*) from assets')"
-  echo "unresolved provider attempts (potential charges): $(q "select count(*) || ', USD ' || coalesce(sum(cost_counted_usd),0) from provider_attempts where cost_basis in ('reserved','unresolved')")"
+  echo "server_encoding: $(show 'show server_encoding'); collation: $(show 'select datcollate from pg_database where datname = current_database()')"
+  echo "schema revision: $(show 'select version_num from alembic_version')"
+  echo "size: $(show "select pg_size_pretty(pg_database_size(current_database()))")"
+  echo "comics by status (excluding deleted):"; show "select status, count(*) from projects where deleted_at is null group by 1 order by 1" | sed 's/^/  /'
+  echo "open credit holds: $(show "select count(*) || ' holds, ' || coalesce(sum(amount - settled),0) || ' credits' from credit_reservations where status = 'open'")"
+  echo "users: $(show 'select count(*) from users'); stored assets (rows): $(show 'select count(*) from assets')"
+  echo "unresolved provider attempts (potential charges): $(show "select count(*) || ', USD ' || coalesce(sum(cost_counted_usd),0) from provider_attempts where cost_basis in ('reserved','unresolved')")"
 fi
 
 h "stored images (local S3 stand-in only; nothing external is contacted)"
 case "$S3URL" in
-  http://127.0.0.1:*|http://localhost:*)
-    python3 - "$S3URL" "$BUCKET" <<'PY' || echo "listing failed: object count unknown"
+  http://127.0.0.1:*|http://localhost:*|http://\[::1\]:*)
+    python3 - "$S3URL" "$BUCKET" <<'PY' || echo "objects in bucket: unknown (listing refused or failed; not counted as missing)"
 import sys, urllib.parse, urllib.request, xml.etree.ElementTree as ET
 base, bucket = sys.argv[1].rstrip("/"), sys.argv[2]
 ns = "{http://s3.amazonaws.com/doc/2006-03-01/}"
@@ -118,28 +130,32 @@ while True:
     token = root.findtext(f"{ns}NextContinuationToken")
 print(f"objects in bucket {bucket}: {count} ({size / 1e6:.1f} MB), all pages listed")
 PY
-    if [ "$DB_OK" = yes ]; then
-      missing=0; checked=0
+    if [ "$DB_OK" = yes ] && keys=$(q "(select storage_key from assets order by created_at asc limit 10) union all (select storage_key from assets order by created_at desc limit 10)"); then
+      present=0 missing=0 unknown=0
       while read -r key; do
-        [ -n "$key" ] || continue; checked=$((checked+1))
-        code=$(curl -s -o /dev/null -w '%{http_code}' -I "${S3URL%/}/$BUCKET/$key")
-        [ "$code" = 200 ] || missing=$((missing+1))
-      done < <(q "(select storage_key from assets order by created_at asc limit 10) union all (select storage_key from assets order by created_at desc limit 10)")
-      echo "sample of asset rows (10 oldest, 10 newest): $checked checked, $missing missing from storage"
+        [ -n "$key" ] || continue
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -I "${S3URL%/}/$BUCKET/$key")
+        case "$code" in 200) present=$((present+1)) ;; 404) missing=$((missing+1)) ;; *) unknown=$((unknown+1)) ;; esac
+      done <<<"$keys"
+      echo "sample of asset rows (10 oldest, 10 newest): $present present, $missing missing (storage answered 404), $unknown unknown (any other answer, e.g. access refused or no connection)"
+    else
+      echo "sample of asset rows: unknown (database not inspected or query failed)"
     fi ;;
   "") echo "S3 endpoint not known (no running worker/API): skipped" ;;
-  *) echo "S3 endpoint is not local: skipped (this script contacts no external service)" ;;
+  *) echo "storage: external endpoint skipped (only storage on this machine is inspected)" ;;
 esac
 
-h "Temporal workflows (address $TADDR, namespace $TNS; structured output)"
-if [ -z "$TEMPORAL_BIN" ]; then
+h "Temporal workflows (namespace $TNS; structured output)"
+if ! is_local "$THOST"; then
+  echo "Temporal: external endpoint skipped (only a Temporal server on this machine is inspected); workflow status UNKNOWN"
+elif [ -z "$TEMPORAL_BIN" ]; then
   echo "temporal CLI not found: workflow status UNKNOWN for every comic"
 elif ! health=$("$TEMPORAL_BIN" operator cluster health --address "$TADDR" -o json 2>&1) \
      || ! echo "$health" | grep -q '"SERVING"' \
      || ! "$TEMPORAL_BIN" operator namespace describe --namespace "$TNS" --address "$TADDR" -o json >/dev/null 2>&1; then
   echo "Temporal or namespace not reachable: workflow status UNKNOWN for every comic (nothing is reported as lost)"
-elif [ "$DB_OK" != yes ]; then
-  echo "database not reachable: comics unknown"
+elif [ "$DB_OK" != yes ] || ! comics=$(q "select id, status, workflow_id from projects where deleted_at is null and workflow_id is not null and status not in ('completed','partially_completed','failed','cancelled','blocked','expired') order by updated_at"); then
+  echo "database not inspected or query failed: workflow status UNKNOWN"
 else
   running=0 lost=0 unknown=0
   while IFS='|' read -r pid status wid; do
@@ -158,10 +174,17 @@ else
       unknown=$((unknown+1)); verdict="UNKNOWN ($(echo "$out" | head -1 | cut -c1-80))"
     fi
     echo "  $pid  $status  $verdict"
-  done < <(q "select id, status, workflow_id from projects where deleted_at is null and workflow_id is not null and status not in ('completed','partially_completed','failed','cancelled','blocked','expired') order by updated_at")
+  done <<<"$comics"
   echo "running or waiting comics: $((running+lost+unknown)); workflow running: $running; lost: $lost; unknown: $unknown"
 fi
 echo "file-backed Temporal state: $([ -f "$SP_DATA/temporal.db" ] && echo "$SP_DATA/temporal.db exists" || echo none)"
+
+h "data directories (a RAM-backed filesystem is wiped at reboot)"
+for d in "$SP_DATA" "$SP_DATA/pg" "$SP_DATA/s3"; do
+  [ -e "$d" ] || { echo "  $d: does not exist"; continue; }
+  fs=$(findmnt -n -o FSTYPE -T "$d" 2>/dev/null || echo unknown)
+  echo "  $d: filesystem $fs$( [ "$fs" = tmpfs ] && echo ' (RAM: lost at reboot)')"
+done
 
 h "space for backups"
 df -h "$HOME" | tail -1 | awk '{print "  free in $HOME: "$4}'
