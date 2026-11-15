@@ -139,8 +139,9 @@ rather than executing it. All other live settings, which are public, are committ
 - **Identity QA:** Gemini `gemini-3.8-flash`.
 - **Exports:** local resampling, with an effective-DPI report.
 - **Disabled:** fal, Voyage.
-- **Prices:** `packages/pricing/pricing.2026-11-14.json`. The OpenAI and Gemini rows are unverified,
-  so check them first.
+- **Prices:** `packages/pricing/pricing.2026-11-15.json`, verified on the official pages on
+  2026-11-15. OpenAI does not publish how many tokens `gpt-image-2.5-sunburst` counts per image:
+  those counts are reservation assumptions.
 - **Constraints:** two characters, no automatic refusal fallback, no automatic resend after an image
   timeout.
 
@@ -159,8 +160,10 @@ scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py pref
 ```
 It checks:
 - that `api.anthropic.com`, `api.openai.com` and `generativelanguage.googleapis.com` are reachable;
-- the settings, including that fal and Voyage are off, and the price table (it warns about
-  unverified prices);
+- the settings, including that fal and Voyage are off, and the price table;
+- the running stack: the worker uses live providers with no simulated scenario, Temporal keeps
+  workflow state on disk, `.env` is git-ignored and readable only by you, the database is UTF-8 and
+  migrated, and the per-attempt cost and QA records exist;
 - that each key works and can see its models, using free model lookups (Anthropic Models API, OpenAI
   `models.retrieve`, Gemini `models.get`);
 - a storage round trip;
@@ -179,12 +182,14 @@ scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py esti
 scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py estimate --image-provider gemini
 ```
 
-| Images from | Expected cost | Smallest cap for a clean run | Suggested cap |
+| Images from | Expected cost | Estimated reservation requirement | Proposed cap |
 |---|---|---|---|
-| OpenAI | about USD 3.33 | USD 4.53 | USD 8.00 |
+| OpenAI | about USD 1.85 (3.97 pessimistic) | USD 3.41 (5.52) | USD 8.00 |
 | Gemini | about USD 1.20 | USD 1.74 | USD 4.00 |
 
-Prices are unverified. The suggested cap covers every panel using both repair rounds. Details and the
+Prices were verified on 2026-11-15; OpenAI's tokens per image are not published. The proposed
+cap covers every panel using both repair rounds at the expected token counts; in the pessimistic
+case the cap stops such a run. Details and the
 itemised tables are in `docs/smoke-test-cost.md`.
 
 ### 6d. The paid run
@@ -205,7 +210,7 @@ For Gemini images use `--image-provider gemini --approve-usd 4.00` instead.
 - **Charges can still exceed the cap:**
   - an image call may use more output tokens than its reservation assumed (no provider lets the caller
     cap them); the overshoot is counted afterwards;
-  - the OpenAI and Gemini prices are unverified;
+  - OpenAI does not publish tokens per input or output image for `gpt-image-2.5-sunburst`;
   - Anthropic may add more input to a call than the 4,000 tokens assumed.
 - An image call that times out is **not** re-sent. It stays counted as an unresolved potential charge
   and the panel offers "retry".

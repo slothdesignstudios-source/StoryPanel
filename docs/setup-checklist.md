@@ -19,9 +19,9 @@ verified and which are not, the free preflight command, and the paid command wit
 
 The cost model behind the budget request is [`smoke-test-cost.md`](smoke-test-cost.md):
 
-| Images from | Estimated cost (unverified prices) | Smallest cap for a clean run |
+| Images from | Estimated cost (prices verified 2026-11-15) | Estimated reservation requirement |
 |---|---|---|
-| OpenAI | about USD 3.33 | USD 4.53 |
+| OpenAI | about USD 1.85 (3.97 if every image uses its reserved output) | USD 3.41 (5.52) |
 | Gemini | about USD 1.20 | USD 1.74 |
 
 The approved cap is an application limit, not a guaranteed ceiling on provider charges.
@@ -34,8 +34,9 @@ The approved cap is an application limit, not a guaranteed ceiling on provider c
 | A4 | Optional: `SP_IMAGE_PROVIDER_DEFAULT=gemini` to make Gemini the default | public | `.env` |
 | A5 | Hosts `api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com` | network | local machines: nothing to do |
 
-*The organisation-verification note for OpenAI image models and the free-tier note for Gemini come
-from search summaries and are unverified. Preflight reports whether each key can see its model.*
+*OpenAI's image guide (fetched 2026-11-15) says GPT Image models may require API Organization
+Verification in the developer console. Gemini image models have no free tier (official pricing
+page). Preflight reports whether each key can see its model.*
 
 ## B. Clerk authentication and identity deletion (development instance; local is fine)
 

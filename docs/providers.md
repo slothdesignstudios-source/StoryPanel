@@ -115,9 +115,10 @@ opt in with the `fal_voyage` fixture.
 
 ## Pricing and commercial terms
 Prices are operator data with a source and a verification date
-(`packages/pricing/pricing.2026-11-14.json`). Live mode refuses to dispatch a call without a current
-price. **The OpenAI and Gemini prices are UNVERIFIED** (search summaries; the official pages are
-blocked from the build sandbox). Check them before a paid run.
+(`packages/pricing/pricing.2026-11-15.json`). Live mode refuses to dispatch a call without a current
+price. The OpenAI and Gemini prices were verified on the official pages on 2026-11-15
+(`docs/evidence/pricing-2026-11-15/`). Not published: tokens per input and output image for
+`gpt-image-2.5-sunburst`; the table's reservation values for them are assumptions.
 
 Commercial-use and data terms were **not reviewed**: confirm for each provider whether outputs may be
 used commercially and whether inputs are used for training. Gemini image outputs carry Google's

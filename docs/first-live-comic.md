@@ -63,16 +63,16 @@ one without credentials and at no cost. On a home connection there is nothing to
 |---|---|---|
 | `claude-sonnet-5-5` | $2 in / $10 out per MTok | **Verified** 2026-11-12 (official page fetched) |
 | `claude-haiku-5-5` | $0.10 in / $0.50 out per MTok | **Verified** 2026-11-12 |
-| `gpt-image-2.5-sunburst` | text in $5, image in $8, image out $30 per MTok | **UNVERIFIED** (search summary of developers.openai.com) |
-| `gemini-3.1-flash-image` | in $0.50, text/thinking out $3, image out $60 per MTok | **UNVERIFIED** (search summary of ai.google.dev) |
-| `gemini-3.8-flash` | $1.50 in / $7.50 out per MTok (standard rate; introductory rate is half until 2026-12-31) | **UNVERIFIED** |
+| `gpt-image-2.5-sunburst` | text in $5, image in $8, image out $30 per MTok (text out not billed) | **Verified** 2026-11-15 (model page and image guide). **Tokens per input and output image are not published**: reserved 7,000 per input image and 6,500 per output image |
+| `gemini-3.1-flash-image` | in $0.50, text/thinking out $3, image out $60 per MTok (1K image = 1,120 tokens) | **Verified** 2026-11-15 |
+| `gemini-3.8-flash` | $1.50 in / $7.50 out per MTok used (the 2027 rate; until 2026-12-31 it is $0.75 / $3.75) | **Verified** 2026-11-15 |
 
-Check the three unverified prices on the providers' pages before approving. If one differs, edit
-`packages/pricing/pricing.2026-11-14.json`, then rerun `estimate`.
+Excerpts of the official pages: `docs/evidence/pricing-2026-11-15/`. If a price changes, edit
+`packages/pricing/pricing.2026-11-15.json`, then rerun `estimate`.
 
-| Images from | Estimated clean run | Smallest cap that can finish | Suggested approval |
+| Images from | Estimated clean run | Estimated reservation requirement (documented assumptions) | Proposed cap |
 |---|---|---|---|
-| OpenAI | about USD 3.33 | USD 4.53 | USD 8.00 |
+| OpenAI | about USD 1.85 (USD 3.97 if every image uses its full reserved output) | USD 3.41 (5.52) | USD 8.00 |
 | Gemini | about USD 1.20 | USD 1.74 | USD 4.00 |
 
 Details, worst cases and what can be billed beyond the cap: [`smoke-test-cost.md`](smoke-test-cost.md).
