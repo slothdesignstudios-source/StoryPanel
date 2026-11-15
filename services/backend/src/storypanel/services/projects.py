@@ -161,7 +161,7 @@ async def submit_answers(db: AsyncSession, project: Project, answers: dict[str, 
     valid_ids = {q["id"] for q in (project.questions or [])}
     project.answers = {**(project.answers or {}),
                        **{k: v[:120] for k, v in answers.items() if k in valid_ids}}  # fmt: skip
-    await outbox.enqueue(db, "signal", f"answers:{project.id}", {
+    await outbox.enqueue(db, "signal", f"answers:{project.workflow_id}", {
         "workflow_id": project.workflow_id, "signal": "answers_submitted",
         "input": {"id": f"answers:{project.id}"}})  # fmt: skip
 
@@ -426,7 +426,7 @@ async def approve_cast(db: AsyncSession, project: Project, version: int, user_id
                              acknowledged or [], "the cast")  # fmt: skip
     await record_approval(db, project.id, "cast", version, user_id, overrides=overrides or None)
     await events.emit(db, project.id, "cast.approved", {"cast_version": version})
-    await outbox.enqueue(db, "signal", f"approve:cast:{project.id}:{version}", {
+    await outbox.enqueue(db, "signal", f"approve:cast:{project.workflow_id}:{version}", {
         "workflow_id": project.workflow_id, "signal": "approve",
         "input": {"id": f"cast:{project.id}:{version}", "kind": "cast", "version": version}})  # fmt: skip
 
@@ -458,7 +458,7 @@ async def patch_script(db: AsyncSession, project: Project, body: api.PatchScript
     await repo.invalidate_approvals(db, project.id, "script")
     if row.consistency["status"] == "pending" and not has_errors(issues):  # type: ignore[index]
         # Checked against the Story Bible by the workflow (metered, retried); approval waits for it.
-        await outbox.enqueue(db, "signal", f"check:{project.id}:{project.script_version}", {
+        await outbox.enqueue(db, "signal", f"check:{project.workflow_id}:{project.script_version}", {
             "workflow_id": project.workflow_id, "signal": "check_script",
             "input": {"id": f"check:{project.id}:{project.script_version}", "version": project.script_version}})  # fmt: skip
     elif row.consistency["status"] == "pending":  # type: ignore[index]
@@ -504,7 +504,7 @@ async def approve_script(db: AsyncSession, project: Project, version: int, user_
                           idempotency_key=f"panels:{project.id}:{version}")  # fmt: skip
     await record_approval(db, project.id, "script", version, user_id, overrides=overrides or None)
     await events.emit(db, project.id, "script.approved", {"script_version": version})
-    await outbox.enqueue(db, "signal", f"approve:script:{project.id}:{version}", {
+    await outbox.enqueue(db, "signal", f"approve:script:{project.workflow_id}:{version}", {
         "workflow_id": project.workflow_id, "signal": "approve",
         "input": {"id": f"script:{project.id}:{version}", "kind": "script", "version": version}})  # fmt: skip
 

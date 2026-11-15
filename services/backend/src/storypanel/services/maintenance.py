@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from typing import Any
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, func, select, text, update
@@ -191,3 +192,65 @@ async def run_loop(stop: asyncio.Event, interval: float = 60.0) -> None:
             await asyncio.wait_for(stop.wait(), timeout=interval)
         except TimeoutError:
             pass
+
+
+# ------------------------------------------------------------------ lost workflows
+# The stage a comic stopped in, by status: where Resume restarts it (nothing already made is redone).
+RESUME_STAGE = {"queued": "intake", "intake": "intake", "awaiting_answers": "intake", "planning": "planning",
+                "awaiting_cast_approval": "cast_gate", "scripting": "scripting",
+                "awaiting_script_approval": "script_gate", "illustrating": "illustrating"}  # fmt: skip
+LOST_MESSAGE = (
+    "This comic's background job was lost (the local servers restarted without keeping it). "
+    "Press Resume to continue from where it stopped."
+)
+
+
+async def find_lost_workflows(
+    client: Any, min_age: timedelta = timedelta(minutes=10)
+) -> list[dict[str, Any]]:
+    """Running comics whose workflow no longer runs in Temporal (not found, or closed). Read-only.
+
+    A comic whose workflow start is still waiting in the outbox, or that changed in the last
+    `min_age`, is never reported."""
+    from temporalio.client import WorkflowExecutionStatus
+    from temporalio.service import RPCError, RPCStatusCode
+
+    async with transaction() as db:
+        rows = (await db.execute(
+            select(Project.id, Project.status, Project.workflow_id, Project.updated_at)
+            .where(Project.status.in_([s.value for s in ACTIVE]), Project.deleted_at.is_(None),
+                   Project.workflow_id.is_not(None),
+                   Project.updated_at < datetime.now(UTC) - min_age))).all()  # fmt: skip
+        queued = set((await db.execute(select(Outbox.payload["workflow_id"].astext).where(
+            Outbox.status == "pending", Outbox.kind == "start_workflow"))).scalars())  # fmt: skip
+    lost = []
+    for pid, status, wid, _ in rows:
+        if wid in queued:
+            continue
+        try:
+            state = (await client.get_workflow_handle(wid).describe()).status
+            if state == WorkflowExecutionStatus.RUNNING:
+                continue
+            why = f"workflow {state.name.lower() if state else 'closed'}"
+        except RPCError as exc:
+            if exc.status != RPCStatusCode.NOT_FOUND:
+                raise
+            why = "workflow not found"
+        lost.append({"project_id": str(pid), "status": status, "workflow_id": wid, "reason": why,
+                     "resume_from": RESUME_STAGE[status]})  # fmt: skip
+    return lost
+
+
+async def recover_lost_workflows(client: Any, *, apply: bool,
+                                 min_age: timedelta = timedelta(minutes=10)) -> list[dict[str, Any]]:  # fmt: skip
+    """Mark each lost comic as stopped where it was, releasing its credit holds, so the person can
+    press Resume (which restarts at that stage; nothing already made or paid for is redone).
+    With apply=False only lists them."""
+    from storypanel.pipeline.stages_art import stage_end
+
+    lost = await find_lost_workflows(client, min_age)
+    for item in lost if apply else ():
+        await stage_end(uuid.UUID(item["project_id"]), status="failed", code="workflow_lost", message=LOST_MESSAGE,
+                        resume_from=item["resume_from"])  # fmt: skip
+        log.warning("lost_workflow_recovered", **item)
+    return lost
