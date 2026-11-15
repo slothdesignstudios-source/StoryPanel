@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -680,11 +681,16 @@ def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels:
                         "they will look blurry in print. Fine on screen.")  # fmt: skip
     if soft:
         warnings.append(f"{len(soft)} panel(s) between {DPI_LOW} and {DPI_GOOD} DPI: may look soft in print.")
-    if small:
-        low_pt = min(r["pt"] for r in small)
-        warnings.append(f"Lettering in {len(small)} panel(s) prints at {low_pt:g} pt at a {PRINT_WIDTH_IN:g}-inch "
-                        f"width, below the {MIN_PRINT_PT:g} pt readable size. Fine on screen. To print it readably, "
-                        f"print at least {PRINT_WIDTH_IN * MIN_PRINT_PT / low_pt:.1f} in wide.")  # fmt: skip
+    for page_no in sorted({r["page"] for r in small}):
+        # One warning per page, from that page's own smallest lettering: a fixed width does not fit every page.
+        on_page = [r for r in small if r["page"] == page_no]
+        low_pt = min(r["pt"] for r in on_page)
+        needed = math.ceil(PRINT_WIDTH_IN * MIN_PRINT_PT / low_pt * 10 - 1e-9) / 10  # rounded up: never short of the floor
+        panels_txt = ", ".join(str(r["panel"]) for r in on_page)
+        warnings.append(f"Page {page_no}: lettering in panel(s) {panels_txt} prints at {low_pt:g} pt at the "
+                        f"{PRINT_WIDTH_IN:g}-inch print width, below the {MIN_PRINT_PT:g} pt readable size. Fine on "
+                        f"screen. This page needs at least {needed:.1f} in of print width for its smallest text to "
+                        f"reach {MIN_PRINT_PT:g} pt.")  # fmt: skip
     return {"lettering": lrows, "min_letter_pt": min((r["pt"] for r in lrows), default=None),
             "min_letter_px": min((r["px"] for r in lrows), default=None), "method": method, "print_width_in": PRINT_WIDTH_IN,
             "note": "Panels are resampled locally (Lanczos); this does not add detail." if method == "local_resample"

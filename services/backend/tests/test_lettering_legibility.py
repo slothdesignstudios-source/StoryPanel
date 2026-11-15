@@ -156,7 +156,13 @@ def test_export_reports_lettering_size_and_warns_below_the_print_floor() -> None
     q = merge_print_quality(None, 0, [], "local_resample", letters=lettering_sizes(0, page((1600, 560), 22)))
     assert q["min_letter_pt"] == 5.94 and q["min_letter_px"] == 27.5
     (w,) = q["warnings"]
-    assert "5.94 pt" in w and "6.48 pt" in w and re.search(r"at least 6\.5 in wide", w), w
-    # pages merge: the report keeps every page's rows
+    assert w.startswith("Page 1:") and "5.94 pt" in w and "6.48 pt" in w, w
+    # rounded UP: 6 x 6.48 / 5.94 = 6.545 in; 6.5 in would leave the text at 6.43 pt
+    assert re.search(r"at least 6\.6 in", w), w
+    # pages merge, and each page gets the width its own smallest text needs (not one fixed width)
     q2 = merge_print_quality(q, 1, [], "local_resample", letters=lettering_sizes(1, page((1600, 560), 15)))
     assert [r["page"] for r in q2["lettering"]] == [1, 2] and q2["min_letter_pt"] == 4.05
+    w1, w2 = [x for x in q2["warnings"] if x.startswith("Page")]
+    assert "at least 6.6 in" in w1 and w2.startswith("Page 2:") and "at least 9.6 in" in w2, q2["warnings"]
+    for width, pt in ((6.6, 5.94), (9.6, 4.05)):  # the stated width really reaches the floor
+        assert pt * width / 6 >= lettering.MIN_PRINT_PT - 1e-9
