@@ -13,7 +13,7 @@ dropped or recreated.
 2. In your Ubuntu (WSL) terminal, run this one command:
 
    ```bash
-   tr -d '\r' < "$(wslpath "$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')")/Downloads/inspect-install.sh" > ~/inspect-install.sh && bash ~/inspect-install.sh ~/storypanel > ~/storypanel-inspect.txt 2>&1; cat ~/storypanel-inspect.txt
+   tr -d '\r' < /mnt/c/Users/<windows-user>/Downloads/inspect-install.sh > ~/inspect-install.sh && bash ~/inspect-install.sh ~/storypanel > ~/storypanel-inspect.txt 2>&1; cat ~/storypanel-inspect.txt
    ```
 
    It copies the script into your WSL home folder (removing Windows line endings if any), runs it
@@ -21,154 +21,71 @@ dropped or recreated.
 3. Paste the printed report into the chat.
 
 What it does:
-- It only reads: `git` metadata, process information, `psql` queries in a read-only transaction,
-  and the Temporal workflow list.
+- It only reads:
+  - `git` metadata and process information;
+  - `psql` queries in read-only transactions, against the database the running worker is
+    configured for;
+  - the local S3 stand-in's object listing;
+  - per-comic Temporal workflow status (structured output, at the configured address and namespace).
+- It contacts no external service.
 - It writes only two files in your WSL home folder: the script copy and the report.
-- From `.env` it prints only variable **names** and the file mode, never values.
+- It never prints the database URL or any credential: only "SP_DATABASE_URL configured: yes/no".
+  From `.env` it prints only variable **names** and the file mode.
+- A comic is reported as **lost** only when Temporal is healthy, the namespace exists, and Temporal
+  answers that comic's workflow with "not found" or a closed status. Any other failure or unreadable
+  answer is reported as **unknown**.
 
-If `cmd.exe` is not available in your WSL, use this path instead, replacing `<you>` with your
-Windows user name: `/mnt/c/Users/<you>/Downloads/inspect-install.sh`.
+## Steps 2–7: the corrected sequence (commands follow your inspection)
 
-**Steps 2–7: draft, tailored after step 1.**
+The commands for these steps will be written for your actual revision, encoding, processes and
+data, as one script, `scripts/upgrade-local.sh`. That script stops automatically, before changing
+anything further, if any check fails. Nothing below is to be run yet.
 
-## 2. Back up (changes nothing)
+**Found while preparing this: images may be lost on every restart.** `scripts/native-stack.sh` runs
+the local S3 stand-in (moto) **in memory**, so stopping the stack deletes every stored image. The
+database keeps its rows. On this machine, after a restart, the bucket holds 0 objects for 2,537
+asset rows. Your inspection's "stored images" section shows whether your installation is already
+affected. The upgrade therefore exports the images **before** anything is stopped and imports them
+afterwards. Keeping images on disk permanently is a follow-up decision, not part of this upgrade.
 
-```bash
-pg_dump -h 127.0.0.1 -U storypanel -Fc --no-owner -f ~/storypanel-backup-$(date +%F-%H%M).dump storypanel && ls -la ~/storypanel-backup-*.dump
-```
-
-```bash
-(cd ~/storypanel-next/services/backend && uv sync -q && uv run python ../../scripts/check-credits.py)
-```
-
-The second command installs the new version's dependencies in `~/storypanel-next` only, then records
-whether balances and holds match the ledger *before* the upgrade. It reads only tables that exist in
-the old schema. A
-mismatch here is a finding about the old data. It is not to be fixed by hand, and it stays separate
-from the open 12-credit question.
-
-## 3. Prepare the database (needs your go-ahead)
-
-**3a. Stop the app.** Postgres keeps running:
-
-```bash
-cd ~/storypanel && scripts/native-stack.sh stop
-```
-
-**3b. Only if step 1 showed SQL_ASCII:** copy into a new UTF-8 database, compare, then swap the names. The
-old database stays as `storypanel_sqlascii_old`.
-
-```bash
-psql -h 127.0.0.1 -U storypanel -d postgres -c "create database storypanel_utf8 encoding 'UTF8' template template0" && psql -h 127.0.0.1 -U storypanel -d storypanel_utf8 -c "create extension if not exists vector"
-```
-
-```bash
-pg_restore -h 127.0.0.1 -U storypanel --no-owner --exit-on-error -d storypanel_utf8 $(ls -t ~/storypanel-backup-*.dump | head -1)
-```
-
-```bash
-for db in storypanel storypanel_utf8; do echo "== $db"; psql -h 127.0.0.1 -U storypanel -d $db -Atc "select 'users',count(*) from users union all select 'projects',count(*) from projects union all select 'panels',count(*) from panels union all select 'credit_ledger',count(*) from credit_ledger union all select 'credit_reservations',count(*) from credit_reservations union all select 'provider_attempts',count(*) from provider_attempts union all select 'assets',count(*) from assets"; done
-```
-
-Continue only if both lists are identical:
-
-```bash
-psql -h 127.0.0.1 -U storypanel -d postgres -c "alter database storypanel rename to storypanel_sqlascii_old" -c "alter database storypanel_utf8 rename to storypanel"
-```
-
-## 4. Switch the code and migrate
-
-```bash
-cd ~/storypanel && git status --short && git rev-parse HEAD > ~/storypanel-previous-commit.txt && git pull --ff-only && (cd services/backend && uv sync && uv run alembic upgrade head && uv run alembic current)
-```
-
-The last line must print `0014 (head)`. Migrations 0012–0014 only add tables and columns. If
-`git status` shows local changes, stop and send them to me first.
-
-## 5. Check restart survival with free simulated providers, then start live
-
-```bash
-scripts/native-services.sh start && scripts/native-stack.sh start && services/backend/.venv/bin/python scripts/restart-check.py
-```
-
-This must end with `PASS`. Then restart with live providers:
-
-```bash
-scripts/native-stack.sh stop && SP_STACK_LIVE=1 scripts/native-stack.sh start
-```
-
-## 6. Lost workflows: dry run first, paid recovery only with your approval per comic
-
-```bash
-services/backend/.venv/bin/python scripts/recover-lost-comics.py --min-age-minutes 0
-```
-
-This is read-only. It lists running comics whose workflow is gone; comics whose workflow still runs,
-and finished, cancelled or deleted comics, are never listed. For each comic it shows separately:
-
-| Group | Meaning | What recovery does with it |
+| Step | What happens | Stops automatically if |
 |---|---|---|
-| **Reusable** | saved results: sheets, Story Bible, script, drawn panels | kept and reused; never paid again |
-| **Retrievable requests** | provider requests whose result can still be fetched by request id | fetched by reconciliation. With OpenAI and Gemini images there are none: their calls are synchronous |
-| **Ambiguous requests** | timed out, cut off or never answered: **may already have been billed**, up to the amount shown | never re-sent. Settle them with the provider's dashboard figures (`live-smoke.py reconcile --charges`) |
-| **Unfinished images** | an image was saved but its checks never finished | **not** reused or redrawn automatically |
-| **Would redo with new paid requests** | panels or planning steps still missing, with the possible additional cost | only after your explicit approval for that comic |
+| 2. Stop writes safely | Wait until no comic is planning, scripting or drawing and no export is rendering. Stop the web app, API and worker only. Postgres, S3 and Temporal keep running: S3 and Temporal hold their state in memory | a comic or export is still working; an app process is still running; the database still has connections from the app |
+| 3. Final backup (after writes stop) | `pg_dump` in custom format; export **every** object from the S3 stand-in with a manifest (key, size, SHA-256); copy `.env` (mode 600) and the current commit id; if Temporal is file-backed, copy its database file after stopping it. An in-memory Temporal cannot be exported: its waiting comics are recorded from the inspection | any copy fails or is empty; free space is short |
+| 4. Verify the backup | Restore the dump into a scratch database. Compare it with the live one table by table: row counts **and** a content checksum per table. Run the credit reconciliation on both. Re-hash the exported objects against the manifest, and compare the object count with the bucket listing | any count, checksum, reconciliation or hash differs |
+| 5. Migrate (pinned commit) | Stop S3 and Temporal, since their state is now captured. Check out the **reviewed target commit by its full SHA**, detached; never "pull main". If the database is SQL_ASCII, restore the verified dump into a new UTF-8 database and validate it as in step 4, adding an encoding check; then swap the names. Install dependencies and run `alembic upgrade head` | local changes in the checkout (other than the git-ignored `.env`); HEAD differs from the reviewed SHA; schema revision before migrating differs from the one your inspection showed; a validation differs; head after migrating is not the expected revision |
+| 6. Validate and restart | Check that row counts and content checksums of the pre-existing tables are unchanged by the migration, for the columns that existed before. Run the credit reconciliation. Start the stack with simulated providers, import the exported objects, verify count and hashes. Run the free restart check, then switch to live providers and run the free preflight | any check fails |
+| 7. Lost workflows | Read-only dry run first. `--apply` and any paid resumption only with your separate approval | (decided by you) |
 
-Then, only if you want to:
+`.env` is never modified. It is only read, and copied into the backup with mode 600.
 
-```bash
-services/backend/.venv/bin/python scripts/recover-lost-comics.py --min-age-minutes 0 --apply
-```
+**Why one final backup, not an earlier one:** a backup taken while the app is running can miss
+writes made after it. If the upgrade needs a database swap (SQL_ASCII) or a rollback, it restores
+**only** the final backup from step 3, taken after writes stopped and verified in step 4. An earlier
+online backup can be kept as an extra copy, never as the restore point.
 
-This stops the listed comics and releases their held credits. Nothing is drawn, sent or charged.
-- A comic waiting at an approval becomes resumable; its Resume redoes nothing.
-- A comic whose Resume would make paid requests is **not** made resumable.
+**Validating a database conversion (SQL_ASCII → UTF-8):** row counts alone are not enough. The
+check also needs:
+- a content checksum per table: the md5 of every row's text, ordered by primary key, identical
+  in the old and new database;
+- no invalid UTF-8: `pg_restore --exit-on-error` refuses such bytes, and any rows containing them
+  are listed beforehand;
+- spot checks of non-ASCII text;
+- identical credit reconciliation results: balances and holds against the ledger.
 
-For each of those you choose to continue, after reading its possible additional cost:
+## Rollback: keep PostgreSQL, images and Temporal at the same point
 
-```bash
-services/backend/.venv/bin/python scripts/recover-lost-comics.py --approve-paid-resume <comic-id>
-```
+A rollback returns **all three to the step 3 snapshot**, never a mix:
 
-Its Resume button then starts exactly the paid work listed under "would redo". A comic you do not
-want can be left stopped, or deleted in the app.
+1. Stop the stack.
+2. Rename the upgraded database aside (`storypanel_failed_upgrade`). Restore the step 3 dump into a
+   fresh database named `storypanel`. A UTF-8 database is fine for the old code.
+3. Start the old code (the commit recorded in step 3). Re-import the step 3 image export into the
+   S3 stand-in.
+4. Rename the new file-backed Temporal database aside. Its workflows belong to the upgraded data
+   and must not run against the restored database. The old version's Temporal starts empty, as it
+   did before. Comics that were waiting are in the same state as before the upgrade.
 
-Tested here (`tests/test_lost_workflows.py`):
-- the groups are reported correctly, including an ambiguous request and an unfinished image;
-- `--apply` never makes a paid resume possible without the approval;
-- unknown, finished, cancelled and deleted comics are refused or ignored;
-- after approval: no double charge, and no redraw of finished panels.
-
-## 7. Verify
-
-```bash
-scripts/inspect-install.sh ~/storypanel > ~/storypanel-inspect-after.txt; services/backend/.venv/bin/python scripts/check-credits.py; scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py preflight
-```
-
-Send me `~/storypanel-inspect-after.txt` and the preflight output. Neither contains keys.
-
-## Rollback
-
-The backup from step 2 and, if made, `storypanel_sqlascii_old` are untouched.
-
-```bash
-cd ~/storypanel && scripts/native-stack.sh stop && psql -h 127.0.0.1 -U storypanel -d postgres -c "alter database storypanel rename to storypanel_failed_upgrade"
-```
-
-```bash
-psql -h 127.0.0.1 -U storypanel -d postgres -c "create database storypanel encoding 'UTF8' template template0" && psql -h 127.0.0.1 -U storypanel -d storypanel -c "create extension if not exists vector" && pg_restore -h 127.0.0.1 -U storypanel --no-owner --exit-on-error -d storypanel $(ls -t ~/storypanel-backup-*.dump | head -1)
-```
-
-```bash
-git -C ~/storypanel checkout $(cat ~/storypanel-previous-commit.txt) && scripts/native-stack.sh start
-```
-
-If the backup was taken from a SQL_ASCII database, rename `storypanel_sqlascii_old` back to
-`storypanel` instead of restoring: a UTF-8 database is fine for the old code too. The failed attempt
-stays as `storypanel_failed_upgrade` until you drop it yourself.
-
-Later, when no longer needed:
-
-```bash
-git -C ~/storypanel worktree remove ~/storypanel-next
-```
+Anything created after the upgrade (comics, images, charges) is not in the snapshot. A rollback
+discards it, which is why the snapshot is taken with writes stopped and the upgrade is validated
+before you use the app again.

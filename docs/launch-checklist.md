@@ -18,6 +18,8 @@ do before launch, whatever the smoke test shows. Account and configuration detai
       with the width that page needs (strips: 6.6–9.6 in). Options to decide later: a wider or
       landscape strip PDF trim, a larger lettering floor for strips, or print-specific layouts
 - [ ] Reuse an image that finished before a lost workflow instead of drawing that panel again
+- [ ] **Local image storage that survives a restart.** moto keeps objects in memory: images are lost
+      whenever the local stack stops. Production uses real S3 (not affected)
 - [ ] A browser test of the approval block while an edit is saving (the server-side refusal is tested)
 
 ## Accounts and infrastructure (B3–B9)

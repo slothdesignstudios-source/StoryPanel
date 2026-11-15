@@ -14,9 +14,12 @@ has not been judged on real generated art. Launch requirements are listed separa
 3. **Your installation has not been inspected or upgraded.** Start with the read-only report in
    [`local-upgrade-procedure.md`](local-upgrade-procedure.md) step 1. Waiting comics on an in-memory
    Temporal lose their workflow at the restart; a dry run lists them before anything changes.
-4. **The 12-credit discrepancy is unresolved.** It needs the real `scripts/sql/reconcile-comic.sql`
+4. **Local images are kept in memory only.** The local S3 stand-in (moto, started by
+   `scripts/native-stack.sh`) loses every stored image when the stack stops; database rows remain.
+   The upgrade exports and re-imports them. Persistent local storage is a follow-up decision.
+5. **The 12-credit discrepancy is unresolved.** It needs the real `scripts/sql/reconcile-comic.sql`
    output.
-5. **Strip print size:** the default stays 6 in. Each export states, per page, the width its own
+6. **Strip print size:** the default stays 6 in. Each export states, per page, the width its own
    smallest text needs. A better print layout is a recorded follow-up.
 
 # External requirements
