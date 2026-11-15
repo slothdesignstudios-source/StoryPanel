@@ -86,6 +86,17 @@ class FakeControl:
     identity_uncertain_attempts: int = 0  # every panel judged "uncertain" on its first N attempts
     identity_omit_targets: set[str] = field(default_factory=set)  # leaves a character out of the report
     identity_calls: list[tuple[str, int]] = field(default_factory=list)  # (panel id, reference images)
+    # Deterministic races: calls of stage `gate_stage` signal `gate_entered` and wait on `gate`
+    # (asyncio.Event objects set by the test), so a test decides exactly when they finish.
+    gate_stage: str = ""
+    gate: Any = None
+    gate_entered: Any = None
+
+    async def wait_at_gate(self, stage: str) -> None:
+        if self.gate is not None and stage == self.gate_stage:
+            if self.gate_entered is not None:
+                self.gate_entered.set()
+            await self.gate.wait()
 
     def reset(self) -> None:
         self.__init__()  # type: ignore[misc]
@@ -131,6 +142,7 @@ class FakeTextProvider:
         images: tuple[ImageInput, ...] = (),
     ) -> tuple[T, Usage]:  # fmt: skip
         control.calls.append((ctx.stage, schema.__name__))
+        await control.wait_at_gate(ctx.stage)
         control.raise_if_queued(f"text:{ctx.stage}")
         control.raise_if_queued("text")
         if control.malformed_text > 0:
@@ -641,6 +653,7 @@ class FakeSyncImageProvider:
         )
         control.sync_calls.append((self.choice, model, n_inputs))
         control.sync_requests.append(req)
+        await control.wait_at_gate(ctx.stage)
         queue = control.sync_errors.get(self.choice)
         if queue:
             raise queue.pop(0)

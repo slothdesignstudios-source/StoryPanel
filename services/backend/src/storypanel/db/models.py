@@ -101,6 +101,8 @@ class Project(Base, Timestamps):
     script_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # set when the user cancels; from then on no new paid request is reserved (metering guard)
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # The image provider and model chosen at creation; every image of the comic (sheets,
     # panels, repairs, edits) uses them. NULL on comics created before 0011 (drawn with fal).
     image_provider: Mapped[str | None] = mapped_column(String(20))

@@ -120,6 +120,9 @@ async def stage_generate_panel(
             return {"version_id": str(done)}
         c = await _panel_context(db, panel_id)
         panel, page, project = c["panel"], c["page"], c["project"]
+        refusal = await metering.project_refuses_paid_work(db, project.id)
+        if refusal:  # cancelled, ended or deleted: no new image, and the panel is not marked as drawing
+            raise AppError(ErrorCode.INVALID_STATE, refusal, retryable=False)
         spec = PanelSpec.model_validate(panel.spec)
         cast = await repo.cast_specs(db, project.id)
         locations = await repo.location_specs(db, project.id)
@@ -340,7 +343,10 @@ async def stage_finalize_panel(
             if resv_id is None and initial:
                 resv = await credits.open_reservation(db, panel.project_id, "panels")
                 resv_id = resv.id if resv else None
-            if resv_id:
+            # A result that lands after the user cancelled is kept but never charged, whether it
+            # is finalized before or after the cancellation releases the hold.
+            late = (await metering.project_refuses_paid_work(db, panel.project_id)) is not None
+            if resv_id and not late:
                 await credits.charge(db, resv_id, unit, reason=f"Panel {kind}",
                                      dedupe_key=f"panel:{panel_id}:{request_key}",
                                      job_ref=workflow_id)  # fmt: skip

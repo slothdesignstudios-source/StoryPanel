@@ -513,6 +513,9 @@ async def approve_script(db: AsyncSession, project: Project, version: int, user_
 async def cancel(db: AsyncSession, project: Project) -> None:
     if project.status not in [x.value for x in ACTIVE]:
         raise invalid_state("This comic isn't running.")
+    # Recorded at once: the paid-request guard refuses new work for this comic from here on,
+    # even before the workflow receives the cancellation.
+    project.cancel_requested_at = project.cancel_requested_at or datetime.now(UTC)
     await outbox.enqueue(db, "cancel", f"cancel:{project.workflow_id}", {
         "workflow_id": project.workflow_id})  # fmt: skip
     await events.emit(db, project.id, "project.cancelling", {})

@@ -265,6 +265,10 @@ async def _begin_attempt(ctx: CallContext, *, key: str, provider: str, model: st
                                         {"u": _uuid(ctx.user_id)})).scalar_one_or_none()  # fmt: skip
             if deleted:
                 raise AppError(ErrorCode.FORBIDDEN, "This account has been deleted.", retryable=False)
+        if ctx.project_id:
+            refusal = await project_refuses_paid_work(db, _uuid(ctx.project_id))
+            if refusal:
+                raise AppError(ErrorCode.INVALID_STATE, refusal, retryable=False)
         latest = await _latest(db, key)
         if (latest.attempt_no if latest else 0) != after:
             # Someone else started an attempt for this operation since we looked.
@@ -279,6 +283,31 @@ async def _begin_attempt(ctx: CallContext, *, key: str, provider: str, model: st
         await db.flush()
         await _sync_operation(db, op_id)
         return _snap(row)
+
+
+# A comic in one of these states, or with a cancel or deletion recorded, gets no new paid request.
+# In-flight requests are not affected: they finish (or are reconciled) and their cost stays counted.
+ENDED_STATUSES = ("cancelled", "failed", "expired", "blocked")
+
+
+async def project_refuses_paid_work(db: Any, project_id: uuid.UUID | None) -> str | None:
+    """Why no new paid request may start for this comic, or None."""
+    if project_id is None:
+        return None
+    row = (await db.execute(text(
+        "select p.status, p.cancel_requested_at, p.deleted_at, u.deleted_at as owner_deleted_at "
+        "from projects p join users u on u.id = p.owner_id where p.id = :p"), {"p": project_id})).one_or_none()  # fmt: skip
+    if row is None:
+        return None  # account-level work (no comic row), or a comic purged with its account
+    if row.owner_deleted_at is not None:
+        return "This account has been deleted."
+    if row.deleted_at is not None:
+        return "This comic has been deleted."
+    if row.cancel_requested_at is not None or row.status == "cancelled":
+        return "This comic was cancelled."
+    if row.status in ENDED_STATUSES:
+        return "This comic has stopped."
+    return None
 
 
 async def _mark(att: Attempt, *, only_if: tuple[str, ...] | None = None, **fields: Any) -> bool:
