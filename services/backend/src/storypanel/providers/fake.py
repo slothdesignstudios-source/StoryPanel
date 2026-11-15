@@ -91,9 +91,13 @@ class FakeControl:
     gate_stage: str = ""
     gate: Any = None
     gate_entered: Any = None
+    gate_skip: int = 0  # the first N calls of the stage pass the gate
 
     async def wait_at_gate(self, stage: str) -> None:
         if self.gate is not None and stage == self.gate_stage:
+            if self.gate_skip > 0:
+                self.gate_skip -= 1
+                return
             if self.gate_entered is not None:
                 self.gate_entered.set()
             await self.gate.wait()

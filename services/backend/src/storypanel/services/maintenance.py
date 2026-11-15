@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -237,8 +237,48 @@ async def find_lost_workflows(
                 raise
             why = "workflow not found"
         lost.append({"project_id": str(pid), "status": status, "workflow_id": wid, "reason": why,
-                     "resume_from": RESUME_STAGE[status]})  # fmt: skip
+                     "resume_from": RESUME_STAGE[status], **await _resume_preview(uuid.UUID(str(pid)), status)})  # fmt: skip
     return lost
+
+
+async def _resume_preview(pid: uuid.UUID, status: str) -> dict[str, Any]:
+    """Read-only: credits held now (released if the comic is marked stopped) and what pressing
+    Resume would redo. Anything already saved (Story Bible, ready sheets, location references,
+    the written script, drawn panels) is reused; only unfinished items are made again."""
+    from storypanel.db.models import Character, CreditReservation, Location, Panel, PanelVersion
+
+    async with transaction() as db:
+        held = (await db.execute(select(func.coalesce(func.sum(CreditReservation.amount - CreditReservation.settled), 0))
+                                 .where(CreditReservation.project_id == pid, CreditReservation.status == "open"))).scalar_one()  # fmt: skip
+        stage = RESUME_STAGE[status]
+        if stage in ("cast_gate", "script_gate"):
+            redo, paid = "nothing: it returns to the approval and waits", False
+        elif stage == "scripting":
+            redo, paid = (
+                "writes the script if none was saved (one paid text call), then the Story Bible check",
+                True,
+            )
+        elif stage == "illustrating":
+            todo = (await db.execute(select(func.count()).select_from(Panel).where(
+                Panel.project_id == pid, Panel.status.not_in(["ok", "needs_attention"])))).scalar_one()  # fmt: skip
+            orphan = (await db.execute(select(func.count()).select_from(PanelVersion).join(
+                Panel, Panel.id == PanelVersion.panel_id).where(
+                Panel.project_id == pid, Panel.current_version_id.is_(None)))).scalar_one()  # fmt: skip
+            redo = (f"draws the {todo} panel(s) not yet drawn (paid image calls and checks); drawn panels are kept"
+                    + (f"; {orphan} image(s) made before the loss but never finished are not reused and are drawn again"
+                       if orphan else ""))  # fmt: skip
+            paid = todo > 0
+        else:  # intake / planning
+            sheets = (await db.execute(select(func.count()).select_from(Character).where(
+                Character.project_id == pid, Character.sheet_status != "ready"))).scalar_one()  # fmt: skip
+            locs = (await db.execute(select(func.count()).select_from(Location).where(
+                Location.project_id == pid, Location.reference_asset_id.is_(None)))).scalar_one()  # fmt: skip
+            redo = (
+                f"finishes planning: a saved Story Bible is reused; {sheets} character sheet(s) and {locs} location "
+                "reference(s) not yet saved are drawn (paid)"
+            )
+            paid = True
+    return {"credits_held": int(held), "resume_redoes": redo, "resume_makes_paid_calls": paid}
 
 
 async def recover_lost_workflows(client: Any, *, apply: bool,

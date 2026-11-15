@@ -685,7 +685,9 @@ def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels:
         # One warning per page, from that page's own smallest lettering: a fixed width does not fit every page.
         on_page = [r for r in small if r["page"] == page_no]
         low_pt = min(r["pt"] for r in on_page)
-        needed = math.ceil(PRINT_WIDTH_IN * MIN_PRINT_PT / low_pt * 10 - 1e-9) / 10  # rounded up: never short of the floor
+        needed = (
+            math.ceil(PRINT_WIDTH_IN * MIN_PRINT_PT / low_pt * 10 - 1e-9) / 10
+        )  # rounded up: never short of the floor
         panels_txt = ", ".join(str(r["panel"]) for r in on_page)
         warnings.append(f"Page {page_no}: lettering in panel(s) {panels_txt} prints at {low_pt:g} pt at the "
                         f"{PRINT_WIDTH_IN:g}-inch print width, below the {MIN_PRINT_PT:g} pt readable size. Fine on "
