@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, func, select, text, update
@@ -195,13 +196,23 @@ async def run_loop(stop: asyncio.Event, interval: float = 60.0) -> None:
 
 
 # ------------------------------------------------------------------ lost workflows
-# The stage a comic stopped in, by status: where Resume restarts it (nothing already made is redone).
+# The stage a comic stopped in, by status: where Resume restarts it (nothing already saved is redone).
 RESUME_STAGE = {"queued": "intake", "intake": "intake", "awaiting_answers": "intake", "planning": "planning",
                 "awaiting_cast_approval": "cast_gate", "scripting": "scripting",
                 "awaiting_script_approval": "script_gate", "illustrating": "illustrating"}  # fmt: skip
+FREE_RESUME_STAGES = ("cast_gate", "script_gate")
+# Providers whose requests can be fetched again by request id after the caller lost track of them
+# (asynchronous queues). OpenAI and Gemini image calls are synchronous: a result that did not come
+# back cannot be retrieved later.
+RETRIEVABLE_PROVIDERS = ("fal",)
 LOST_MESSAGE = (
     "This comic's background job was lost (the local servers restarted without keeping it). "
     "Press Resume to continue from where it stopped."
+)
+LOST_NEEDS_APPROVAL = (
+    "This comic's background job was lost (the local servers restarted without keeping it). "
+    "Continuing it would make new paid requests, so it can be resumed only after the owner "
+    "approves that with scripts/recover-lost-comics.py --approve-paid-resume."
 )
 
 
@@ -211,7 +222,7 @@ async def find_lost_workflows(
     """Running comics whose workflow no longer runs in Temporal (not found, or closed). Read-only.
 
     A comic whose workflow start is still waiting in the outbox, or that changed in the last
-    `min_age`, is never reported."""
+    `min_age`, is never reported. Finished, cancelled, failed and deleted comics are never listed."""
     from temporalio.client import WorkflowExecutionStatus
     from temporalio.service import RPCError, RPCStatusCode
 
@@ -236,61 +247,183 @@ async def find_lost_workflows(
             if exc.status != RPCStatusCode.NOT_FOUND:
                 raise
             why = "workflow not found"
+        stage = RESUME_STAGE[status]
         lost.append({"project_id": str(pid), "status": status, "workflow_id": wid, "reason": why,
-                     "resume_from": RESUME_STAGE[status], **await _resume_preview(uuid.UUID(str(pid)), status)})  # fmt: skip
+                     "resume_from": stage, **await resume_preview(uuid.UUID(str(pid)), stage)})  # fmt: skip
     return lost
 
 
-async def _resume_preview(pid: uuid.UUID, status: str) -> dict[str, Any]:
-    """Read-only: credits held now (released if the comic is marked stopped) and what pressing
-    Resume would redo. Anything already saved (Story Bible, ready sheets, location references,
-    the written script, drawn panels) is reused; only unfinished items are made again."""
-    from storypanel.db.models import Character, CreditReservation, Location, Panel, PanelVersion
+async def resume_preview(pid: uuid.UUID, stage: str) -> dict[str, Any]:
+    """Read-only account of a stopped comic, in four separate groups:
+
+    reusable              results already saved; Resume reuses them, nothing is paid again;
+    retrievable_requests  provider requests whose result can still be fetched by request id;
+    ambiguous_requests    requests whose outcome is unknown (timed out, cut off, never answered):
+                          they may already have been billed, up to the amount shown;
+    unfinished_images     images saved but never finished (their checks did not complete): not
+                          reused automatically;
+    needs_redo            what Resume would make again with NEW paid requests, with the possible
+                          additional cost. Resume of such a comic needs an explicit approval."""
+    from storypanel.db.models import (
+        Character,
+        CreditReservation,
+        Location,
+        Panel,
+        PanelVersion,
+        ProviderAttempt,
+        ProviderUsage,
+    )  # fmt: skip
+    from storypanel.providers.metering import UNRESOLVED_BASES
 
     async with transaction() as db:
         held = (await db.execute(select(func.coalesce(func.sum(CreditReservation.amount - CreditReservation.settled), 0))
                                  .where(CreditReservation.project_id == pid, CreditReservation.status == "open"))).scalar_one()  # fmt: skip
-        stage = RESUME_STAGE[status]
-        if stage in ("cast_gate", "script_gate"):
-            redo, paid = "nothing: it returns to the approval and waits", False
-        elif stage == "scripting":
-            redo, paid = (
-                "writes the script if none was saved (one paid text call), then the Story Bible check",
-                True,
+        attempts = (await db.execute(
+            select(ProviderAttempt.id, ProviderAttempt.provider, ProviderAttempt.model, ProviderAttempt.status,
+                   ProviderAttempt.provider_request_id, ProviderAttempt.cost_basis, ProviderAttempt.cost_counted_usd,
+                   ProviderAttempt.cost_estimate_usd, ProviderUsage.stage, ProviderUsage.target_id)
+            .join(ProviderUsage, ProviderUsage.id == ProviderAttempt.operation_id)
+            .where(ProviderAttempt.project_id == pid).order_by(ProviderAttempt.created_at))).all()  # fmt: skip
+        panels = (await db.execute(select(Panel.id, Panel.index.label("pos"), Panel.status, Panel.current_version_id).where(
+            Panel.project_id == pid).order_by(Panel.index))).all()  # fmt: skip
+        orphans = (await db.execute(select(PanelVersion.id, PanelVersion.panel_id, PanelVersion.qa_status).join(
+            Panel, Panel.id == PanelVersion.panel_id).where(
+            Panel.project_id == pid, Panel.current_version_id.is_(None)))).all()  # fmt: skip
+        sheets_todo = (await db.execute(select(func.count()).select_from(Character).where(
+            Character.project_id == pid, Character.sheet_status != "ready"))).scalar_one()  # fmt: skip
+        sheets_ready = (await db.execute(select(func.count()).select_from(Character).where(
+            Character.project_id == pid, Character.sheet_status == "ready"))).scalar_one()  # fmt: skip
+        locs_todo = (await db.execute(select(func.count()).select_from(Location).where(
+            Location.project_id == pid, Location.reference_asset_id.is_(None)))).scalar_one()  # fmt: skip
+    open_ = [a for a in attempts if a.cost_basis in UNRESOLVED_BASES]
+    retrievable = [a for a in open_ if a.provider in RETRIEVABLE_PROVIDERS and a.provider_request_id]
+    ambiguous = [a for a in open_ if a not in retrievable]
+
+    def latest(stage_name: str, target: str | None = None) -> Decimal | None:
+        rows = [a for a in attempts if a.stage == stage_name and (target is None or a.target_id == target)]
+        return Decimal(rows[-1].cost_estimate_usd) if rows else None
+
+    done = [p for p in panels if p.status in ("ok", "needs_attention")]
+    reusable = []
+    if sheets_ready:
+        reusable.append(f"{sheets_ready} character sheet(s)")
+    if stage in ("script_gate", "illustrating"):
+        reusable.append("the approved Story Bible and the written script")
+    if done:
+        reusable.append(f"{len(done)} drawn panel(s): " + ", ".join(f"panel {p.pos + 1}" for p in done))
+    needs_redo: list[dict[str, Any]] = []
+    if stage == "illustrating":
+        # one attempt round = the panel image + its safety, layout and identity checks, at the last reservation seen
+        any_panel = latest("panel_generate")
+        checks = sum((x for x in (latest("image_safety"), latest("vision_qa"), latest("identity_visual")) if x),
+                     Decimal(0))  # fmt: skip
+        for p in panels:
+            if p.status in ("ok", "needs_attention"):
+                continue
+            image = latest("panel_generate", str(p.id)) or any_panel
+            needs_redo.append({"what": f"panel {p.pos + 1}", "panel_id": str(p.id),
+                               "possible_additional_cost_usd": str((image + checks).quantize(Decimal("0.0001")))
+                               if image is not None else None})  # fmt: skip
+    elif stage == "scripting":
+        cost = latest("script")
+        needs_redo.append({"what": "the script, if none was saved", "possible_additional_cost_usd":
+                           str(cost) if cost is not None else None})  # fmt: skip
+    elif stage in ("intake", "planning"):
+        if sheets_todo:
+            needs_redo.append(
+                {"what": f"{sheets_todo} character sheet(s)", "possible_additional_cost_usd": None}
             )
-        elif stage == "illustrating":
-            todo = (await db.execute(select(func.count()).select_from(Panel).where(
-                Panel.project_id == pid, Panel.status.not_in(["ok", "needs_attention"])))).scalar_one()  # fmt: skip
-            orphan = (await db.execute(select(func.count()).select_from(PanelVersion).join(
-                Panel, Panel.id == PanelVersion.panel_id).where(
-                Panel.project_id == pid, Panel.current_version_id.is_(None)))).scalar_one()  # fmt: skip
-            redo = (f"draws the {todo} panel(s) not yet drawn (paid image calls and checks); drawn panels are kept"
-                    + (f"; {orphan} image(s) made before the loss but never finished are not reused and are drawn again"
-                       if orphan else ""))  # fmt: skip
-            paid = todo > 0
-        else:  # intake / planning
-            sheets = (await db.execute(select(func.count()).select_from(Character).where(
-                Character.project_id == pid, Character.sheet_status != "ready"))).scalar_one()  # fmt: skip
-            locs = (await db.execute(select(func.count()).select_from(Location).where(
-                Location.project_id == pid, Location.reference_asset_id.is_(None)))).scalar_one()  # fmt: skip
-            redo = (
-                f"finishes planning: a saved Story Bible is reused; {sheets} character sheet(s) and {locs} location "
-                "reference(s) not yet saved are drawn (paid)"
+        if locs_todo:
+            needs_redo.append(
+                {"what": f"{locs_todo} location reference(s)", "possible_additional_cost_usd": None}
             )
-            paid = True
-    return {"credits_held": int(held), "resume_redoes": redo, "resume_makes_paid_calls": paid}
+        if stage == "intake":
+            needs_redo.append(
+                {"what": "the brief and Story Bible, if not saved", "possible_additional_cost_usd": None}
+            )
+    known = [
+        Decimal(n["possible_additional_cost_usd"]) for n in needs_redo if n["possible_additional_cost_usd"]
+    ]
+    paid = bool(needs_redo) and stage not in FREE_RESUME_STAGES
+    return {
+        "credits_held": int(held),
+        "reusable": reusable,
+        "retrievable_requests": [{"attempt_id": str(a.id), "stage": a.stage, "provider": a.provider,
+                                  "request_id": a.provider_request_id, "status": a.status} for a in retrievable],
+        "ambiguous_requests": [{"attempt_id": str(a.id), "stage": a.stage, "target_id": a.target_id,
+                                "model": a.model, "status": a.status,
+                                "may_already_be_billed_up_to_usd": str(a.cost_counted_usd)} for a in ambiguous],
+        "unfinished_images": [{"panel_id": str(o.panel_id), "version_id": str(o.id), "checks": o.qa_status}
+                              for o in orphans],
+        "needs_redo": needs_redo,
+        "possible_additional_cost_usd": str(sum(known, Decimal(0))) if known else None,
+        "possible_additional_cost_note": "per attempt round at the last reservations seen; automatic repair rounds "
+                                         "can repeat a panel's round" if stage == "illustrating" else None,
+        "resume_makes_paid_calls": paid,
+        "resume_needs_approval": paid,
+    }  # fmt: skip
 
 
 async def recover_lost_workflows(client: Any, *, apply: bool,
                                  min_age: timedelta = timedelta(minutes=10)) -> list[dict[str, Any]]:  # fmt: skip
-    """Mark each lost comic as stopped where it was, releasing its credit holds, so the person can
-    press Resume (which restarts at that stage; nothing already made or paid for is redone).
-    With apply=False only lists them."""
-    from storypanel.pipeline.stages_art import stage_end
+    """With apply=False (default use): only lists. With apply=True: marks each lost comic as stopped
+    where it was and releases its credit holds. Nothing is charged, drawn or sent.
+
+    A comic whose Resume makes no paid request (waiting at an approval) becomes resumable at once.
+    A comic whose Resume would make paid requests is stopped WITHOUT a resume point; it becomes
+    resumable only through approve_paid_resume(), comic by comic."""
+    from storypanel.services import events, repo
 
     lost = await find_lost_workflows(client, min_age)
     for item in lost if apply else ():
-        await stage_end(uuid.UUID(item["project_id"]), status="failed", code="workflow_lost", message=LOST_MESSAGE,
-                        resume_from=item["resume_from"])  # fmt: skip
-        log.warning("lost_workflow_recovered", **item)
+        pid = uuid.UUID(item["project_id"])
+        approve_needed = item["resume_needs_approval"]
+        async with transaction() as db:
+            project = await repo.get_project(db, pid, lock=True)
+            if project.status not in [s.value for s in ACTIVE] or project.deleted_at is not None:
+                continue  # changed since it was listed: leave it alone
+            await repo.fail_project(db, project, code="workflow_lost",
+                                    message=LOST_NEEDS_APPROVAL if approve_needed else LOST_MESSAGE,
+                                    resume_from=None if approve_needed else item["resume_from"],
+                                    lost_stage=item["resume_from"], needs_approval=approve_needed)  # fmt: skip
+            from storypanel.db.models import Panel
+            from storypanel.domain.states import PanelStatus
+
+            await db.execute(update(Panel).where(Panel.project_id == pid, Panel.status == PanelStatus.GENERATING.value)
+                             .values(status=PanelStatus.PENDING.value))  # fmt: skip
+            await events.notify_after_commit(db)
+        log.warning("lost_workflow_recovered", project_id=item["project_id"], stage=item["resume_from"],
+                    needs_approval=approve_needed)  # fmt: skip
     return lost
+
+
+async def approve_paid_resume(project_ids: list[uuid.UUID]) -> list[dict[str, Any]]:
+    """The owner's explicit approval, per comic, to make a stopped lost comic resumable although
+    Resume will make new paid requests. Changes nothing else: Resume must still be pressed."""
+
+    out = []
+    for pid in project_ids:
+        async with transaction() as db:
+            project = (
+                await db.execute(select(Project).where(Project.id == pid).with_for_update())
+            ).scalar_one_or_none()
+            if project is None:
+                out.append({"project_id": str(pid), "approved": False, "reason": "no such comic"})
+                continue
+            failure = dict(project.failure or {})
+            if (project.status != "failed" or project.deleted_at is not None or failure.get("code") != "workflow_lost"
+                    or not failure.get("needs_approval")):  # fmt: skip
+                out.append(
+                    {
+                        "project_id": str(pid),
+                        "approved": False,
+                        "reason": "not a lost comic waiting for a paid-resume approval",
+                    }
+                )
+                continue
+            stage = str(failure["lost_stage"])
+            project.resume_from = stage
+            project.failure = {**failure, "needs_approval": False, "approved_at": datetime.now(UTC).isoformat(),
+                               "message": LOST_MESSAGE}  # fmt: skip
+        out.append({"project_id": str(pid), "approved": True, "resume_from": stage})
+    return out

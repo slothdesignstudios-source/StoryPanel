@@ -92,6 +92,7 @@ class FakeControl:
     gate: Any = None
     gate_entered: Any = None
     gate_skip: int = 0  # the first N calls of the stage pass the gate
+    gate_raise: Any = None  # raised by the held call once released (e.g. a timeout: outcome unknown)
 
     async def wait_at_gate(self, stage: str) -> None:
         if self.gate is not None and stage == self.gate_stage:
@@ -101,6 +102,8 @@ class FakeControl:
             if self.gate_entered is not None:
                 self.gate_entered.set()
             await self.gate.wait()
+            if self.gate_raise is not None:
+                raise self.gate_raise
 
     def reset(self) -> None:
         self.__init__()  # type: ignore[misc]

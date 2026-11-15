@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -19,7 +20,7 @@ from sqlalchemy import select
 from storypanel.db.models import Project
 from storypanel.db.session import transaction
 from storypanel.providers import fake
-from storypanel.services.maintenance import find_lost_workflows, recover_lost_workflows
+from storypanel.services.maintenance import approve_paid_resume, find_lost_workflows, recover_lost_workflows
 from tests.conftest import wait_for
 from tests.test_credit_paths import state
 from tests.test_story_fidelity import start
@@ -119,19 +120,23 @@ async def test_finished_cancelled_and_deleted_comics_are_never_listed_or_revived
 async def test_recovery_during_drawing_never_charges_twice_or_redraws_finished_panels(
     client: Any, headers: dict[str, str], worker: Any, temporal_env: Any
 ) -> None:
-    """Workflow lost while drawing: panel 1 finished and charged, panel 2's image in flight. The
-    dry run says what Resume redoes; --apply stops the comic and releases only the unused hold;
-    a second --apply finds nothing; Resume draws only the missing panels; every delivered panel is
-    charged exactly once and the ledger reconciles."""
+    """Workflow lost while drawing: panel 1 finished and charged, panel 2's image request cut off.
+    The dry run separates the reusable panel, the ambiguous request (may already be billed), the
+    absence of retrievable requests (synchronous image API) and the panels to redraw with their
+    possible cost. --apply stops the comic and releases only the unused hold, but does NOT make it
+    resumable (redrawing is paid); a second --apply finds nothing. Only after the explicit
+    per-comic approval can it resume; then only the missing panels are drawn, every delivered
+    panel is charged exactly once and the ledger reconciles."""
     from storypanel.db.models import CreditLedger, Panel, ProviderAttempt, ProviderUsage
     from tests.test_credit_paths import to_script_gate
 
     pid, p = await to_script_gate(client, headers)
-    fake.control.gate_stage, fake.control.gate, fake.control.gate_skip = "panel_generate", asyncio.Event(), 1
+    # the first panel's safety check passes; the next image is drawn and saved, its check held open
+    fake.control.gate_stage, fake.control.gate, fake.control.gate_skip = "image_safety", asyncio.Event(), 1
     fake.control.gate_entered = asyncio.Event()
     await client.post(f"/v1/projects/{pid}/script/approve", json={"script_version": p["script_version"]},
                       headers=headers)  # fmt: skip
-    await asyncio.wait_for(fake.control.gate_entered.wait(), 30)  # a second image is in flight
+    await asyncio.wait_for(fake.control.gate_entered.wait(), 30)  # a second image saved, its check in flight
     p = await wait_for(client, pid, headers, lambda p: any(pn["status"] in ("ok", "needs_attention")
                                                            for pg in p["pages"] for pn in pg["panels"]))  # fmt: skip
     finished = {pn["id"]: pn["current_version_id"] for pg in p["pages"] for pn in pg["panels"]
@@ -139,13 +144,38 @@ async def test_recovery_during_drawing_never_charges_twice_or_redraws_finished_p
     async with transaction() as db:
         wid = (await db.execute(select(Project.workflow_id).where(Project.id == uuid.UUID(pid)))).scalar_one()
     await temporal_env.client.get_workflow_handle(wid).terminate("simulated: dev server restarted in memory")
+    # the held check then times out on the client side: the provider may or may not have billed it
+    from storypanel.errors import AppError, ErrorCode
+
+    fake.control.gate_raise = AppError(ErrorCode.TIMEOUT, "simulated client timeout", retryable=True)
     fake.control.gate.set()
-    await asyncio.sleep(1)
-    fake.control.gate = None
+    for _ in range(100):  # wait until the held attempt is closed
+        async with transaction() as db:
+            open_ = (await db.execute(select(ProviderAttempt.id).where(ProviderAttempt.project_id == uuid.UUID(pid),
+                     ProviderAttempt.status.in_(["reserved", "submitting"])))).all()  # fmt: skip
+        if not open_:
+            break
+        await asyncio.sleep(0.2)
+    fake.control.gate, fake.control.gate_raise = None, None
 
     (item,) = await find_lost_workflows(temporal_env.client, min_age=timedelta(0))  # dry run: changes nothing
-    assert item["resume_from"] == "illustrating" and item["resume_makes_paid_calls"] is True
-    assert item["credits_held"] > 0 and "panel(s) not yet drawn" in item["resume_redoes"]
+    assert item["resume_from"] == "illustrating" and item["credits_held"] > 0
+    assert any("drawn panel(s)" in r for r in item["reusable"])
+    assert item["retrievable_requests"] == []  # synchronous image API: nothing to fetch later
+    cut_off = [a for a in item["ambiguous_requests"] if a["stage"] == "image_safety"]
+    assert cut_off and all(Decimal(a["may_already_be_billed_up_to_usd"]) > 0 for a in cut_off)
+    unfinished = {u["panel_id"] for u in item["unfinished_images"]}
+    assert unfinished and not unfinished & set(
+        finished
+    )  # saved image whose check never finished: listed apart
+    redo = [r for r in item["needs_redo"] if r.get("panel_id")]
+    assert (
+        redo
+        and not [r for r in redo if r["panel_id"] in finished]
+        and unfinished <= {r["panel_id"] for r in redo}
+    )
+    assert all(Decimal(r["possible_additional_cost_usd"]) > 0 for r in redo)
+    assert item["resume_needs_approval"] is True
     assert (await client.get(f"/v1/projects/{pid}", headers=headers)).json()["status"] == "illustrating"
     await recover_lost_workflows(temporal_env.client, apply=True, min_age=timedelta(0))
     _, held = await state()
@@ -153,6 +183,18 @@ async def test_recovery_during_drawing_never_charges_twice_or_redraws_finished_p
     assert (
         await recover_lost_workflows(temporal_env.client, apply=True, min_age=timedelta(0)) == []
     )  # idempotent
+    p = (await client.get(f"/v1/projects/{pid}", headers=headers)).json()
+    assert (
+        p["status"] == "failed"
+        and p["failure"]["code"] == "workflow_lost"
+        and "approves" in p["failure"]["message"]
+    )
+    assert (
+        await client.post(f"/v1/projects/{pid}/resume", headers=headers)
+    ).status_code == 409  # not without approval
+    assert (await approve_paid_resume([uuid.uuid4()]))[0]["approved"] is False  # unknown comics are refused
+    (ok,) = await approve_paid_resume([uuid.UUID(pid)])
+    assert ok["approved"] and ok["resume_from"] == "illustrating"
 
     async with transaction() as db:
         attempts_before = {a.id for a in (await db.execute(select(ProviderAttempt).where(

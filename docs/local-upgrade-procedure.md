@@ -97,35 +97,47 @@ This must end with `PASS`. Then restart with live providers:
 scripts/native-stack.sh stop && SP_STACK_LIVE=1 scripts/native-stack.sh start
 ```
 
-## 6. Lost workflows: dry run first
+## 6. Lost workflows: dry run first, paid recovery only with your approval per comic
 
 ```bash
 services/backend/.venv/bin/python scripts/recover-lost-comics.py --min-age-minutes 0
 ```
 
-This is read-only. For each comic whose workflow is gone, it lists:
-- the stage it stopped at;
-- the credits it holds now;
-- what Resume would redo, and whether that makes paid calls.
+This is read-only. It lists running comics whose workflow is gone; comics whose workflow still runs,
+and finished, cancelled or deleted comics, are never listed. For each comic it shows separately:
 
-Comics whose workflow still runs, and finished, cancelled or deleted comics, are never listed. Not
-every paused comic needs recovery: a comic you no longer want can simply be cancelled in the app.
+| Group | Meaning | What recovery does with it |
+|---|---|---|
+| **Reusable** | saved results: sheets, Story Bible, script, drawn panels | kept and reused; never paid again |
+| **Retrievable requests** | provider requests whose result can still be fetched by request id | fetched by reconciliation. With OpenAI and Gemini images there are none: their calls are synchronous |
+| **Ambiguous requests** | timed out, cut off or never answered: **may already have been billed**, up to the amount shown | never re-sent. Settle them with the provider's dashboard figures (`live-smoke.py reconcile --charges`) |
+| **Unfinished images** | an image was saved but its checks never finished | **not** reused or redrawn automatically |
+| **Would redo with new paid requests** | panels or planning steps still missing, with the possible additional cost | only after your explicit approval for that comic |
 
-Only if you want them resumable:
+Then, only if you want to:
 
 ```bash
 services/backend/.venv/bin/python scripts/recover-lost-comics.py --min-age-minutes 0 --apply
 ```
 
-This marks the listed comics as stopped at their stage and releases their held credits. Nothing is
-charged and nothing is drawn. Then press **Resume** only on the ones you want:
-- At an approval, nothing is redone.
-- In the drawing stage, only the missing panels are drawn, which is **paid** with live providers.
+This stops the listed comics and releases their held credits. Nothing is drawn, sent or charged.
+- A comic waiting at an approval becomes resumable; its Resume redoes nothing.
+- A comic whose Resume would make paid requests is **not** made resumable.
 
-Tested here:
-- no double charge;
-- no redraw of finished panels;
-- cancelled and deleted comics are never revived.
+For each of those you choose to continue, after reading its possible additional cost:
+
+```bash
+services/backend/.venv/bin/python scripts/recover-lost-comics.py --approve-paid-resume <comic-id>
+```
+
+Its Resume button then starts exactly the paid work listed under "would redo". A comic you do not
+want can be left stopped, or deleted in the app.
+
+Tested here (`tests/test_lost_workflows.py`):
+- the groups are reported correctly, including an ambiguous request and an unfinished image;
+- `--apply` never makes a paid resume possible without the approval;
+- unknown, finished, cancelled and deleted comics are refused or ignored;
+- after approval: no double charge, and no redraw of finished panels.
 
 ## 7. Verify
 
