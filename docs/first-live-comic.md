@@ -3,10 +3,13 @@
 Everything needed for the paid smoke test, and nothing else: no Clerk, Stripe, AWS, Render or
 Temporal Cloud, and **no fal or Voyage account**. Never paste a key into chat.
 
-> **Status (2026-11-14):**
+> **Status (2026-11-15):**
 > - The app runs on Anthropic, OpenAI and Google Gemini.
 > - fal and Voyage are disabled by configuration and need no key.
-> - No paid call has been made. Everything below was exercised only with simulated providers.
+> - No paid call has been made. Everything below was exercised only with simulated providers
+>   (`docs/evidence/smoke/sim-fidelity-openai/`, `sim-fidelity-gemini/`).
+> - Before a live run on a machine that ran an earlier version, follow `docs/upgrade-verification.md`
+>   (database encoding, migration, comics whose workflow was lost).
 
 ## 1. Where the keys go
 
@@ -69,8 +72,8 @@ Check the three unverified prices on the providers' pages before approving. If o
 
 | Images from | Estimated clean run | Smallest cap that can finish | Suggested approval |
 |---|---|---|---|
-| OpenAI | about USD 3.32 | USD 4.53 | USD 8.00 |
-| Gemini | about USD 1.20 | USD 1.73 | USD 4.00 |
+| OpenAI | about USD 3.33 | USD 4.53 | USD 8.00 |
+| Gemini | about USD 1.20 | USD 1.74 | USD 4.00 |
 
 Details, worst cases and what can be billed beyond the cap: [`smoke-test-cost.md`](smoke-test-cost.md).
 
@@ -105,16 +108,28 @@ or with Gemini images:
 scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py run --image-provider gemini --approve-usd 4.00 --run-id smoke-gemini-1
 ```
 
-**Scope:** one comic from the fixed prompt (a lighthouse keeper and a seagull, a 3-panel strip):
+**Scope:** one comic from the fixed prompt (a lighthouse keeper who always carries a brass lantern,
+and a seagull, as a 3-panel strip):
 1. Intake and moderation.
-2. Story Bible, then reference sheets for two characters, with safety checks, and up to three
-   location references.
-3. Script, which must have exactly 3 panels. Otherwise the run stops before any panel image is
+2. Story Bible, then reference sheets for two characters, with safety checks and a sheet review, and
+   up to three location references.
+3. **Persistent visual prop:** unless the Story Bible already has one, the run adds the continuity
+   rule "The keeper carries a brass lantern" (no paid call; the sheets are not redrawn). Because the
+   rule is newer than the sheet review, that review is confirmed explicitly; the confirmation is
+   recorded in the evidence.
+4. Script, which must have exactly 3 panels. Otherwise the run stops before any panel image is
    paid for.
-4. Three reference-conditioned panels, each with a safety check, a layout check and a Gemini
-   identity check, and up to two repair rounds each.
-5. One instruction edit of panel 1.
-6. PDF, PNG and CBZ exports. These make no paid call: local resampling, with an effective-DPI report.
+5. **Script edit before approval:** the three panels get distinct camera shots (wide, medium,
+   close-up) and the last panel's action changes. The edited version is re-checked against the
+   Story Bible (one small text call). A blocking issue stops the run before panel images; review
+   items are confirmed and recorded.
+6. Three reference-conditioned panels, each with a safety check, a layout check and a Gemini
+   identity check (the lantern is a required element wherever the keeper is drawn), and up to two
+   repair rounds each. The run checks the drawn panels use the edited shots.
+7. One instruction edit of panel 1.
+8. PDF, PNG and CBZ exports. These make no paid call: local resampling, with effective-DPI and
+   lettering-size reports. A 6-inch strip PDF reports lettering below 6.48 pt (expected; see
+   `docs/remaining-blockers.md`).
 
 The approved amount becomes a lifetime spending cap on the smoke user. If the next reservation would
 cross it, the run stops.

@@ -14,8 +14,10 @@
 The flow: create a comic from a fixed 3-panel prompt (Anthropic text generation + moderation) with
 the chosen image provider (OpenAI by default, or Gemini; kept for the whole comic), approve the cast
 (character reference sheets), approve the script (reference-conditioned panel generation, Anthropic
-safety and layout checks, Gemini visual identity QA, vector lettering), one instruction edit on
-panel 1, then PDF, PNG and CBZ exports (native images, local resampling, effective-DPI report),
+safety and layout checks, Gemini visual identity QA, vector lettering), a persistent visual prop
+(continuity rule "The keeper carries a brass lantern", checked in panel QA), one script edit before
+approval (three distinct camera shots and a changed action; re-checked against the Story Bible),
+one instruction edit on panel 1, then PDF, PNG and CBZ exports (native images, local resampling, effective-DPI report),
 downloaded and validated. fal and Voyage are not called. Usage and cost are read back per stage
 from `provider_attempts`: reserved estimate, calculated cost, unresolved potential charges and
 provider-confirmed charges, kept separate.
@@ -55,10 +57,16 @@ sys.path.insert(0, str(ROOT / "services/backend/src"))
 
 import httpx  # noqa: E402
 
-PROMPT = ("A lighthouse keeper and a cheeky seagull argue over the last sandwich on a windy pier, "
-          "as a 3 panel strip")  # fmt: skip
+PROMPT = ("A lighthouse keeper, who always carries a brass lantern, and a cheeky seagull argue over the "
+          "last sandwich on a windy pier, as a 3 panel strip")  # fmt: skip
 PANELS_REQUESTED = 3
 EDIT = "Make the seagull hold the sandwich in its beak."
+# Persistent visual prop: a must-have rule on the keeper, checked on the sheet and in every panel's QA.
+PROP_RULE = {"text": "The keeper carries a brass lantern", "applies_to": "character", "strength": "must",
+             "visual": True, "source": "user"}  # fmt: skip
+SHOTS = ["wide", "medium", "close_up"]  # the script edit makes the three camera shots distinct
+SCRIPT_EDIT_ACTION = " The keeper raises the brass lantern."  # appended to the last panel's action
+RULE_FIELDS = ("id", "text", "applies_to", "target", "strength", "visual", "source", "world_rule_index")
 PROFILE = ROOT / "docs/evidence/smoke-call-profile.json"
 API = os.environ.get("SP_SMOKE_API", "http://127.0.0.1:8000")
 IMAGE_PROVIDERS = ("openai", "gemini")
@@ -251,6 +259,7 @@ async def _storage_and_api(check: Any) -> None:
         print("  [SKIP] object storage put/get/delete: needs valid live settings (the provider keys)")
     else:
         await _storage(check)
+        await _database(check)
     try:
         async with httpx.AsyncClient(timeout=10) as h:
             r = await h.get(f"{API}/readyz")
@@ -259,6 +268,30 @@ async def _storage_and_api(check: Any) -> None:
             check("API runs live providers", meta.get("provider_mode") == "live", meta.get("provider_mode", "?"))
     except Exception as exc:
         check("API reachable", False, f"{API}: {type(exc).__name__}")
+
+
+async def _database(check: Any) -> None:
+    """The database must be UTF-8: SQL_ASCII refuses the JSON escapes the app writes for non-ASCII text,
+    so a comic with an accent in it would fail part-way. Converting is a copy, not a reset: see
+    docs/upgrade-verification.md."""
+    try:
+        from sqlalchemy import text
+
+        from storypanel.db.session import transaction
+
+        async with transaction() as db:
+            enc = (await db.execute(text("show server_encoding"))).scalar_one()
+            rev = (await db.execute(text("select version_num from alembic_version"))).scalar_one_or_none()
+        check("database encoding is UTF8", enc == "UTF8", f"{enc}: see docs/upgrade-verification.md (copy to UTF-8)")
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        cfg = Config(str(ROOT / "services/backend/alembic.ini"))
+        cfg.set_main_option("script_location", str(ROOT / "services/backend/migrations"))
+        head = ScriptDirectory.from_config(cfg).get_current_head()
+        check("database migrated to head", rev == head, f"at {rev}, head {head}; run: cd services/backend && uv run alembic upgrade head")
+    except Exception as exc:
+        check("database reachable", False, _safe_err(exc))
 
 
 async def _storage(check: Any) -> None:
@@ -380,8 +413,8 @@ def cost_model(image_provider: str = "openai") -> dict[str, Any]:
                  "reference-sheet review: portrait + turnaround per character (flags only, no redraw)"),
         text_row("script", "script|text_story", "text_story", 0, 1, SR * TA, f"draft + {SR - 1} repairs, x TEXT attempts"),
         text_row("moderation.script", "moderation.script|text_light", "text_light", 0, 1, TA, "same activity as the script"),
-        text_row("script_consistency", "script_consistency|text_light", "text_light", 0, 1, TA,
-                 "Story Bible check of the script (again for every user edit; none in the smoke test)"),
+        text_row("script_consistency", "script_consistency|text_light", "text_light", 0, 2, 2 * TA,
+                 "Story Bible check of the script, again after the test's one script edit; x TEXT attempts"),
         image_row("panel_generate", ED, REFS, P, P * QA * IA,
                   f"{P} panels x {QA} QA rounds x IMAGE attempts; up to {REFS} reference images"),
         text_row("image_safety (panels)", "image_safety|text_vision", "text_vision", 1, P, P * QA * IA, "safety per candidate"),
@@ -577,14 +610,63 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str, image_provi
                 await h.post(f"{API}/v1/projects/{pid}/answers", headers=H, json={"answers": {}})
                 p = await until(pid, lambda p: p["status"] == "awaiting_cast_approval", "cast")
             result["characters"] = len(p.get("characters") or [])
-            await h.post(f"{API}/v1/projects/{pid}/characters/approve", headers=H, json={"cast_version": p["cast_version"]})
-            p = await until(pid, lambda p: p["status"] == "awaiting_script_approval", "script")
+            p = await until(pid, lambda p: all((c.get("sheet_check") or {}).get("status") != "pending"
+                                               for c in p["characters"]), "sheet review")  # fmt: skip
+            # 1. Persistent visual prop: add the rule unless the Story Bible already has one (no paid call;
+            #    the sheets are not redrawn, their review is then marked as made against older rules).
+            keeper = next((c for c in p["characters"] if "keeper" in (c["name"] + json.dumps(c["spec"])).lower()),
+                          p["characters"][0])  # fmt: skip
+            rules = p["bible"]["continuity_rules"]
+            prop = next((r for r in rules if "lantern" in r["text"].lower()), None)
+            added = prop is None
+            if prop is None:
+                prop = {**PROP_RULE, "target": keeper["slug"]}
+                r = await h.put(f"{API}/v1/projects/{pid}/continuity-rules", headers=H, json={
+                    "cast_version": p["cast_version"],
+                    "rules": [{k: x[k] for k in RULE_FIELDS if x.get(k) is not None} for x in rules] + [prop]})  # fmt: skip
+                if r.status_code != 200:
+                    raise RuntimeError(f"adding the prop rule failed: {r.status_code} {r.text[:300]}")
+                p = r.json()
+            result["prop_rule"] = {"text": prop["text"], "target": prop.get("target"), "added_by_test": added}
+            cast_acks = [c["review"] for c in p["characters"] if c.get("review")]
+            result["cast_confirmations"] = [{"kind": x["kind"], "character": x.get("character"), "issue": x["issue"]}
+                                            for x in cast_acks]  # fmt: skip
+            r = await h.post(f"{API}/v1/projects/{pid}/characters/approve", headers=H, json={
+                "cast_version": p["cast_version"], "acknowledged": [x["key"] for x in cast_acks]})  # fmt: skip
+            if r.status_code != 200:
+                raise RuntimeError(f"cast approval refused: {r.status_code} {r.text[:300]}")
+            checked = lambda p: (p["status"] == "awaiting_script_approval"  # noqa: E731
+                                 and ((p.get("script") or {}).get("consistency") or {}).get("status") != "pending")
+            p = await until(pid, checked, "script")
             # Checked before approval, so a wrong count costs no panel images (simulated and live alike).
             scripted = [len(pg["panels"]) for pg in p["script"]["content"]["pages"]]
             result["scripted_panels"] = scripted
             if scripted != [PANELS_REQUESTED]:
                 raise RuntimeError(f"script has {scripted} panels; asked for one page of {PANELS_REQUESTED}")
-            await h.post(f"{API}/v1/projects/{pid}/script/approve", headers=H, json={"script_version": p["script_version"]})
+            # 2. A script edit, as a person would make it: three distinct camera shots and one changed action.
+            content = p["script"]["content"]
+            result["generated_shots"] = [pn["shot"] for pn in content["pages"][0]["panels"]]
+            for pn, shot in zip(content["pages"][0]["panels"], SHOTS, strict=True):
+                pn["shot"] = shot
+            content["pages"][0]["panels"][-1]["action"] += SCRIPT_EDIT_ACTION
+            r = await h.patch(f"{API}/v1/projects/{pid}/script", headers=H,
+                              json={"base_version": p["script_version"], "script": content})  # fmt: skip
+            if r.status_code != 200:
+                raise RuntimeError(f"script edit refused: {r.status_code} {r.text[:300]}")
+            p = await until(pid, lambda q, v=r.json()["version"]: checked(q) and q["script_version"] == v, "script edit")
+            script = p["script"]
+            errors = [i for i in script["issues"] if i.get("severity", "error") == "error"]
+            result["script_edit"] = {"version": script["version"], "shots": SHOTS,
+                                     "consistency": (script.get("consistency") or {}).get("status"),
+                                     "errors": [i["message"] for i in errors],
+                                     "confirmations": [{"kind": x["kind"], "panel": x.get("panel"), "issue": x["issue"]}
+                                                       for x in script["review_required"]]}  # fmt: skip
+            if errors:  # stops before any panel image is paid for
+                raise RuntimeError(f"edited script has blocking issues: {[i['message'] for i in errors]}")
+            r = await h.post(f"{API}/v1/projects/{pid}/script/approve", headers=H, json={
+                "script_version": p["script_version"], "acknowledged": [x["key"] for x in script["review_required"]]})  # fmt: skip
+            if r.status_code != 200:
+                raise RuntimeError(f"script approval refused: {r.status_code} {r.text[:300]}")
             p = await until(pid, lambda p: p["status"] in ("completed", "partially_completed")
                             and all(pg["preview_url"] for pg in p["pages"]), "panels")  # fmt: skip
             panels = [pn for pg in p["pages"] for pn in pg["panels"]]
@@ -593,6 +675,14 @@ async def run(simulated: bool, approve: Decimal | None, run_id: str, image_provi
             result["panels_requested"] = PANELS_REQUESTED
             if len(panels) != PANELS_REQUESTED:  # same assertion in simulated and live runs
                 raise RuntimeError(f"asked for {PANELS_REQUESTED} panels, got {len(panels)}")
+            result["final_shots"] = [pn["spec"]["shot"] for pn in panels]
+            if result["final_shots"] != SHOTS:
+                raise RuntimeError(f"drawn panels use shots {result['final_shots']}, the edited script says {SHOTS}")
+            # what panel QA said about each panel (the prop rule is a required element where the keeper is drawn)
+            result["panel_qa"] = [{"panel": n + 1, "status": pn["status"], "qa_state": pn.get("qa_state"),
+                                   "keeper_drawn": any(c["id"] == keeper["slug"] for c in pn["spec"]["characters"]),
+                                   "reasons": [x["label"] for x in pn.get("qa_reasons", [])]}
+                                  for n, pn in enumerate(panels)]  # fmt: skip
             first = panels[0]
             before = first.get("current_version_id")
             r = await h.post(f"{API}/v1/panels/{first['id']}/edit", headers={**H, "Idempotency-Key": f"edit-{run_id}"},

@@ -1,0 +1,571 @@
+{
+ "run_id": "sim-fidelity-openai",
+ "mode": "SIMULATED",
+ "project_id": "6e02936c-6168-4a51-9e4d-42dd799f31ed",
+ "prompt": "A lighthouse keeper, who always carries a brass lantern, and a cheeky seagull argue over the last sandwich on a windy pier, as a 3 panel strip",
+ "approved_usd": null,
+ "image_provider": "openai",
+ "image_model": "fake-openai-image",
+ "characters": 2,
+ "prop_rule": {
+  "text": "The keeper carries a brass lantern",
+  "target": "kiro",
+  "added_by_test": true
+ },
+ "cast_confirmations": [
+  {
+   "kind": "Reference sheet checked against older rules",
+   "character": "Kiro",
+   "issue": "the current rules for Kiro weren't checked against it. Look at the sheet yourself before approving."
+  }
+ ],
+ "scripted_panels": [
+  3
+ ],
+ "generated_shots": [
+  "wide",
+  "medium",
+  "close_up"
+ ],
+ "script_edit": {
+  "version": 2,
+  "shots": [
+   "wide",
+   "medium",
+   "close_up"
+  ],
+  "consistency": "done",
+  "errors": [],
+  "confirmations": []
+ },
+ "panels": 3,
+ "panel_status": [
+  "ok",
+  "ok",
+  "ok"
+ ],
+ "panels_requested": 3,
+ "final_shots": [
+  "wide",
+  "medium",
+  "close_up"
+ ],
+ "panel_qa": [
+  {
+   "panel": 1,
+   "status": "ok",
+   "qa_state": "passed",
+   "keeper_drawn": true,
+   "reasons": []
+  },
+  {
+   "panel": 2,
+   "status": "ok",
+   "qa_state": "passed",
+   "keeper_drawn": true,
+   "reasons": []
+  },
+  {
+   "panel": 3,
+   "status": "ok",
+   "qa_state": "passed",
+   "keeper_drawn": true,
+   "reasons": []
+  }
+ ],
+ "edit_request": 202,
+ "print_quality": {
+  "pdf": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    }
+   ],
+   "min_dpi": 417,
+   "warnings": [
+    "Lettering in 3 panel(s) prints at 5.94 pt at a 6-inch width, below the 6.48 pt readable size. Fine on screen. To print it readably, print at least 6.5 in wide."
+   ],
+   "lettering": [
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 1,
+     "text_size": 22.0
+    },
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 2,
+     "text_size": 22.0
+    },
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 3,
+     "text_size": 22.0
+    }
+   ],
+   "min_letter_pt": 5.94,
+   "min_letter_px": 27.5,
+   "print_width_in": 6.0
+  },
+  "png": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    }
+   ],
+   "min_dpi": 417,
+   "warnings": [
+    "Lettering in 3 panel(s) prints at 5.94 pt at a 6-inch width, below the 6.48 pt readable size. Fine on screen. To print it readably, print at least 6.5 in wide."
+   ],
+   "lettering": [
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 1,
+     "text_size": 22.0
+    },
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 2,
+     "text_size": 22.0
+    },
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 3,
+     "text_size": 22.0
+    }
+   ],
+   "min_letter_pt": 5.94,
+   "min_letter_px": 27.5,
+   "print_width_in": 6.0
+  },
+  "cbz": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    },
+    {
+     "dpi": 417,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      768,
+      768
+     ],
+     "printed_in": [
+      1.84,
+      1.8
+     ]
+    }
+   ],
+   "min_dpi": 417,
+   "warnings": [
+    "Lettering in 3 panel(s) prints at 5.94 pt at a 6-inch width, below the 6.48 pt readable size. Fine on screen. To print it readably, print at least 6.5 in wide."
+   ],
+   "lettering": [
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 1,
+     "text_size": 22.0
+    },
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 2,
+     "text_size": 22.0
+    },
+    {
+     "pt": 5.94,
+     "px": 27.5,
+     "page": 1,
+     "panel": 3,
+     "text_size": 22.0
+    }
+   ],
+   "min_letter_pt": 5.94,
+   "min_letter_px": 27.5,
+   "print_width_in": 6.0
+  }
+ },
+ "exports": {
+  "pdf": {
+   "ok": true,
+   "bytes": 110921,
+   "all_fonts_embedded": true,
+   "selectable_text_chars": 156,
+   "fonts": [
+    "Bangers-Regular",
+    "ComicNeue-Bold",
+    "ComicNeue-Regular"
+   ],
+   "trim_box": [
+    9.0,
+    9.0,
+    441.0,
+    160.2
+   ],
+   "bleed_box": [
+    0.0,
+    0.0,
+    450.0,
+    169.2
+   ]
+  },
+  "png": {
+   "ok": true,
+   "size": [
+    2000,
+    700
+   ]
+  },
+  "cbz": {
+   "ok": true,
+   "entries": [
+    "page_001.png",
+    "ComicInfo.xml"
+   ]
+  }
+ },
+ "timings_s": {
+  "story+cast": 2.1,
+  "sheet review": 0.0,
+  "script": 2.1,
+  "script edit": 2.1,
+  "panels": 2.1,
+  "edit": 2.1,
+  "export_pdf": 2.1,
+  "export_png": 2.1,
+  "export_cbz": 2.1,
+  "total": 17.1
+ },
+ "timing_resolution_s": 2,
+ "usage": {
+  "by_stage": {
+   "intake|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000138",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008736",
+    "max_input_tokens": 378
+   },
+   "moderation.prompt|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000140",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008606",
+    "max_input_tokens": 397
+   },
+   "bible|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "provider": "fake",
+    "counted": "0.003350",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.182926",
+    "max_input_tokens": 675
+   },
+   "moderation.bible|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000154",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008663",
+    "max_input_tokens": 541
+   },
+   "character_sheet|image_sync_generate": {
+    "calls": 2,
+    "model": "fake-openai-image",
+    "provider": "fake",
+    "counted": "0.241395",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_input_text_tokens": 159,
+    "max_input_image_tokens": 0,
+    "max_estimate": "0.263195",
+    "max_input_tokens": 159
+   },
+   "location_ref|image_sync_generate": {
+    "calls": 2,
+    "model": "fake-openai-image",
+    "provider": "fake",
+    "counted": "0.240840",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_input_text_tokens": 84,
+    "max_input_image_tokens": 0,
+    "max_estimate": "0.261695",
+    "max_input_tokens": 84
+   },
+   "image_safety|text_vision": {
+    "calls": 12,
+    "model": "fake-vision",
+    "provider": "fake",
+    "counted": "0.001404",
+    "statuses": {
+     "succeeded": 12
+    },
+    "max_estimate": "0.008581",
+    "max_input_tokens": 165
+   },
+   "character_sheet|image_sync_edit": {
+    "calls": 4,
+    "model": "fake-openai-image",
+    "provider": "fake",
+    "counted": "0.515405",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_input_text_tokens": 212,
+    "max_input_image_tokens": 1000,
+    "max_estimate": "0.280255",
+    "max_input_tokens": 1212
+   },
+   "sheet_check|text_vision": {
+    "calls": 2,
+    "model": "fake-vision",
+    "provider": "fake",
+    "counted": "0.000249",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_estimate": "0.008706",
+    "max_input_tokens": 255
+   },
+   "script|text_story": {
+    "calls": 1,
+    "model": "fake-story",
+    "provider": "fake",
+    "counted": "0.004704",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.184930",
+    "max_input_tokens": 1352
+   },
+   "moderation.script|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000141",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008612",
+    "max_input_tokens": 412
+   },
+   "script_consistency|text_light": {
+    "calls": 2,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000323",
+    "statuses": {
+     "succeeded": 2
+    },
+    "max_estimate": "0.008838",
+    "max_input_tokens": 619
+   },
+   "moderation.script_edit|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000143",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008619",
+    "max_input_tokens": 429
+   },
+   "panel_generate|image_sync_edit": {
+    "calls": 4,
+    "model": "fake-openai-image",
+    "provider": "fake",
+    "counted": "0.572810",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_input_text_tokens": 306,
+    "max_input_image_tokens": 4000,
+    "max_estimate": "0.330125",
+    "max_input_tokens": 4306
+   },
+   "vision_qa|text_vision": {
+    "calls": 4,
+    "model": "fake-vision",
+    "provider": "fake",
+    "counted": "0.000599",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.009022",
+    "max_input_tokens": 512
+   },
+   "identity_visual|text_vision": {
+    "calls": 4,
+    "model": "fake-gemini-qa",
+    "provider": "fake",
+    "counted": "0.008625",
+    "statuses": {
+     "succeeded": 4
+    },
+    "max_estimate": "0.045270",
+    "max_input_tokens": 466
+   },
+   "moderation.panel_edit|text_light": {
+    "calls": 1,
+    "model": "fake-light",
+    "provider": "fake",
+    "counted": "0.000137",
+    "statuses": {
+     "succeeded": 1
+    },
+    "max_estimate": "0.008596",
+    "max_input_tokens": 373
+   }
+  },
+  "totals": {
+   "reserved_estimate": "4.172370",
+   "calculated": "1.590557",
+   "unresolved": "0",
+   "provider_confirmed": "0",
+   "counted": "1.590557"
+  },
+  "estimate_overruns": [],
+  "counted_by_model": {
+   "fake-light": "0.001176",
+   "fake-story": "0.008054",
+   "fake-openai-image": "1.570450",
+   "fake-vision": "0.002252",
+   "fake-gemini-qa": "0.008625"
+  },
+  "note": "calculated = usage x operator price table (not a provider charge); unresolved = potential charges counted at their estimate (e.g. compute-time upscaling) until a provider charge is imported"
+ }
+}

@@ -1,7 +1,7 @@
 {
- "recorded_at": "2026-11-14",
+ "recorded_at": "2026-11-15",
  "source": "live-smoke.py run --simulated",
- "image_provider": "openai",
+ "image_provider": "gemini",
  "characters": 2,
  "panels": 3,
  "calls": {
@@ -16,7 +16,8 @@
   "sheet_check|text_vision": 2,
   "script|text_story": 1,
   "moderation.script|text_light": 1,
-  "script_consistency|text_light": 1,
+  "script_consistency|text_light": 2,
+  "moderation.script_edit|text_light": 1,
   "panel_generate|image_sync_edit": 4,
   "vision_qa|text_vision": 4,
   "identity_visual|text_vision": 4,
@@ -24,36 +25,36 @@
  },
  "sizes": {
   "intake|text_light": {
-   "max_estimate": "0.008732",
-   "max_input_tokens": 369,
+   "max_estimate": "0.008736",
+   "max_input_tokens": 378,
    "model": "fake-light"
   },
   "moderation.prompt|text_light": {
-   "max_estimate": "0.008602",
-   "max_input_tokens": 387,
+   "max_estimate": "0.008606",
+   "max_input_tokens": 397,
    "model": "fake-light"
   },
   "bible|text_story": {
-   "max_estimate": "0.182852",
-   "max_input_tokens": 666,
+   "max_estimate": "0.182926",
+   "max_input_tokens": 675,
    "model": "fake-story"
   },
   "moderation.bible|text_light": {
-   "max_estimate": "0.008659",
-   "max_input_tokens": 531,
+   "max_estimate": "0.008663",
+   "max_input_tokens": 541,
    "model": "fake-light"
   },
   "character_sheet|image_sync_generate": {
-   "max_estimate": "0.263195",
+   "max_estimate": "0.081520",
    "max_input_tokens": 159,
-   "model": "fake-openai-image",
+   "model": "fake-gemini-image",
    "max_prompt_bytes": 636,
    "max_input_images": 0
   },
   "location_ref|image_sync_generate": {
-   "max_estimate": "0.261695",
+   "max_estimate": "0.081370",
    "max_input_tokens": 84,
-   "model": "fake-openai-image",
+   "model": "fake-gemini-image",
    "max_prompt_bytes": 336,
    "max_input_images": 0
   },
@@ -63,9 +64,9 @@
    "model": "fake-vision"
   },
   "character_sheet|image_sync_edit": {
-   "max_estimate": "0.280255",
+   "max_estimate": "0.082186",
    "max_input_tokens": 1212,
-   "model": "fake-openai-image",
+   "model": "fake-gemini-image",
    "max_prompt_bytes": 848,
    "max_input_images": 1
   },
@@ -75,8 +76,8 @@
    "model": "fake-vision"
   },
   "script|text_story": {
-   "max_estimate": "0.184362",
-   "max_input_tokens": 1281,
+   "max_estimate": "0.184930",
+   "max_input_tokens": 1352,
    "model": "fake-story"
   },
   "moderation.script|text_light": {
@@ -85,20 +86,25 @@
    "model": "fake-light"
   },
   "script_consistency|text_light": {
-   "max_estimate": "0.008814",
-   "max_input_tokens": 560,
+   "max_estimate": "0.008838",
+   "max_input_tokens": 619,
+   "model": "fake-light"
+  },
+  "moderation.script_edit|text_light": {
+   "max_estimate": "0.008619",
+   "max_input_tokens": 429,
    "model": "fake-light"
   },
   "panel_generate|image_sync_edit": {
-   "max_estimate": "0.329820",
-   "max_input_tokens": 4291,
-   "model": "fake-openai-image",
-   "max_prompt_bytes": 1164,
+   "max_estimate": "0.084053",
+   "max_input_tokens": 4306,
+   "model": "fake-gemini-image",
+   "max_prompt_bytes": 1224,
    "max_input_images": 4
   },
   "vision_qa|text_vision": {
-   "max_estimate": "0.009014",
-   "max_input_tokens": 494,
+   "max_estimate": "0.009022",
+   "max_input_tokens": 512,
    "model": "fake-vision"
   },
   "identity_visual|text_vision": {

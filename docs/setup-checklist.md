@@ -21,8 +21,8 @@ The cost model behind the budget request is [`smoke-test-cost.md`](smoke-test-co
 
 | Images from | Estimated cost (unverified prices) | Smallest cap for a clean run |
 |---|---|---|
-| OpenAI | about USD 3.32 | USD 4.53 |
-| Gemini | about USD 1.20 | USD 1.73 |
+| OpenAI | about USD 3.33 | USD 4.53 |
+| Gemini | about USD 1.20 | USD 1.74 |
 
 The approved cap is an application limit, not a guaranteed ceiling on provider charges.
 

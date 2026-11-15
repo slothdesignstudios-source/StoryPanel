@@ -181,8 +181,8 @@ scripts/live-env.sh services/backend/.venv/bin/python scripts/live-smoke.py esti
 
 | Images from | Expected cost | Smallest cap for a clean run | Suggested cap |
 |---|---|---|---|
-| OpenAI | about USD 3.32 | USD 4.53 | USD 8.00 |
-| Gemini | about USD 1.20 | USD 1.73 | USD 4.00 |
+| OpenAI | about USD 3.33 | USD 4.53 | USD 8.00 |
+| Gemini | about USD 1.20 | USD 1.74 | USD 4.00 |
 
 Prices are unverified. The suggested cap covers every panel using both repair rounds. Details and the
 itemised tables are in `docs/smoke-test-cost.md`.
