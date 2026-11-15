@@ -52,8 +52,12 @@ scripts/native-services.sh start
 (cd apps/web && pnpm install)
 ```
 ```bash
+scripts/install-versitygw.sh && (cd services/backend && uv run alembic upgrade head)
+```
+```bash
 scripts/native-stack.sh start
 ```
+Images are kept as files under `$SP_DATA/s3` (local S3-compatible server) and survive restarts.
 Stop with `scripts/native-stack.sh stop`. Logs are in `/tmp/storypanel-run`.
 Optional demo credits: `cd services/backend && uv run python ../../scripts/seed-demo.py you@example.com`.
 

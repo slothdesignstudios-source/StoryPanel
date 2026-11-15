@@ -14,9 +14,16 @@ has not been judged on real generated art. Launch requirements are listed separa
 3. **Your installation has not been inspected or upgraded.** Start with the read-only report in
    [`local-upgrade-procedure.md`](local-upgrade-procedure.md) step 1. Waiting comics on an in-memory
    Temporal lose their workflow at the restart; a dry run lists them before anything changes.
-4. **Local images are kept in memory only.** The local S3 stand-in (moto, started by
-   `scripts/native-stack.sh`) loses every stored image when the stack stops; database rows remain.
-   The upgrade exports and re-imports them. Persistent local storage is a follow-up decision.
+4. **Durable image storage is required before the paid test.** Older `scripts/native-stack.sh`
+   versions ran an in-memory S3 stand-in (moto): every image was lost when the stack stopped.
+   **Prepared for review, not yet run on your machine:**
+   - Versity S3 Gateway with a POSIX backend (files under `$SP_DATA/s3`, `--fsync`);
+   - guards against stopping in-memory storage or Temporal;
+   - snapshot export, import and verify (`scripts/s3-snapshot.py`);
+   - an isolated persistence check (`scripts/persistence-check.sh`).
+
+   Verified here only with moto: the check correctly fails, losing 32 of 32 objects. The Versity
+   pass is not yet verified, because running the compiled server was not permitted in this session.
 5. **The 12-credit discrepancy is unresolved.** It needs the real `scripts/sql/reconcile-comic.sql`
    output.
 6. **Strip print size:** the default stays 6 in. Each export states, per page, the width its own

@@ -46,7 +46,7 @@ It must print `preflight: PASS`. It checks, without paid calls:
 | Real providers, no fake fallback | API and **worker process** in live mode, no simulated scenario. The registry has no live-to-fake fallback; live mode refuses to start without keys |
 | fal and Voyage disabled | settings and the worker's environment |
 | Secrets configured securely | `.env` git-ignored, untracked, mode 600; no key in committed config; each key valid via free model lookups (Anthropic Models API, OpenAI `models.retrieve`, Gemini `models.get`) |
-| Workflow state survives a restart | Temporal runs with a database file; `scripts/restart-check.py` (step 5 of the upgrade) proved it with simulated providers |
+| Images and workflow state survive a restart | Preflight fails unless image storage keeps objects on disk (not in-memory moto) and Temporal runs with a database file. `scripts/persistence-check.sh` proves both with a full stop and start of an **isolated** copy (own database, bucket, Temporal namespace and ports), first with simulated providers, then again in live mode without creating or approving anything |
 | Costs and QA recorded per attempt | `provider_attempts` (attempt, status, reserved, counted and calculated cost, tokens, latency, request id), `provider_usage` (stage, target), `panel_versions` (attempt, QA status and scores); the database migrated to head and UTF-8 |
 | Network | the three provider hosts are reachable |
 

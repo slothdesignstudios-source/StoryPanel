@@ -35,57 +35,59 @@ What it does:
   answers that comic's workflow with "not found" or a closed status. Any other failure or unreadable
   answer is reported as **unknown**.
 
-## Steps 2–7: the corrected sequence (commands follow your inspection)
+## After step 1: the sequence (commands follow your inspection output)
 
-The commands for these steps will be written for your actual revision, encoding, processes and
-data, as one script, `scripts/upgrade-local.sh`. That script stops automatically, before changing
-anything further, if any check fails. Nothing below is to be run yet.
+The concrete commands will be one script, written for your actual revision, encoding and processes,
+pinned to a reviewed commit (full SHA, checked out detached; never "pull main"). It stops
+automatically, before any further change, on:
+- local changes in the checkout (other than the git-ignored `.env`);
+- an unexpected schema revision;
+- any failed check.
 
-**Found while preparing this: images may be lost on every restart.** `scripts/native-stack.sh` runs
-the local S3 stand-in (moto) **in memory**, so stopping the stack deletes every stored image. The
-database keeps its rows. On this machine, after a restart, the bucket holds 0 objects for 2,537
-asset rows. Your inspection's "stored images" section shows whether your installation is already
-affected. The upgrade therefore exports the images **before** anything is stopped and imports them
-afterwards. Keeping images on disk permanently is a follow-up decision, not part of this upgrade.
+`.env` is only ever read. Nothing below is to be run yet.
 
-| Step | What happens | Stops automatically if |
+**Durable image storage comes first.** `scripts/native-stack.sh` used to run the local S3 stand-in
+(moto) in memory, so stopping it deleted every stored image. It now runs a local S3-compatible
+server that keeps each object as a file under `$SP_DATA/s3`: Versity S3 Gateway v1.11.0, the same
+one `docker-compose.yml` uses, POSIX backend. Persistent storage is required before the paid test.
+Images are imported **only into that durable storage**: importing into in-memory storage and then
+restarting it would erase them again, and `native-stack.sh stop` now refuses to do that.
+
+| Phase | What happens | Stops automatically if |
 |---|---|---|
-| 2. Stop writes safely | Wait until no comic is planning, scripting or drawing and no export is rendering. Stop the web app, API and worker only. Postgres, S3 and Temporal keep running: S3 and Temporal hold their state in memory | a comic or export is still working; an app process is still running; the database still has connections from the app |
-| 3. Final backup (after writes stop) | `pg_dump` in custom format; export **every** object from the S3 stand-in with a manifest (key, size, SHA-256); copy `.env` (mode 600) and the current commit id; if Temporal is file-backed, copy its database file after stopping it. An in-memory Temporal cannot be exported: its waiting comics are recorded from the inspection | any copy fails or is empty; free space is short |
-| 4. Verify the backup | Restore the dump into a scratch database. Compare it with the live one table by table: row counts **and** a content checksum per table. Run the credit reconciliation on both. Re-hash the exported objects against the manifest, and compare the object count with the bucket listing | any count, checksum, reconciliation or hash differs |
-| 5. Migrate (pinned commit) | Stop S3 and Temporal, since their state is now captured. Check out the **reviewed target commit by its full SHA**, detached; never "pull main". If the database is SQL_ASCII, restore the verified dump into a new UTF-8 database and validate it as in step 4, adding an encoding check; then swap the names. Install dependencies and run `alembic upgrade head` | local changes in the checkout (other than the git-ignored `.env`); HEAD differs from the reviewed SHA; schema revision before migrating differs from the one your inspection showed; a validation differs; head after migrating is not the expected revision |
-| 6. Validate and restart | Check that row counts and content checksums of the pre-existing tables are unchanged by the migration, for the columns that existed before. Run the credit reconciliation. Start the stack with simulated providers, import the exported objects, verify count and hashes. Run the free restart check, then switch to live providers and run the free preflight | any check fails |
-| 7. Lost workflows | Read-only dry run first. `--apply` and any paid resumption only with your separate approval | (decided by you) |
+| A. Prove persistence, isolated | From a separate checkout of the reviewed commit: install the storage server (`scripts/install-versitygw.sh`), then run `scripts/persistence-check.sh`. It uses its own database, bucket, Temporal server and namespace, ports and data folder. It seeds a simulated comic, does a **full** stop and start, then checks every object's SHA-256, retrieves an image through the app's signed URL, confirms the workflow is still running, and approves. Your comics are not touched | any check fails |
+| B. Stop writes | Wait until no comic is planning, scripting or drawing and no export is rendering. Stop **only** the web app, API and worker (`native-stack.sh stop-app`). The in-memory storage and the in-memory Temporal **keep running**, so images and waiting workflows are still held | a comic or export is still working; an app process does not exit |
+| C. Final backup | `pg_dump` with the app stopped; `s3-snapshot.py export` of every object from the running in-memory storage (all pages, SHA-256 manifest); `.env` copied with mode 600; the current commit recorded | any copy fails or is empty; free space is short |
+| D. Verify the backup | Restore the dump into a scratch database. Compare it with the live database table by table: row count **and** a content checksum per table. Run the credit reconciliation on both. `s3-snapshot.py verify` against the running storage must report every object ok, and the snapshot files are re-hashed | any count, checksum, reconciliation or hash differs |
+| E. Move images to durable storage | Only now stop the in-memory storage. Start the durable one and import the snapshot; every object is re-read and hash-checked. Then stop and start the durable storage **alone** and verify every object again | any object is missing, unknown or different |
+| F. Code and database | Check out the reviewed SHA. If SQL_ASCII, convert into a new UTF-8 database and validate it: content checksums, encoding, spot checks of non-ASCII text, credit reconciliation. Migrate, then validate the pre-existing tables' counts and checksums (original columns) and the credit reconciliation | local changes; HEAD ≠ reviewed SHA; schema before migrating ≠ the inspected revision; any validation differs |
+| G. Workflows kept running | Before any new worker connects to the still-running Temporal, download the histories of its running workflows and **replay them against the new code**. Only if every history replays does the new worker start (`start-app`), simulated first | any history fails to replay (the new worker is then not started) |
+| H. Live mode | `stop-app`, then `SP_STACK_LIVE=1 start-app`. Run the free preflight, which now fails on in-memory storage. Run `persistence-check.sh --live` (isolated; creates and approves nothing). Sample real images through the app | any check fails |
 
-`.env` is never modified. It is only read, and copied into the backup with mode 600.
+**Temporal: what can and cannot be preserved.** Your Temporal very likely runs in memory; the
+inspection says. An in-memory Temporal cannot be exported. An empty or new Temporal does **not**
+restore waiting workflows to their previous state: those comics would show "waiting for approval"
+with nothing behind them. To preserve them, Temporal is **not stopped** during the upgrade (phases B
+and G). The new worker continues the existing workflows once their histories replay.
 
-**Why one final backup, not an earlier one:** a backup taken while the app is running can miss
-writes made after it. If the upgrade needs a database swap (SQL_ASCII) or a rollback, it restores
-**only** the final backup from step 3, taken after writes stopped and verified in step 4. An earlier
-online backup can be kept as an extra copy, never as the restore point.
+Moving to the file-backed Temporal, which the paid test's preflight requires, means stopping the
+in-memory one, and that loses whatever is still running or waiting. It is done only when you choose:
+- ideally when no comic is waiting;
+- otherwise after the read-only recovery dry run has listed each affected comic and you have decided
+  what happens to each.
 
-**Validating a database conversion (SQL_ASCII → UTF-8):** row counts alone are not enough. The
-check also needs:
-- a content checksum per table: the md5 of every row's text, ordered by primary key, identical
-  in the old and new database;
-- no invalid UTF-8: `pg_restore --exit-on-error` refuses such bytes, and any rows containing them
-  are listed beforehand;
-- spot checks of non-ASCII text;
-- identical credit reconciliation results: balances and holds against the ledger.
+`native-stack.sh stop` refuses to stop an in-memory Temporal unless `SP_ALLOW_TEMPORAL_RESET=1`
+is set.
 
-## Rollback: keep PostgreSQL, images and Temporal at the same point
+`.env` is never modified.
 
-A rollback returns **all three to the step 3 snapshot**, never a mix:
+## Rollback
 
-1. Stop the stack.
-2. Rename the upgraded database aside (`storypanel_failed_upgrade`). Restore the step 3 dump into a
-   fresh database named `storypanel`. A UTF-8 database is fine for the old code.
-3. Start the old code (the commit recorded in step 3). Re-import the step 3 image export into the
-   S3 stand-in.
-4. Rename the new file-backed Temporal database aside. Its workflows belong to the upgraded data
-   and must not run against the restored database. The old version's Temporal starts empty, as it
-   did before. Comics that were waiting are in the same state as before the upgrade.
+| Situation | What a rollback does | What it never does |
+|---|---|---|
+| A check fails before phase E | Nothing to undo. The app is restarted on the old code; storage and Temporal were never stopped | — |
+| A check fails in phases E–G, **before any live call** | Stop the app. Restore the phase-C dump into a fresh database and swap the names; the upgraded one is kept as `storypanel_failed_upgrade`. Images stay in the durable storage: it holds the verified snapshot, and the old code reads it the same way. Check out the recorded old commit | Start an **old** worker against a Temporal that a **new** worker has already used: those histories contain the new code's steps and the old code cannot replay them. If a new worker has run, the in-memory Temporal is reset (its waiting workflows are lost, stated explicitly), or the rollback is not done |
+| **After any live paid activity** | **No automatic database rollback.** Restoring the backup would erase the records of real provider charges and credits, and restoring a database does not undo an external charge. Fix forward instead. Any manual decision starts from an export of the post-upgrade charge records | Automatic restore. The rollback script refuses when the database holds any non-simulated provider attempt made after the upgrade began |
 
-Anything created after the upgrade (comics, images, charges) is not in the snapshot. A rollback
-discards it, which is why the snapshot is taken with writes stopped and the upgrade is validated
-before you use the app again.
+PostgreSQL, images and Temporal are always returned to **the same point** (the phase-C snapshot), or
+not at all.

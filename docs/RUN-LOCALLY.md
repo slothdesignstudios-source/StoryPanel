@@ -92,8 +92,18 @@ echo 'export SP_DATA="$HOME/.storypanel-data"' >> ~/.bashrc && source ~/.bashrc
 ```
 
 ## 4. Try it with simulated providers (free; no keys)
+Images are stored by a local S3-compatible server that keeps every object as a file under
+`$SP_DATA/s3`, so they survive restarts. Install it once (it is built with Go; Go checks every
+downloaded module against its public checksum database):
 ```bash
-scripts/native-services.sh start && scripts/native-stack.sh start
+scripts/install-versitygw.sh
+```
+Create the database tables once (on later versions, follow the upgrade procedure instead):
+```bash
+scripts/native-services.sh start && (cd services/backend && uv run alembic upgrade head)
+```
+```bash
+scripts/native-stack.sh start
 ```
 The first start builds the web app, which takes a few minutes. Then open **http://localhost:3000** in
 your Windows browser (WSL forwards the port) and sign in with any email; this is the development
@@ -248,9 +258,9 @@ grep -rlFf <(cut -d= -f2- .env | sed '/^$/d') preflight.txt smoke-1.txt docs/evi
 Also note your own totals from each provider's usage page for the same time window.
 
 ## 6g. After pulling a new version
-- `scripts/native-stack.sh start` applies database migrations itself (`alembic upgrade head`).
-  The 2026-11-14 round adds migrations 0012 (hold history) and 0013 (review results). Both are
-  additive: existing comics keep working.
+- `scripts/native-stack.sh start` does **not** migrate the database. It refuses to start when the
+  schema is not the one the code expects. Migrate after a verified backup, following
+  `docs/local-upgrade-procedure.md`.
 - The database must be UTF-8. Check it with:
 ```bash
 psql -h 127.0.0.1 -U storypanel -d storypanel -Atc "show server_encoding"
@@ -273,8 +283,15 @@ scripts/live-env.sh services/backend/.venv/bin/python scripts/stage-report.py <c
 - **Lettering characters:** Western European (Latin-1) letters and common punctuation only. Ł, Greek,
   Cyrillic, CJK and emoji are refused with a message naming them; nothing is changed automatically
   (`docs/release-notes.md`).
-- **Switching between simulated and live:** always `scripts/native-stack.sh stop` first. `SP_STACK_LIVE=1`
-  selects live providers; without it the stack is fake.
+- **Switching between simulated and live:** restart only the app processes. Storage and Temporal keep
+  running and keep their state:
+  ```bash
+  scripts/native-stack.sh stop-app && SP_STACK_LIVE=1 scripts/native-stack.sh start-app
+  ```
+  `SP_STACK_LIVE=1` selects live providers; without it the stack is fake.
+- **Stopping safely:** `scripts/native-stack.sh stop` refuses to stop in-memory image storage that
+  still holds objects, and an in-memory Temporal. Both were started by older versions of the script,
+  and stopping them would delete images or workflows. See `docs/local-upgrade-procedure.md`.
 - **Reset everything local:**
   ```bash
   scripts/native-stack.sh stop; scripts/native-services.sh stop; rm -rf "$SP_DATA" /tmp/storypanel-run

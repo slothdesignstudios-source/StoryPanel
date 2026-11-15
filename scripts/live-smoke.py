@@ -348,6 +348,17 @@ def _process_and_file_checks(check: Any) -> None:
             check("worker has no simulated-provider scenario", not wenv.get("SP_FAKE_SCENARIO"))
             check("worker: fal and Voyage disabled",
                   not _truthy(wenv.get("SP_FAL_ENABLED")) and not _truthy(wenv.get("SP_VOYAGE_ENABLED")))
+    # Stored images survive a restart only with file-backed storage (not the in-memory moto server).
+    spid = _pid("s3")
+    if spid is None:
+        check("local image storage running", False, "no live pid in $SP_RUN/s3.pid")
+    else:
+        try:
+            moto = b"moto_server" in Path(f"/proc/{spid}/cmdline").read_bytes()
+            check("image storage keeps objects on disk (survives a restart)", not moto,
+                  "moto keeps images IN MEMORY: install versitygw and migrate the images (docs/local-upgrade-procedure.md)")
+        except OSError:
+            print("  [SKIP] storage command line: /proc not readable here")
     # Workflow state survives a restart only with a file-backed Temporal dev server.
     tpid = _pid("temporal")
     if tpid is None:
