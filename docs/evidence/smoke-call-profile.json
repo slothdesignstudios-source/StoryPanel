@@ -1,7 +1,7 @@
 {
  "recorded_at": "2026-11-15",
  "source": "live-smoke.py run --simulated",
- "image_provider": "gemini",
+ "image_provider": "openai",
  "characters": 2,
  "panels": 3,
  "calls": {
@@ -45,16 +45,16 @@
    "model": "fake-light"
   },
   "character_sheet|image_sync_generate": {
-   "max_estimate": "0.081520",
+   "max_estimate": "0.263195",
    "max_input_tokens": 159,
-   "model": "fake-gemini-image",
+   "model": "fake-openai-image",
    "max_prompt_bytes": 636,
    "max_input_images": 0
   },
   "location_ref|image_sync_generate": {
-   "max_estimate": "0.081370",
+   "max_estimate": "0.261695",
    "max_input_tokens": 84,
-   "model": "fake-gemini-image",
+   "model": "fake-openai-image",
    "max_prompt_bytes": 336,
    "max_input_images": 0
   },
@@ -64,9 +64,9 @@
    "model": "fake-vision"
   },
   "character_sheet|image_sync_edit": {
-   "max_estimate": "0.082186",
+   "max_estimate": "0.280255",
    "max_input_tokens": 1212,
-   "model": "fake-gemini-image",
+   "model": "fake-openai-image",
    "max_prompt_bytes": 848,
    "max_input_images": 1
   },
@@ -96,9 +96,9 @@
    "model": "fake-light"
   },
   "panel_generate|image_sync_edit": {
-   "max_estimate": "0.084053",
+   "max_estimate": "0.330125",
    "max_input_tokens": 4306,
-   "model": "fake-gemini-image",
+   "model": "fake-openai-image",
    "max_prompt_bytes": 1224,
    "max_input_images": 4
   },
