@@ -332,7 +332,8 @@ async def test_world_rules_are_classified_verbatim_without_invented_detail(
 ) -> None:
     fake.control.no_continuity_rules = True  # like a Bible written before continuity rules existed
     pid = await start(client, headers)
-    p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_cast_approval")
+    p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_cast_approval"
+                       and all((c["sheet_check"] or {}).get("status") not in (None, "pending") for c in p["characters"]))  # fmt: skip
     bible = p["bible"]
     assert bible["continuity_rules"] == [] and len(bible["world_rules"]) == 2
     rule_text = bible["world_rules"][1]  # "Kiro always wears the red apron"
@@ -356,10 +357,13 @@ async def test_world_rules_are_classified_verbatim_without_invented_detail(
         f"/v1/projects/{pid}/characters/approve", json={"cast_version": v}, headers=headers
     )
     assert stale.status_code == 409  # the approval covers the rules
-    r = await client.post(
-        f"/v1/projects/{pid}/characters/approve", json={"cast_version": v + 1}, headers=headers
-    )
-    assert r.status_code == 200
+    # Kiro's sheet was reviewed before the new rule existed: confirming that is explicit
+    kiro = next(c for c in p["characters"] if c["slug"] == "kiro")
+    assert kiro["sheet_rules_current"] is False
+    assert kiro["review"]["kind"] == "Reference sheet checked against older rules"
+    r = await client.post(f"/v1/projects/{pid}/characters/approve", headers=headers,
+                          json={"cast_version": v + 1, "acknowledged": [kiro["review"]["key"]]})  # fmt: skip
+    assert r.status_code == 200, r.text
     p = await wait_for(client, pid, headers, lambda p: p["status"] == "awaiting_script_approval")
     locked = await client.put(f"/v1/projects/{pid}/continuity-rules", headers=headers,
                               json={"cast_version": p["cast_version"], "rules": []})  # fmt: skip

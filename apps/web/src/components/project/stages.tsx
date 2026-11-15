@@ -244,6 +244,7 @@ function SheetReview({ c, onFix }: { c: Character; onFix: (text: string) => void
   const check = c.sheet_check as { status?: string; problems?: SheetItem[]; uncertain?: SheetItem[]; whole_figures?: string; layout_unverified?: boolean } | null;
   if (!check) return null;
   if (check.status === "pending") return <p className="text-sm text-muted" role="status">Reviewing the sheet against the design…</p>;
+  if (check.status === "ok" && c.sheet_rules_current === false) return <Notice tone="warn" title="Reviewed against older rules">The continuity rules for {c.name} changed after this sheet was reviewed, so the new rules weren&apos;t checked against it. Look it over yourself; you&apos;ll be asked to confirm when you approve the cast.</Notice>;
   if (check.status === "ok") return <p className="text-sm text-ok">Sheet reviewed: the listed features and rules look right.</p>;
   if (check.status === "unavailable") return <Notice tone="warn" title="Sheet not reviewed">The checking service didn&apos;t answer. Look over the sheet yourself; you&apos;ll be asked to confirm when you approve the cast.</Notice>;
   const problems = check.problems ?? [], unsure = check.uncertain ?? [];
@@ -254,6 +255,7 @@ function SheetReview({ c, onFix }: { c: Character; onFix: (text: string) => void
         {unsure.map((p) => <li key={p.item}><b>{p.item}</b>: couldn&apos;t tell from the sheet</li>)}
         {(check.whole_figures === "no" || check.layout_unverified) && <li>A turnaround view may be cut off or missing.</li>}
       </ul>
+      {c.sheet_rules_current === false && <p className="mt-1 text-xs font-semibold">This review was made before the continuity rules changed.</p>}
       <p className="mt-1 text-xs">This review is a model&apos;s judgment and can be wrong. Revising redraws the sheet and costs 1 credit if it succeeds.</p>
     </Notice>
   );

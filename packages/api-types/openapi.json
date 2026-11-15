@@ -256,6 +256,17 @@
       ],
       "title": "Sheet Check"
      },
+     "sheet_rules_current": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sheet Rules Current"
+     },
      "sheet_status": {
       "title": "Sheet Status",
       "type": "string"
@@ -2006,6 +2017,17 @@
       },
       "title": "Qa Reasons",
       "type": "array"
+     },
+     "qa_rules_current": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Qa Rules Current"
      },
      "qa_state": {
       "anyOf": [

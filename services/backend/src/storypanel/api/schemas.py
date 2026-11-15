@@ -246,6 +246,8 @@ class CharacterOut(Out):
     # Review of the current sheet (NULL for sheets made before reviews existed): status
     # pending | ok | flagged | unavailable, with problems and uncertain items.
     sheet_check: dict[str, Any] | None
+    # Reviewed against the current continuity rules? False: rules changed since (stale); None: unknown
+    sheet_rules_current: bool | None = None
     review: ReviewItem | None  # what approving the cast would acknowledge for this character
 
 
@@ -301,6 +303,8 @@ class PanelOut(Out):
     # passed | issues | uncertain | not_checked ("not_checked" is never a confirmed defect)
     qa_state: str | None
     qa_reasons: list[QaReason]
+    # Checked against the current continuity rules? False: rules changed since (stale); None: unknown
+    qa_rules_current: bool | None = None
     balloons: list[BalloonOut]
     busy: bool
 

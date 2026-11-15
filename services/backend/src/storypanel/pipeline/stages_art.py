@@ -31,7 +31,7 @@ from storypanel.domain.states import PanelStatus
 from storypanel.domain.states import ProjectStatus as S
 from storypanel.errors import AppError, ErrorCode
 from storypanel.obs import metrics
-from storypanel.pipeline import art, lettering, moderation, qa, render, repair
+from storypanel.pipeline import art, consistency, lettering, moderation, qa, render, repair
 from storypanel.providers import metering
 from storypanel.providers.base import CallContext, ImageInput, ImageRequest
 from storypanel.providers.registry import get_providers
@@ -299,7 +299,8 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
                                     .with_for_update())).scalar_one()  # fmt: skip
         version.qa_status = outcome.status
         version.qa_scores = {**outcome.scores, "fix_notes": outcome.fix_notes,
-                             "head_boxes": outcome.head_boxes, "action_box": outcome.action_box}  # fmt: skip
+                             "head_boxes": outcome.head_boxes, "action_box": outcome.action_box,
+                             "rules_sha": consistency.rules_fingerprint(required)}  # fmt: skip
         if outcome.status == "blocked":
             # Quarantine: the asset can never be signed for download or used as a reference.
             await db.execute(update(Asset).where(Asset.id == version.image_asset_id)

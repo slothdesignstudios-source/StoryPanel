@@ -20,6 +20,8 @@ The model's answers are judgments, not proof; they can be wrong in both directio
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from storypanel.catalog import PROMPT_VERSION, render_prompt
@@ -40,6 +42,13 @@ CONSISTENCY_CODES = frozenset({
     "rule_violation", "rule_uncertain", "beat_not_expressed", "beat_uncertain", "rule_conflict",
     "consistency_incomplete", "consistency_unavailable",
 })  # fmt: skip
+
+
+def rules_fingerprint(rules: list[ContinuityRule]) -> str:
+    """Identifies the exact rules a check judged against (wording, scope and strength). Stored with
+    sheet and panel check results; a different fingerprint now means the result is stale."""
+    data = sorted((r.id, r.text, r.applies_to, r.target or "", r.strength, bool(r.visual)) for r in rules)
+    return hashlib.sha256(json.dumps(data).encode()).hexdigest()[:16]
 
 
 def must_rules(rules: list[ContinuityRule]) -> list[ContinuityRule]:
@@ -182,5 +191,8 @@ async def check_sheet(spec: CharacterSpec, rules: list[ContinuityRule], portrait
     unsure += [{"item": m, "kind": "rule", "visible": "uncertain", "depicted_correctly": "uncertain",
                 "note": "Not reported by the check."} for m in sorted(missing)]  # fmt: skip
     flagged = bool(problems or unsure or report.whole_figures != "yes")
+    from storypanel.pipeline.art import rules_for_character
+
     return {"status": "flagged" if flagged else "ok", "problems": problems, "uncertain": unsure,
+            "rules_sha": rules_fingerprint(rules_for_character(rules, spec.id)),
             "whole_figures": report.whole_figures, "notes": report.notes[:4]}  # fmt: skip

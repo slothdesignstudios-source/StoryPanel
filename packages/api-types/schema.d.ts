@@ -678,6 +678,8 @@ export interface components {
             sheet_check: {
                 [key: string]: unknown;
             } | null;
+            /** Sheet Rules Current */
+            sheet_rules_current?: boolean | null;
             /** Sheet Status */
             sheet_status: string;
             /** Sheet Version */
@@ -1284,6 +1286,8 @@ export interface components {
             qa_problems: string[];
             /** Qa Reasons */
             qa_reasons: components["schemas"]["QaReason"][];
+            /** Qa Rules Current */
+            qa_rules_current?: boolean | null;
             /** Qa State */
             qa_state: string | null;
             /** Rect */

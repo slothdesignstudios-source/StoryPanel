@@ -31,13 +31,21 @@ from storypanel.db.models import (
     Script,
     StoryBibleRow,
 )  # fmt: skip
-from storypanel.domain.schemas import BeatSheet, ComicFormat, ComicScript, ContinuityRule, StoryBible, slugify
+from storypanel.domain.schemas import (
+    BeatSheet,
+    ComicFormat,
+    ComicScript,
+    ContinuityRule,
+    PanelSpec,
+    StoryBible,
+    slugify,
+)
 from storypanel.domain.states import ACTIVE, PanelStatus
 from storypanel.domain.states import ProjectStatus as S
 from storypanel.domain.validation import has_errors, validate_script
 from storypanel.errors import AppError, ErrorCode, invalid_state, not_found, version_conflict
 from storypanel.obs import metrics
-from storypanel.pipeline import lettering, moderation, qa, story
+from storypanel.pipeline import art, consistency, lettering, moderation, qa, story
 from storypanel.pipeline.stages_art import panel_rect
 from storypanel.pipeline.stages_plan import initial_consistency, record_approval
 from storypanel.services import credits, events, outbox, repo
@@ -233,11 +241,48 @@ REVIEW_KINDS = {
 _ISSUE_PATH = re.compile(r"^pages\[(\d+)\]\.panels\[(\d+)\](?:\.rule:([a-z0-9_]+)|\.beat:(.+))?$")
 
 
-def sheet_review(c: Character, cast_version: int = 0) -> api.ReviewItem | None:
+def sheet_rules_current(c: Character, rules: list[ContinuityRule] | None) -> bool | None:
+    """Was the current sheet reviewed against today's rules for this character? None: not
+    reviewed, or reviewed before reviews recorded their rules (unknown, never reported as current)."""
+    check = c.sheet_check or {}
+    if (
+        rules is None
+        or check.get("sheet_version") != c.sheet_version
+        or check.get("status") not in ("ok", "flagged")
+    ):
+        return None
+    if "rules_sha" not in check:
+        return None
+    char_id = (c.spec or {}).get("id") or c.slug
+    return bool(check["rules_sha"] == consistency.rules_fingerprint(art.rules_for_character(rules, char_id)))
+
+
+def panel_rules_current(qa_scores: dict[str, Any] | None, spec: dict[str, Any],
+                        rules: list[ContinuityRule] | None) -> bool | None:  # fmt: skip
+    """Was the panel's current image checked against today's rules for that panel? None: unknown."""
+    if rules is None or not qa_scores or "rules_sha" not in qa_scores:
+        return None
+    required = art.rules_for_panel(rules, PanelSpec.model_validate(spec))[0]
+    return bool(qa_scores["rules_sha"] == consistency.rules_fingerprint(required))
+
+
+def sheet_review(c: Character, cast_version: int = 0,
+                 rules: list[ContinuityRule] | None = None) -> api.ReviewItem | None:  # fmt: skip
     """What approving the cast acknowledges for this character's current sheet, if anything."""
     check = c.sheet_check or {}
-    if check.get("sheet_version") != c.sheet_version or check.get("status") not in ("flagged", "unavailable"):
+    stale = sheet_rules_current(c, rules) is False
+    if check.get("sheet_version") != c.sheet_version or (check.get("status") not in ("flagged", "unavailable")
+                                                         and not stale):  # fmt: skip
         return None
+    if stale and check["status"] == "ok":
+        msg = (
+            f"{c.name}'s reference sheet was reviewed before the continuity rules changed: the current rules "
+            f"for {c.name} weren't checked against it. Look at the sheet yourself before approving."
+        )
+        return api.ReviewItem(key=_bound_key(f"sheet_rules:{c.slug}:v{c.sheet_version}", cast_version,
+                                             check.get("checked_at"), msg),
+                              message=msg, kind="Reference sheet checked against older rules", character=c.name,
+                              issue=msg.split(": ", 1)[-1])  # fmt: skip
     if check["status"] == "unavailable":
         msg = f"{c.name}'s reference sheet wasn't reviewed (the checking service didn't answer)."
     else:
@@ -248,6 +293,8 @@ def sheet_review(c: Character, cast_version: int = 0) -> api.ReviewItem | None:
         if check.get("whole_figures") == "no" or check.get("layout_unverified"):
             bits.append("a turnaround view may be cut off")
         msg = f"{c.name}'s reference sheet was flagged: " + "; ".join(bits or ["see the sheet review"]) + "."
+        if stale:
+            msg += " The review was also made before the continuity rules changed."
     kind = "Reference sheet not reviewed" if check["status"] == "unavailable" else "Reference sheet flagged"
     return api.ReviewItem(key=_bound_key(f"sheet:{c.slug}:v{c.sheet_version}", cast_version, check.get("checked_at"), msg),
                           message=msg, kind=kind, character=c.name, issue=msg.split(": ", 1)[-1])  # fmt: skip
@@ -373,8 +420,10 @@ async def approve_cast(db: AsyncSession, project: Project, version: int, user_id
     if any((c.sheet_check or {}).get("status") == "pending" and (c.sheet_check or {}).get("sheet_version")
            == c.sheet_version for c in cast):  # fmt: skip
         raise AppError(ErrorCode.CONFLICT, "Still reviewing the reference sheets. Try again in a moment.")
-    overrides = _acknowledge([r for c in cast if (r := sheet_review(c, project.cast_version))], acknowledged or [],
-                             "the cast")  # fmt: skip
+    bible = await repo.latest_bible(db, project.id)
+    rules = bible.continuity_rules if bible else []
+    overrides = _acknowledge([r for c in cast if (r := sheet_review(c, project.cast_version, rules))],
+                             acknowledged or [], "the cast")  # fmt: skip
     await record_approval(db, project.id, "cast", version, user_id, overrides=overrides or None)
     await events.emit(db, project.id, "cast.approved", {"cast_version": version})
     await outbox.enqueue(db, "signal", f"approve:cast:{project.id}:{version}", {
@@ -622,7 +671,8 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
                          sheet_version=c.sheet_version, revising=bool(c.pending_revision),
                          images=images.get(c.slug, {}),
                          sheet_check=c.sheet_check if (c.sheet_check or {}).get("sheet_version") == c.sheet_version else None,
-                         review=sheet_review(c, project.cast_version))
+                         sheet_rules_current=sheet_rules_current(c, bible.continuity_rules if bible else []),
+                         review=sheet_review(c, project.cast_version, bible.continuity_rules if bible else []))
         for c in await repo.cast_rows(db, pid)]  # fmt: skip
     loc_rows = (await db.execute(
         select(Location, Asset.storage_key).outerjoin(Asset, Asset.id == Location.reference_asset_id)
@@ -674,6 +724,8 @@ async def serialize(db: AsyncSession, project: Project) -> api.ProjectOut:
                 image_url=_url(cur[2], cur[3]) if visible and cur else None,
                 qa_problems=((cur[1] or {}).get("problems", []) if cur else []),
                 **_qa_fields(cur, names, rule_text),
+                qa_rules_current=panel_rules_current(cur[1] if cur else None, panel.spec,
+                                                     bible.continuity_rules if bible else []),
                 balloons=balloons.get(panel.id, []),
                 busy=str(panel.id) in busy or panel.status == PanelStatus.GENERATING.value))  # fmt: skip
         options = [_layout_out(t) for t in sorted(layouts().values(), key=lambda t: t.id)

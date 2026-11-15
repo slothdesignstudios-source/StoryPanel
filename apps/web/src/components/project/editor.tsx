@@ -133,6 +133,16 @@ function QaNotice({ panel }: { panel: Panel }) {
   );
 }
 
+/** The panel's check was made against continuity rules that have since changed. */
+function StaleRulesNotice({ panel }: { panel: Panel }) {
+  if (panel.qa_rules_current !== false) return null;
+  return (
+    <Notice tone="warn" title="Checked against older rules">
+      The continuity rules changed after this panel was checked, so its check result doesn&apos;t cover the current rules. Look it over yourself, or redraw it to check it against them.
+    </Notice>
+  );
+}
+
 function PanelTools({ project, page, panel }: { project: Project; page: Page; panel: Panel }) {
   const qc = useQueryClient();
   const refresh = () => { void qc.invalidateQueries({ queryKey: pk("project", project.id) }); void qc.invalidateQueries({ queryKey: pk("me") }); };
@@ -157,6 +167,7 @@ function PanelTools({ project, page, panel }: { project: Project; page: Page; pa
       </div>
       <p className="text-sm text-muted">{String(panel.spec.action ?? "")}</p>
       {panel.status === "needs_attention" && <QaNotice panel={panel} />}
+      <StaleRulesNotice panel={panel} />
       {panel.status === "blocked" && <Notice tone="danger" title="This panel can't be shown">Every attempt failed our safety check, so no image is available and you weren&apos;t charged. Try regenerating.</Notice>}
       {panel.status === "failed" && <Notice tone="danger" title="This panel wasn't drawn">The illustration service had a problem. You weren&apos;t charged. Regenerate to try again.</Notice>}
       <div className="flex flex-wrap gap-2">
@@ -371,7 +382,7 @@ export function Editor({ project }: { project: Project }) {
             <ol className="space-y-2 text-sm">
               {page.panels.map((p) => (
                 <li key={p.id}>
-                  <button type="button" aria-pressed={panelId === p.id && !balloonId} onClick={() => set({ panelId: p.id, balloonId: null })} className={cn("w-full rounded-md px-2 py-1 text-left font-semibold hover:bg-ink/5", panelId === p.id && !balloonId && "bg-sun")}>Panel {p.index + 1}{p.status !== "ok" && <span className="ml-2 font-normal text-warn">{p.busy ? "redrawing" : p.status === "needs_attention" ? QA_STATE_LABEL[p.qa_state ?? ""] ?? "needs attention" : p.status.replace("_", " ")}</span>}</button>
+                  <button type="button" aria-pressed={panelId === p.id && !balloonId} onClick={() => set({ panelId: p.id, balloonId: null })} className={cn("w-full rounded-md px-2 py-1 text-left font-semibold hover:bg-ink/5", panelId === p.id && !balloonId && "bg-sun")}>Panel {p.index + 1}{p.qa_rules_current === false && <span className="ml-2 font-normal text-warn">checked against older rules</span>}{p.status !== "ok" && <span className="ml-2 font-normal text-warn">{p.busy ? "redrawing" : p.status === "needs_attention" ? QA_STATE_LABEL[p.qa_state ?? ""] ?? "needs attention" : p.status.replace("_", " ")}</span>}</button>
                   <ul className="ml-3 border-l-2 border-line pl-2">
                     {p.balloons.map((b) => <li key={b.id}><button type="button" aria-pressed={balloonId === b.id} onClick={() => set({ panelId: p.id, balloonId: b.id })} className={cn("w-full truncate rounded-md px-2 py-1 text-left hover:bg-ink/5", balloonId === b.id && "bg-sun")}><span className="text-muted">{b.type}: </span>{b.flags.includes("overflow") && <span className="font-semibold text-warn">doesn&apos;t fit · </span>}{texts[b.id] ?? b.text}</button></li>)}
                   </ul>
