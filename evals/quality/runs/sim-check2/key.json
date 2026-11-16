@@ -1,0 +1,10 @@
+{
+ "prop-lighthouse": {
+  "A": "old",
+  "B": "new"
+ },
+ "dialogue-roadtrip": {
+  "A": "new",
+  "B": "old"
+ }
+}

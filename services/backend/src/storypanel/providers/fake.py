@@ -56,6 +56,7 @@ class FakeControl:
     no_continuity_rules: bool = False  # the fake Bible writes no continuity rules (legacy-like)
     qa_fail_attempts: int = 0  # each panel fails QA on its first N attempts
     qa_fail_targets: set[str] = field(default_factory=set)  # these targets always fail QA
+    no_panel_purpose: bool = False  # the fake script leaves purpose and focus empty (legacy-like)
     unsafe_targets: set[str] = field(default_factory=set)  # image safety blocks these
     unsafe_attempts: int = 0  # every image is unsafe on its first N attempts
     stray_text_targets: set[str] = field(default_factory=set)
@@ -301,6 +302,8 @@ class FakeTextProvider:
                     "characters": [{"id": c, "position": positions[n], "pose": "standing",
                                     "expression": "nervous smile"} for n, c in enumerate(who)],
                     "action": f"{who[0]} offers a steaming bowl", "mood": "warm, cosy",
+                    "purpose": f"Panel {k + 1} moves the story on" if not control.no_panel_purpose else "",
+                    "focus": "the steaming bowl" if not control.no_panel_purpose else "",
                     "emphasis": "large" if (p == climax_page and k == n_panels - 1
                                             and not strip) else "normal",
                     "dialogue": dialogue,
@@ -359,7 +362,9 @@ class FakeTextProvider:
             + (["Remove all lettering from the art."] if text else []),
             "required_elements": [
                 {"rule_id": r, "visible": "uncertain" if target in control.rule_uncertain_targets
-                 else "no" if ctx.attempt < control.rule_missing_attempts else "yes"}
+                 else "no" if ctx.attempt < control.rule_missing_attempts else "yes",
+                 "box": None if target in control.rule_uncertain_targets or ctx.attempt < control.rule_missing_attempts
+                 else {"x": 0.56, "y": 0.5, "w": 0.12, "h": 0.14}}
                 for r in ctx.inputs.get("required_rules", [])],
         }  # fmt: skip
 

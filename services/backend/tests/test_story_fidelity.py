@@ -61,7 +61,8 @@ def compile_(p: PanelSpec, rules: list[ContinuityRule]) -> str:
     return art.compile_panel(panel=p, aspect="1:1", style_preset="clean_manga_warm", cast={"kiro": spec()},
                              locations={"stall": LocationSpec(id="stall", name="Stall", description="A stall"),
                                         "roof": LocationSpec(id="roof", name="Roof", description="A roof")},
-                             character_refs={}, location_refs={}, continuity=None, max_references=4,
+                             character_refs={"kiro": {"three_quarter": "k3q", "portrait": "kp"}}, location_refs={},
+                             continuity=None, max_references=4,
                              rules=rules).prompt  # fmt: skip
 
 

@@ -308,12 +308,19 @@ def layout_panel(
     characters: list[dict[str, Any]], head_boxes: dict[str, dict[str, float]] | None = None,
     action_box: dict[str, float] | None = None, font: str = "comic_neue",
     body_boxes: dict[str, dict[str, float]] | None = None,
+    prop_boxes: dict[str, dict[str, float]] | None = None,
+    zone: dict[str, float] | None = None,
 ) -> list[Placed]:  # fmt: skip
     """Place every dialogue item of one panel. `dialogue` is in reading order.
 
     Balloons avoid faces strongly and, when the QA check located them, characters' bodies less
     strongly: in a crowded or narrow panel a balloon may still overlap a body, and is flagged
-    ("covers_subject") so the user can see it, rather than shrunk until unreadable."""
+    ("covers_subject") so the user can see it, rather than shrunk until unreadable.
+
+    `prop_boxes` are required story elements the QA check located (the lantern, the key): kept clear
+    almost as strongly as faces ("covers_prop" when that fails). `zone` is the lettering space the
+    picture was asked to leave free (art.lettering_plan): balloons prefer it, but never at the cost
+    of a face, a prop or the reading order."""
     px, py, pw, ph = panel_rect
     heads: dict[str, Rect] = {}
     for ch in characters:
@@ -322,6 +329,8 @@ def layout_panel(
     no_go: list[Rect] = list(heads.values())
     bodies = [r for ch in characters if (r := _abs((body_boxes or {}).get(ch["id"]), panel_rect))]
     action = _abs(action_box, panel_rect)
+    props = [r for b in (prop_boxes or {}).values() if (r := _abs(b, panel_rect))]
+    planned = _abs(zone, panel_rect)
     placed: list[Placed] = []
     captions = 0
     pad = min(pw, ph) * 0.03
@@ -352,6 +361,7 @@ def layout_panel(
                         # sound effects sit near the action but not across faces or bodies
                         cost += sum(overlap(ink, z) for z in no_go) / (ink[2] * ink[3]) * 6.0
                         cost += sum(overlap(ink, z) for z in bodies) / (ink[2] * ink[3]) * 1.5
+                        cost += sum(overlap(ink, z) for z in props) / (ink[2] * ink[3]) * 6.0
                         cost += math.hypot(g["x"] - tx, g["y"] - ty) / math.hypot(pw, ph)
                         if cost < best_cost - 1e-9:
                             best_cost, best_g = cost, g
@@ -417,7 +427,10 @@ def layout_panel(
                 cy = y0 + (y1 - y0) * iy / steps
                 rect = (cx, cy, w, h)
                 cost = sum(overlap(rect, z) for z in no_go) / (w * h) * 12.0
+                cost += sum(overlap(rect, z) for z in props) / (w * h) * 10.0
                 cost += sum(overlap(rect, z) for z in bodies) / (w * h) * 4.0
+                if planned:
+                    cost += (1.0 - overlap(rect, planned) / (w * h)) * 0.8
                 if action:
                     cost += overlap(rect, action) / (w * h) * 3.0
                 cost += sum(overlap(rect, _ink_rect(p)) for p in placed) / (w * h) * 40.0
@@ -438,6 +451,8 @@ def layout_panel(
         rect = (x, y, w, h)
         if any(overlap(rect, z) > 0.15 * z[2] * z[3] for z in heads.values()):
             flags.append("covers_face")
+        elif any(overlap(rect, z) > 0.25 * z[2] * z[3] for z in props):
+            flags.append("covers_prop")  # a required story element is mostly hidden
         elif any(overlap(rect, z) > 0.5 * w * h and overlap(rect, z) > 0.1 * z[2] * z[3] for z in bodies):
             flags.append("covers_subject")  # most of the balloon sits on a character
         tail = _tail_tip(rect, head) if head and kind in ("speech", "thought") else None

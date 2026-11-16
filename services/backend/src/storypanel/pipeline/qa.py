@@ -299,10 +299,84 @@ async def evaluate_panel(
     head_boxes = {o.id: o.head_box.model_dump() for o in report.characters if o.present and o.head_box}
     body_boxes = {o.id: o.body_box.model_dump() for o in report.characters if o.present and o.body_box}
     scores["body_boxes"] = body_boxes  # lettering keeps balloons off the characters where it can
+    # where required story elements were seen, so lettering keeps them clear
+    scores["prop_boxes"] = {e.rule_id: e.box.model_dump() for e in report.required_elements
+                            if e.box is not None and e.visible == "yes" and e.rule_id in {r.id for r in required}}  # fmt: skip
+    scores["aspects"] = aspects(problems)
     if blocking:
         scores["repair"] = repair.repair_target(blocking, body_boxes)
+        notes = actionable_notes(blocking, notes, panel=panel, cast=cast, report=report)
+    else:
+        notes = []  # nothing will be repaired: the model's remarks are not instructions for anyone
     return QAOutcome(status, scores, notes[:6], head_boxes,
                      report.action_box.model_dump() if report.action_box else None)  # fmt: skip
+
+
+# ------------------------------------------------------------------ aspects and repair notes
+# What each problem is about, so story, required elements, identity and composition are judged
+# and reported separately (one bad aspect never hides or excuses another).
+ASPECT = {
+    "action": "story", "missing": "story",
+    "rule_missing": "required_elements", "rule_uncertain": "required_elements",
+    "identity_visual": "identity", "identity_rating": "identity", "features": "identity",
+    "identity_embedding": "identity", "identity_uncertain": "identity", "identity_unverified": "identity",
+    "identity_check_invalid": "identity", "identity_flagged_repair": "identity",
+    "identity_flagged_manual_review": "identity", "no_reference": "identity", "unlocalised": "identity",
+    "character_count": "composition", "anatomy": "composition", "stray_text": "composition",
+}  # fmt: skip
+SEVERITY = {"ok": 0, "not_checked": 1, "uncertain": 2, "defect": 3}
+
+
+def aspects(problems: list[str]) -> dict[str, str]:
+    """Per aspect: ok | defect (a confirmed visual problem) | uncertain (the check couldn't tell) |
+    not_checked (the check failed or had nothing to compare with). Lettering is judged on the page."""
+    out = {"story": "ok", "required_elements": "ok", "identity": "ok", "composition": "ok"}
+    for p in problems:
+        code = p.split(":")[0]
+        kind = {"visual_mismatch": "defect", "missing": "defect"}.get(QA_CATEGORY.get(code, "visual_mismatch"),
+                                                                       QA_CATEGORY.get(code, "defect"))  # fmt: skip
+        aspect = ASPECT.get(code, "composition")
+        if SEVERITY[kind] > SEVERITY[out[aspect]]:
+            out[aspect] = kind
+    return out
+
+
+def repeated_after_repair(current: list[str], previous: list[str]) -> bool:
+    """True when every blocking problem now was already there before the repair aimed at it."""
+    now = {p for p in current if p.split(":")[0] not in REVIEW_ONLY}
+    before = {p for p in previous if p.split(":")[0] not in REVIEW_ONLY}
+    return bool(now) and now <= before
+
+
+def actionable_notes(blocking: list[str], notes: list[str], *, panel: PanelSpec, cast: dict[str, CharacterSpec],
+                     report: VisionQAReport) -> list[str]:  # fmt: skip
+    """A repair is only worth paying for with concrete instructions. Every blocking problem gets a
+    specific note when the reviewer gave none for it, written from the panel's own spec."""
+    out = list(notes)
+    text = " ".join(out).lower()
+    expected = [c for c in panel.characters if c.id in cast]
+    for p in blocking:
+        code, _, subject = p.partition(":")
+        name = cast[subject].name if subject in cast else subject
+        if code == "missing" and name.lower() not in text:
+            pos = next((c.position for c in expected if c.id == subject), "")
+            out.append(f"Draw {name}{' on the ' + pos if pos and pos != 'center' else ''}, as in the reference image.")
+        elif code == "character_count" and "character" not in text:
+            names = ", ".join(cast[c.id].name for c in expected) or "no characters"
+            out.append(f"Show exactly {len(expected)} character{'s' if len(expected) != 1 else ''} ({names}); no one else.")
+        elif code == "action" and not out:
+            out.append(f"Show this action clearly: {panel.action.strip().rstrip('.')}.")
+        elif code == "stray_text" and "text" not in text and "letter" not in text:
+            out.append("Remove every letter, word, sign with writing and speech bubble from the picture.")
+        elif code == "anatomy" and not any(d.lower() in text for d in report.anatomy_defects):
+            out.append("Fix these drawing defects: " + "; ".join(report.anatomy_defects[:3]) + ".")
+        elif code == "features" and name.lower() not in text:
+            feats = ", ".join(cast[subject].visual.signature_features) if subject in cast else ""
+            out.append(f"{name}: draw the signature features clearly ({feats}).")
+        elif code in ("identity_rating", "identity_embedding") and name.lower() not in text:
+            out.append(f"Match {name} to the reference image: face, colours and outfit.")
+        text = " ".join(out).lower()
+    return out
 
 
 # ------------------------------------------------------------------ user-facing reasons

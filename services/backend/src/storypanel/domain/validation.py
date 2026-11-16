@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from storypanel.domain.schemas import BeatSheet, ComicFormat, ComicScript, ScriptIssue
+from storypanel.domain.schemas import BeatSheet, ComicFormat, ComicScript, PanelSpec, ScriptIssue
 from storypanel.pipeline.lettering import unsupported_chars, unsupported_message
 
 # Server-side text limits for script fields (the browser enforces the same, but is not trusted).
-FIELD_LIMITS = {"action": 500, "angle": 120, "mood": 120, "time_of_day": 120}
+FIELD_LIMITS = {"action": 500, "angle": 120, "mood": 120, "time_of_day": 120, "purpose": 200, "focus": 120}
 CHARACTER_FIELD_LIMITS = {"pose": 120, "expression": 120}
 MAX_BALLOON_CHARS = 300
 MAX_WORD_CHARS = 24  # a longer unbroken word cannot be wrapped inside a balloon
@@ -144,7 +144,78 @@ def validate_script(
                         "size; mark the last panel as large instead, or leave both normal.", "warning")  # fmt: skip
     if beats is not None:
         issues += beat_coverage(script, beats)
+    issues += story_checks(script, beats)
     return issues
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in "".join(c.lower() if c.isalnum() else " " for c in text).split() if w]
+
+
+def story_checks(script: ComicScript, beats: BeatSheet | None = None) -> list[ScriptIssue]:
+    """Deterministic storytelling warnings (never blocking): repeated lines, panels that would look
+    interchangeable, framing that never changes, a last panel that doesn't carry the final beat, and
+    panels without a stated purpose. Judgments that need reading comprehension (does the panel add
+    something, does the lettering restate the art, does the ending pay off) are made by the Story
+    Bible check instead."""
+    out: list[ScriptIssue] = []
+    flat = [(pi, ni, p) for pi, page in enumerate(script.pages) for ni, p in enumerate(page.panels)]
+    multi = len(script.pages) > 1
+
+    def where(pi: int, ni: int) -> str:
+        return f"Page {pi + 1}, panel {ni + 1}" if multi else f"Panel {ni + 1}"
+
+    said: dict[tuple[str, ...], tuple[int, int]] = {}
+    for pi, ni, p in flat:
+        for di, d in enumerate(p.dialogue):
+            key = tuple(_words(d.text))
+            if d.type == "sfx" or len(key) < 2:
+                continue
+            if key in said:
+                first = where(*said[key])
+                out.append(ScriptIssue(code="repeated_dialogue", path=f"pages[{pi}].panels[{ni}].dialogue[{di}].text",
+                                       severity="warning",
+                                       message=f"{where(pi, ni)} repeats a line from {first.lower() if not multi else first}. "
+                                               "Cut it or say something new."))  # fmt: skip
+            else:
+                said[key] = (pi, ni)
+
+    def look(p: PanelSpec) -> tuple[object, ...]:
+        return (p.shot, p.location_id, tuple(sorted((c.id, c.position, c.pose.lower().strip(), c.expression.lower().strip())
+                                                    for c in p.characters)))  # fmt: skip
+
+    for (pi, ni, p), (qi, qn, q) in zip(flat, flat[1:], strict=False):
+        if look(p) == look(q) or (p.shot == q.shot and p.location_id == q.location_id
+                                  and {c.id for c in p.characters} == {c.id for c in q.characters}
+                                  and _similar(p.action, q.action)):  # fmt: skip
+            out.append(ScriptIssue(code="interchangeable_panels", path=f"pages[{qi}].panels[{qn}]", severity="warning",
+                                   message=f"{where(pi, ni)} and the next panel would look almost the same (same shot, "
+                                           "place, cast and poses). Change the action, framing or expression, or merge them."))  # fmt: skip
+    for pi, page in enumerate(script.pages):
+        shots = [(p.shot, p.angle.lower().strip()) for p in page.panels]
+        if len(shots) >= 3 and len(set(shots)) == 1:
+            out.append(ScriptIssue(code="unvaried_framing", path=f"pages[{pi}]", severity="warning",
+                                   message=(f"Page {pi + 1}: every" if multi else "Every") + " panel uses the same shot and "
+                                           "angle. Vary the framing where it helps the reader (for example, a close-up for "
+                                           "the reaction)."))  # fmt: skip
+    if beats is not None and beats.beats and any(p.beats for _, _, p in flat):
+        last_beat = _norm(beats.beats[-1].name)
+        pi, ni, last = flat[-1]
+        if last_beat not in {_norm(b) for b in last.beats}:
+            out.append(ScriptIssue(code="payoff_not_last", path=f"pages[{pi}].panels[{ni}].beats", severity="warning",
+                                   message=f"The last panel doesn't show the final beat (“{beats.beats[-1].name}”), so the "
+                                           "ending may not pay off the setup."))  # fmt: skip
+    if any(p.purpose.strip() for _, _, p in flat):
+        for pi, ni, p in flat:
+            if not p.purpose.strip():
+                out.append(ScriptIssue(code="purpose_missing", path=f"pages[{pi}].panels[{ni}].purpose", severity="warning",
+                                       message=f"{where(pi, ni)} has no stated purpose: say what it adds for the reader."))  # fmt: skip
+    return out
+
+
+def _similar(a: str, b: str) -> bool:
+    wa, wb = set(_words(a)), set(_words(b))
+    return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.8
 
 
 def _norm(name: str) -> str:

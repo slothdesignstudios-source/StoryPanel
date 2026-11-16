@@ -361,12 +361,22 @@
       "title": "Palette",
       "type": "object"
      },
+     "proportions": {
+      "default": "",
+      "title": "Proportions",
+      "type": "string"
+     },
      "signature_features": {
       "items": {
        "type": "string"
       },
       "title": "Signature Features",
       "type": "array"
+     },
+     "silhouette": {
+      "default": "",
+      "title": "Silhouette",
+      "type": "string"
      },
      "type": {
       "title": "Type",
@@ -2115,12 +2125,22 @@
       "title": "Emphasis",
       "type": "string"
      },
+     "focus": {
+      "default": "",
+      "title": "Focus",
+      "type": "string"
+     },
      "location_id": {
       "title": "Location Id",
       "type": "string"
      },
      "mood": {
       "title": "Mood",
+      "type": "string"
+     },
+     "purpose": {
+      "default": "",
+      "title": "Purpose",
       "type": "string"
      },
      "rule_exceptions": {

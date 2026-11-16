@@ -233,6 +233,7 @@ async def stage_generate_panel(
             panel=spec, aspect=aspect, style_preset=preset, cast=cast, locations=locations,
             character_refs=char_refs, location_refs=loc_refs, continuity=continuity,
             max_references=s.image_max_references, fix_notes=tuple(fix_notes or ()), rules=rules,
+            panel_size=(float(template.rects[panel.index][2]), float(template.rects[panel.index][3])),
         )  # fmt: skip
         async with transaction() as db:
             refs = [ImageInput(await repo.asset_bytes(db, uuid.UUID(slot.asset_id)))
@@ -301,6 +302,16 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
     async with transaction() as db:
         version = (await db.execute(select(PanelVersion).where(PanelVersion.id == version_id)
                                     .with_for_update())).scalar_one()  # fmt: skip
+        repeat = False
+        if outcome.status == "fail" and attempt > 0 and version.idempotency_key.endswith(f":a{attempt}"):
+            # The same problems survived a repair aimed at them: another paid attempt with the same
+            # instructions is unlikely to help, so the panel goes to the user instead.
+            prev_key = version.idempotency_key[: -len(f"a{attempt}")] + f"a{attempt - 1}"
+            prev = (await db.execute(select(PanelVersion.qa_scores).where(
+                PanelVersion.idempotency_key == prev_key))).scalar_one_or_none() or {}  # fmt: skip
+            repeat = qa.repeated_after_repair(outcome.scores.get("problems", []), prev.get("problems", []))
+        if repeat:
+            outcome.scores["repeated_after_repair"] = True
         version.qa_status = outcome.status
         version.qa_scores = {**outcome.scores, "fix_notes": outcome.fix_notes,
                              "head_boxes": outcome.head_boxes, "action_box": outcome.action_box,
@@ -309,7 +320,7 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
             # Quarantine: the asset can never be signed for download or used as a reference.
             await db.execute(update(Asset).where(Asset.id == version.image_asset_id)
                              .values(quarantined=True))  # fmt: skip
-    return {"status": outcome.status, "fix_notes": outcome.fix_notes}
+    return {"status": outcome.status, "fix_notes": outcome.fix_notes, "stop": repeat}
 
 
 async def stage_finalize_panel(
@@ -438,15 +449,21 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
             if has or not spec.dialogue:
                 continue
             scores: dict[str, Any] = {}
+            zone = None
             if panel.current_version_id:
-                scores = (await db.execute(select(PanelVersion.qa_scores).where(
-                    PanelVersion.id == panel.current_version_id))).scalar_one() or {}  # fmt: skip
+                row = (await db.execute(select(PanelVersion.qa_scores, PanelVersion.prompt_version, PanelVersion.kind)
+                                        .where(PanelVersion.id == panel.current_version_id))).one()  # fmt: skip
+                scores = row[0] or {}
+                if row[1] not in ("v1", "v2") and row[2] != "edit":  # the picture was asked to leave this space free
+                    _, _, rw, rh = panel_rect(page, panel)
+                    plan_zone = art.lettering_plan(spec, (rw, rh)).zone
+                    zone = dict(zip(("x", "y", "w", "h"), plan_zone, strict=True)) if plan_zone else None
             placed = lettering.layout_panel(
                 panel_rect=panel_rect(page, panel), page_size=template.page,
                 dialogue=[d.model_dump() for d in spec.dialogue],
                 characters=[ch.model_dump() for ch in spec.characters],
                 head_boxes=scores.get("head_boxes"), action_box=scores.get("action_box"),
-                body_boxes=scores.get("body_boxes"),
+                body_boxes=scores.get("body_boxes"), prop_boxes=scores.get("prop_boxes"), zone=zone,
                 font=styles().get(preset).font,
             )  # fmt: skip
             for b in placed:

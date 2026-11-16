@@ -1,0 +1,16 @@
+{{ style_token }}.
+{% if references %}Reference images, each to be used only for its stated purpose:
+{% for r in references %}- Image {{ r.n }}: {{ r.purpose }}.
+{% endfor %}{% endif %}{% if purpose %}Panel purpose: {{ purpose }}.
+{% endif %}Framing: {{ shot }} shot, {{ angle }}, {{ frame }}. {{ composition }}
+{% for c in characters %}{{ c.position_phrase }}: {{ c.name }}, {{ c.canonical_description }}{% if c.ref %} (as in image {{ c.ref }}){% endif %}. Pose: {{ c.pose }}. Expression: {{ c.expression }}.
+{% endfor %}{% if relative_scale %}Keep the characters' relative heights and proportions as described.
+{% endif %}Action: {{ action }}.
+{% for r in must_rules %}Must be clearly visible: {{ r }}
+{% endfor %}{% for r in prefer_rules %}Where it fits naturally: {{ r }}
+{% endfor %}Setting: {{ location_description }}{% if time_of_day %}, {{ time_of_day }}{% endif %}. {{ mood }} mood.
+{% if focus %}Focal point: {{ focus }}.
+{% endif %}{% if fix_notes %}Corrections from the review of the previous attempt (keep everything else that already matches this description):
+{% for note in fix_notes %}- {{ note }}
+{% endfor %}{% endif %}{% if lettering %}Lettering space: {{ lettering }}.
+{% endif %}No text, letters, speech bubbles, captions or watermarks.

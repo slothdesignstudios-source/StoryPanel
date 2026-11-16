@@ -40,7 +40,8 @@ from storypanel.providers.base import CallContext, ImageInput
 
 CONSISTENCY_CODES = frozenset({
     "rule_violation", "rule_uncertain", "beat_not_expressed", "beat_uncertain", "rule_conflict",
-    "consistency_incomplete", "consistency_unavailable",
+    "consistency_incomplete", "consistency_unavailable", "panel_adds_nothing", "dialogue_restates_art",
+    "weak_payoff",
 })  # fmt: skip
 
 
@@ -81,7 +82,7 @@ async def check_script(script: ComicScript, beats: BeatSheet | None, rules: list
                 "page": pi + 1, "panel": ni + 1, "action": p.action, "location": p.location_id,
                 "characters": [c.id for c in p.characters],
                 "dialogue": [f"{d.type}{' ' + d.speaker if d.speaker else ''}: {d.text}" for d in p.dialogue],
-                "beats": p.beats, "rules": [r.id for r in musts if _applies(r, p)],
+                "beats": p.beats, "rules": [r.id for r in musts if _applies(r, p)], "purpose": p.purpose,
                 "excepted": [r for r in p.rule_exceptions if r in by_id],
             })  # fmt: skip
     lines = ["Continuity rules (must hold where they apply):"]
@@ -93,7 +94,8 @@ async def check_script(script: ComicScript, beats: BeatSheet | None, rules: list
     lines.append("Panels:")
     for d in panels:
         lines.append(f"- page {d['page']} panel {d['panel']} at {d['location']}, drawn: {', '.join(d['characters']) or 'nobody'}; "
-                     f"action: {d['action']}; lettering: {' | '.join(d['dialogue']) or 'none'}; "
+                     f"action: {d['action']}; " + (f"purpose: {d['purpose']}; " if d["purpose"] else "")
+                     + f"lettering: {' | '.join(d['dialogue']) or 'none'}; "
                      f"claims beats: {', '.join(d['beats']) or 'none'}; check rules: {', '.join(d['rules']) or 'none'}")  # fmt: skip
     report = await metering.structured(
         role="light", system=render_prompt("script_consistency"), user="\n".join(lines),
@@ -139,6 +141,16 @@ def issues_from_report(report: ScriptConsistencyReport, script: ComicScript,
             elif b.expressed == "uncertain":
                 out.append(ScriptIssue(code="beat_uncertain", path=f"{path}.beat:{b.beat}", severity="review",
                                        message=f"{where}can't tell whether it shows the “{b.beat}” beat: {b.reason}"))  # fmt: skip
+        # Storytelling judgments are advice for the writer: shown, never required to approve.
+        note = f" {pc.note.strip()}" if pc.note.strip() else ""
+        if pc.adds == "no":
+            out.append(ScriptIssue(code="panel_adds_nothing", path=path, severity="warning",
+                                   message=f"{where}doesn't seem to change anything for the reader.{note} Give it new "
+                                           "information, action or emotion, or merge it with a neighbour."))  # fmt: skip
+        if pc.restates_art and panel.dialogue:
+            out.append(ScriptIssue(code="dialogue_restates_art", path=f"{path}.dialogue", severity="warning",
+                                   message=f"{where}the lettering only describes what the picture already shows.{note} "
+                                           "Use it for what the picture can't show (a thought, a joke, a voice)."))  # fmt: skip
     for pi, page in enumerate(script.pages):
         for ni, panel in enumerate(page.panels):
             needs = [r for r in musts if _applies(r, panel)] or panel.beats
@@ -146,6 +158,11 @@ def issues_from_report(report: ScriptConsistencyReport, script: ComicScript,
                 label = f"Page {pi + 1}, panel {ni + 1}" if len(script.pages) > 1 else f"Panel {ni + 1}"
                 out.append(ScriptIssue(code="consistency_incomplete", path=f"pages[{pi}].panels[{ni}]", severity="review",
                                        message=f"{label} wasn't covered by the Story Bible check."))  # fmt: skip
+    if report.payoff in ("weak", "no"):
+        reason = f" {report.payoff_reason.strip()}" if report.payoff_reason.strip() else ""
+        out.append(ScriptIssue(code="weak_payoff", path="ending", severity="warning",
+                               message=("The ending doesn't pay off the setup." if report.payoff == "no" else
+                                        "The ending only weakly pays off the setup.") + reason))  # fmt: skip
     for n, c in enumerate(report.conflicts):
         names = ", ".join(f"“{by_id[i].text}”" for i in c.rule_ids if i in by_id) or "the rules"
         out.append(ScriptIssue(code="rule_conflict", path=f"continuity_rules[{n}]", severity="review",

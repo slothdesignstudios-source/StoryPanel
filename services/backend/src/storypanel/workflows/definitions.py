@@ -88,6 +88,8 @@ async def run_panel(*, panel_id: str, kind: str, request_key: str, intent_seq: i
                                              "attempt": attempt}, IMAGE)  # fmt: skip
             if verdict["status"] in ("pass", "review"):
                 break  # review: an uncertain identity judgment is not fixed by repainting
+            if verdict.get("stop") and workflow.patched("qa-stop-repeat-2026-11"):
+                break  # the same problems survived a repair aimed at them: the user decides
             notes = verdict.get("fix_notes", [])
         return await act("finalize_panel", final, DB)
     except ActivityError as exc:

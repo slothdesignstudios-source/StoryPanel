@@ -1,0 +1,28 @@
+{
+ "version": "quality-v1",
+ "description": "Small, fixed comic-quality set for matched A/B comparisons. Every case runs once per arm with the same prompt, image provider and settings; every result is kept, including failures. Criteria: evals/quality/criteria.md.",
+ "image_provider": "openai",
+ "cases": [
+  {"id": "prop-lighthouse", "covers": ["persistent signature prop", "two characters interacting", "3-panel strip", "visual joke"],
+   "prompt": "A lighthouse keeper who always carries a brass lantern and a cheeky seagull argue over the last sandwich, as a 3 panel strip.",
+   "watch": ["the lantern is in every panel where the keeper appears, the same shape and colour", "the seagull is the same bird throughout", "the last panel pays off the argument"]},
+  {"id": "twist-cat-fishbowl", "covers": ["visual joke or twist", "4-panel strip", "action and pose changes"],
+   "prompt": "A cat spends a whole afternoon plotting to catch the goldfish, but in the last panel we learn the goldfish has been training the cat. A 4 panel strip, funny, no words in the last panel.",
+   "watch": ["each panel shows a different stage of the plan", "the twist is readable from the picture alone", "the last panel has no lettering"]},
+  {"id": "action-apprentice", "covers": ["action and pose changes", "multi-panel page"],
+   "prompt": "A clumsy apprentice knight practises sword drills in a castle courtyard, trips over her own cape, and turns the fall into a perfect spinning strike that slices an apple in mid-air. 1 page, energetic.",
+   "watch": ["poses are readable and different in each panel", "cause and effect between the trip and the strike", "the large panel is the strike"]},
+  {"id": "emotion-garden", "covers": ["emotional scene", "multi-panel page"],
+   "prompt": "An old man returns in spring to the garden his late wife planted and finds her favourite tulips blooming. Quiet, gentle, 1 page, very few words.",
+   "watch": ["the emotion changes across the page", "the tulips are the same flowers when they recur", "dialogue is sparse and does not explain the feelings"]},
+  {"id": "dialogue-roadtrip", "covers": ["dialogue-heavy panels", "two characters interacting", "multi-panel page"],
+   "prompt": "Two siblings in a tiny car argue about directions on a desert road trip, until they realise the map is upside down. 1 page, lots of bickering dialogue, funny.",
+   "watch": ["balloons read in the right order and point at the right speaker", "no balloon covers a face or the map", "lettering is readable at normal page size"]},
+  {"id": "page-dragon-mail", "covers": ["multi-panel page", "persistent signature prop", "action and pose changes"],
+   "prompt": "A tiny dragon delivers the post in a rainy city, wearing a red satchel that is too big for her, and saves the last soggy letter by drying it with her breath. 1 page, cosy.",
+   "watch": ["the red satchel stays the same in every panel", "the dragon is the same size relative to people", "the payoff uses her fire breath, set up earlier"]},
+  {"id": "strip-robot-noodles", "covers": ["two characters interacting", "4-panel strip", "emotional scene"],
+   "prompt": "A shy robot who runs a night-time noodle stall makes friends with a girl who is caught in the rain, as a 4 panel strip.",
+   "watch": ["robot and girl look the same in every panel", "each panel changes something (not four bowls of noodles)", "the ending pays off the shyness"]}
+ ]
+}

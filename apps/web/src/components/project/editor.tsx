@@ -239,6 +239,8 @@ const FLAG_LABELS: [string, string][] = [
   ["unsupported_characters", "Contains characters that can't be printed"],
   ["covers_face", "Covers a face"],
   ["covers_subject", "Covers a character"],
+  ["covers_prop", "Covers an important object"],
+  ["reading_order", "Reads out of order"],
 ];
 
 

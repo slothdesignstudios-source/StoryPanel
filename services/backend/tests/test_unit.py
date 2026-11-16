@@ -148,11 +148,14 @@ def compiled(**kw: object) -> art.CompiledPanel:
         panel=panel(), aspect="4:3", style_preset="clean_manga_warm", cast={"kiro": KIRO, "mei": MEI},
         locations={"stall": LOC}, location_refs={"stall": "loc-asset"}, continuity=("prev", "prev-asset"),
         character_refs={"kiro": {"three_quarter": "k3q", "side": "kside", "portrait": "kp"},
-                        "mei": {"three_quarter": "m3q", "portrait": "mp"}}, max_references=4)  # fmt: skip
+                        "mei": {"three_quarter": "m3q", "portrait": "mp"}}, max_references=4,
+        prompt_version="v2")  # fmt: skip
     return art.compile_panel(**{**args, **kw})  # type: ignore[arg-type]
 
 
 def test_prompt_compiler_order_references_and_no_dialogue() -> None:
+    """Prompts v2, frozen: existing comics' prompts are rebuilt from it (tests/test_comic_quality.py
+    covers v3)."""
     c = compiled()
     token = styles().get("clean_manga_warm").token
     assert c.prompt.startswith(token + ". Medium shot")  # style token verbatim and first

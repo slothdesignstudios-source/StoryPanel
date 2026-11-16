@@ -1,0 +1,966 @@
+{
+ "comic_id": "1c5e49c3-0e0d-441c-b573-25d12e970ef9",
+ "status": "completed",
+ "format": "western_page",
+ "image_provider": "openai",
+ "style_preset": "clean_manga_warm",
+ "idea": "Two siblings in a tiny car argue about directions on a desert road trip, until they realise the map is upside down. 1 page, lots of bickering dialogue, funny.",
+ "bible_versions": [
+  {
+   "version": 1,
+   "source": "ai",
+   "content": {
+    "cast": [
+     "kiro",
+     "mei"
+    ],
+    "tone": "warm, funny",
+    "genre": [
+     "slice of life",
+     "comedy"
+    ],
+    "title": "Noodles After Midnight",
+    "format": {
+     "type": "western_page",
+     "pages": 1,
+     "panels": null,
+     "panels_per_page": "4-6"
+    },
+    "themes": [
+     "loneliness",
+     "small kindnesses"
+    ],
+    "logline": "Two siblings in a tiny car argue about directions on a desert road trip, until they realise the map is upside down. 1 page, lots of bickering dialogue, funny.",
+    "palette": [
+     "#F4E9D8",
+     "#D94F30",
+     "#2B2B2B"
+    ],
+    "setting": "a rain-soaked neon city",
+    "audience": "all_ages",
+    "locations": [
+     {
+      "id": "noodle_stall_night",
+      "name": "Noodle stall",
+      "description": "A street noodle stall at night in light rain, paper lanterns"
+     },
+     {
+      "id": "rooftop_dawn",
+      "name": "Rooftop",
+      "description": "A flat rooftop at dawn above the city, water tanks, pink sky"
+     }
+    ],
+    "world_rules": [
+     "robots are common but rarely befriended",
+     "Kiro always wears the red apron"
+    ],
+    "style_preset": "clean_manga_warm",
+    "continuity_rules": [
+     {
+      "id": "apron_always",
+      "text": "Kiro wears the red apron with a noodle-bowl patch",
+      "source": "model",
+      "target": "kiro",
+      "visual": true,
+      "strength": "must",
+      "applies_to": "character",
+      "world_rule_index": null
+     },
+     {
+      "id": "light_rain",
+      "text": "light rain in the air",
+      "source": "model",
+      "target": "noodle_stall_night",
+      "visual": true,
+      "strength": "prefer",
+      "applies_to": "location",
+      "world_rule_index": null
+     }
+    ]
+   }
+  }
+ ],
+ "characters": [
+  {
+   "slug": "kiro",
+   "spec": {
+    "id": "kiro",
+    "name": "Kiro",
+    "role": "protagonist",
+    "voice": "short literal sentences",
+    "visual": {
+     "body": "round body, short stubby legs",
+     "hair": "none",
+     "head": "dome head with a single wide visor eye",
+     "type": "small service robot, about 1.2 m tall",
+     "outfit": "red apron with a noodle-bowl patch",
+     "palette": {
+      "eye": "#7FD4FF",
+      "body": "#E9E4D8",
+      "accent": "#D94F30"
+     },
+     "signature_features": [
+      "single visor eye",
+      "red apron",
+      "antenna with a bell"
+     ]
+    },
+    "personality": "shy, precise, secretly funny"
+   },
+   "sheet_version": 1,
+   "sheet_check": {
+    "notes": [],
+    "layout": {
+     "turnaround": {
+      "method": "grid",
+      "problems": []
+     },
+     "expressions": {
+      "method": "grid",
+      "problems": []
+     }
+    },
+    "status": "ok",
+    "problems": [],
+    "rules_sha": "0ad0946d3dc1ad32",
+    "uncertain": [],
+    "checked_at": "2026-11-16T23:21:36.447725+00:00",
+    "situational": [],
+    "sheet_version": 1,
+    "whole_figures": "yes"
+   },
+   "views": [
+    "back",
+    "expr_angry",
+    "expr_happy",
+    "expr_sad",
+    "expr_surprised",
+    "expression_sheet",
+    "front",
+    "portrait",
+    "side",
+    "three_quarter",
+    "turnaround_sheet"
+   ]
+  },
+  {
+   "slug": "mei",
+   "spec": {
+    "id": "mei",
+    "name": "Mei",
+    "role": "friend",
+    "voice": "quick, teasing questions",
+    "visual": {
+     "body": "slim, energetic",
+     "hair": "short black bob",
+     "head": "round face",
+     "type": "girl, about 10",
+     "outfit": "yellow raincoat",
+     "palette": {
+      "eye": "#F4A7B9",
+      "body": "#FFD23F",
+      "accent": "#2B2B2B"
+     },
+     "signature_features": [
+      "yellow raincoat",
+      "striped umbrella"
+     ]
+    },
+    "personality": "curious and bold"
+   },
+   "sheet_version": 1,
+   "sheet_check": {
+    "notes": [],
+    "layout": {
+     "turnaround": {
+      "method": "grid",
+      "problems": []
+     },
+     "expressions": {
+      "method": "grid",
+      "problems": []
+     }
+    },
+    "status": "ok",
+    "problems": [],
+    "rules_sha": "4f53cda18c2baa0c",
+    "uncertain": [],
+    "checked_at": "2026-11-16T23:21:36.476860+00:00",
+    "situational": [],
+    "sheet_version": 1,
+    "whole_figures": "yes"
+   },
+   "views": [
+    "back",
+    "expr_angry",
+    "expr_happy",
+    "expr_sad",
+    "expr_surprised",
+    "expression_sheet",
+    "front",
+    "portrait",
+    "side",
+    "three_quarter",
+    "turnaround_sheet"
+   ]
+  }
+ ],
+ "locations": [
+  {
+   "slug": "noodle_stall_night"
+  },
+  {
+   "slug": "rooftop_dawn"
+  }
+ ],
+ "scripts": [
+  {
+   "version": 1,
+   "beats": {
+    "beats": [
+     {
+      "name": "hook",
+      "pages": [
+       1
+      ],
+      "summary": "The hook."
+     },
+     {
+      "name": "setup",
+      "pages": [
+       1
+      ],
+      "summary": "The setup."
+     },
+     {
+      "name": "rising conflict",
+      "pages": [
+       1
+      ],
+      "summary": "The rising conflict."
+     },
+     {
+      "name": "climax",
+      "pages": [
+       1
+      ],
+      "summary": "The climax."
+     },
+     {
+      "name": "resolution",
+      "pages": [
+       1
+      ],
+      "summary": "The resolution."
+     }
+    ],
+    "structure": "three_act"
+   },
+   "content": {
+    "pages": [
+     {
+      "panels": [
+       {
+        "mood": "warm, cosy",
+        "shot": "wide",
+        "angle": "eye-level",
+        "beats": [
+         "hook",
+         "setup"
+        ],
+        "action": "kiro offers a steaming bowl",
+        "dialogue": [
+         {
+          "text": "Page 1. The rain kept falling.",
+          "type": "caption",
+          "speaker": null
+         },
+         {
+          "text": "I calculated you were hungry.",
+          "type": "speech",
+          "speaker": "kiro"
+         }
+        ],
+        "emphasis": "normal",
+        "characters": [
+         {
+          "id": "kiro",
+          "pose": "standing",
+          "position": "left",
+          "expression": "nervous smile"
+         }
+        ],
+        "location_id": "noodle_stall_night",
+        "time_of_day": "night, light rain",
+        "rule_exceptions": []
+       },
+       {
+        "mood": "warm, cosy",
+        "shot": "medium",
+        "angle": "eye-level",
+        "beats": [
+         "rising conflict"
+        ],
+        "action": "kiro offers a steaming bowl",
+        "dialogue": [
+         {
+          "text": "You made this for me?",
+          "type": "speech",
+          "speaker": "mei"
+         },
+         {
+          "text": "CLANG!",
+          "type": "sfx",
+          "speaker": null
+         }
+        ],
+        "emphasis": "normal",
+        "characters": [
+         {
+          "id": "kiro",
+          "pose": "standing",
+          "position": "left",
+          "expression": "nervous smile"
+         },
+         {
+          "id": "mei",
+          "pose": "standing",
+          "position": "right",
+          "expression": "nervous smile"
+         }
+        ],
+        "location_id": "noodle_stall_night",
+        "time_of_day": "night, light rain",
+        "rule_exceptions": []
+       },
+       {
+        "mood": "warm, cosy",
+        "shot": "close_up",
+        "angle": "eye-level",
+        "beats": [
+         "climax"
+        ],
+        "action": "kiro offers a steaming bowl",
+        "dialogue": [
+         {
+          "text": "I calculated you were hungry.",
+          "type": "speech",
+          "speaker": "kiro"
+         }
+        ],
+        "emphasis": "normal",
+        "characters": [
+         {
+          "id": "kiro",
+          "pose": "standing",
+          "position": "left",
+          "expression": "nervous smile"
+         }
+        ],
+        "location_id": "noodle_stall_night",
+        "time_of_day": "night, light rain",
+        "rule_exceptions": []
+       },
+       {
+        "mood": "warm, cosy",
+        "shot": "wide",
+        "angle": "eye-level",
+        "beats": [
+         "resolution"
+        ],
+        "action": "kiro offers a steaming bowl",
+        "dialogue": [
+         {
+          "text": "You made this for me?",
+          "type": "speech",
+          "speaker": "mei"
+         },
+         {
+          "text": "Same time tomorrow?",
+          "type": "speech",
+          "speaker": "kiro"
+         }
+        ],
+        "emphasis": "large",
+        "characters": [
+         {
+          "id": "kiro",
+          "pose": "standing",
+          "position": "left",
+          "expression": "nervous smile"
+         },
+         {
+          "id": "mei",
+          "pose": "standing",
+          "position": "right",
+          "expression": "nervous smile"
+         }
+        ],
+        "location_id": "rooftop_dawn",
+        "time_of_day": "night, light rain",
+        "rule_exceptions": []
+       }
+      ]
+     }
+    ]
+   },
+   "issues": [],
+   "source": "ai",
+   "consistency": {
+    "status": "done",
+    "checked_at": "2026-11-16T23:21:37.708237+00:00"
+   },
+   "created_at": "2026-11-16 23:21:37.613868+00:00"
+  }
+ ],
+ "pages": [
+  {
+   "index": 0,
+   "layout": "w4_bottom_large",
+   "panels": [
+    {
+     "index": 0,
+     "status": "ok",
+     "spec": {
+      "mood": "warm, cosy",
+      "shot": "wide",
+      "angle": "eye-level",
+      "beats": [
+       "hook",
+       "setup"
+      ],
+      "action": "kiro offers a steaming bowl",
+      "dialogue": [
+       {
+        "text": "Page 1. The rain kept falling.",
+        "type": "caption",
+        "speaker": null
+       },
+       {
+        "text": "I calculated you were hungry.",
+        "type": "speech",
+        "speaker": "kiro"
+       }
+      ],
+      "emphasis": "normal",
+      "characters": [
+       {
+        "id": "kiro",
+        "pose": "standing",
+        "position": "left",
+        "expression": "nervous smile"
+       }
+      ],
+      "location_id": "noodle_stall_night",
+      "time_of_day": "night, light rain",
+      "rule_exceptions": []
+     },
+     "aspect": "9:16",
+     "versions": [
+      {
+       "attempt": 0,
+       "kind": "generate",
+       "instruction": null,
+       "provider": "openai",
+       "model": "fake-openai-image",
+       "prompt_version": "v2",
+       "prompt_sha256": "53a56d13dc24e61458d5126ed0b3c5202473ac7dd7ac503fce1defb2401b8f08",
+       "references": [
+        {
+         "key": "kiro",
+         "role": "character",
+         "view": "three_quarter",
+         "asset_id": "e0f10631-db7f-434b-9517-7606ccc3ac4a"
+        },
+        {
+         "key": "noodle_stall_night",
+         "role": "location",
+         "view": null,
+         "asset_id": "6620c0ac-6180-43ed-96ea-a2e420b04483"
+        }
+       ],
+       "qa_status": "pass",
+       "problems": [],
+       "fix_notes": [],
+       "qa_aspects": null,
+       "repeated_after_repair": false,
+       "identity_rating_avg": 5.0,
+       "cost_usd": "0.13715",
+       "latency_ms": null,
+       "current": true,
+       "image": "panels/p1-n1-a0-generate-pass.png",
+       "rebuilt_prompt": {
+        "status": "reproduced",
+        "note": null,
+        "prompt": "Clean-line manga illustration, screentone shading, bold black ink, warm limited palette. Wide shot, eye-level, 9:16 frame. Show full figures small within the setting, with the surroundings clearly visible.\nSetting: A street noodle stall at night in light rain, paper lanterns, night, light rain (image 2).\nOn the left: Kiro, small service robot, about 1.2 m tall, round body, short stubby legs, dome head with a single wide visor eye, red apron with a noodle-bowl patch; signature features: single visor eye, red apron, antenna with a bell from image 1, standing, nervous smile.\nkiro offers a steaming bowl. Warm, cosy mood.\nMust be clearly visible: Kiro wears the red apron with a noodle-bowl patch.\nWhere it fits naturally: light rain in the air.\n\nKeep all characters exactly as in their reference images.\nLeave clear empty space in the upper right of the frame.\nNo text, letters, speech bubbles, captions or watermarks."
+       }
+      }
+     ]
+    },
+    {
+     "index": 1,
+     "status": "ok",
+     "spec": {
+      "mood": "warm, cosy",
+      "shot": "medium",
+      "angle": "eye-level",
+      "beats": [
+       "rising conflict"
+      ],
+      "action": "kiro offers a steaming bowl",
+      "dialogue": [
+       {
+        "text": "You made this for me?",
+        "type": "speech",
+        "speaker": "mei"
+       },
+       {
+        "text": "CLANG!",
+        "type": "sfx",
+        "speaker": null
+       }
+      ],
+      "emphasis": "normal",
+      "characters": [
+       {
+        "id": "kiro",
+        "pose": "standing",
+        "position": "left",
+        "expression": "nervous smile"
+       },
+       {
+        "id": "mei",
+        "pose": "standing",
+        "position": "right",
+        "expression": "nervous smile"
+       }
+      ],
+      "location_id": "noodle_stall_night",
+      "time_of_day": "night, light rain",
+      "rule_exceptions": []
+     },
+     "aspect": "9:16",
+     "versions": [
+      {
+       "attempt": 0,
+       "kind": "generate",
+       "instruction": null,
+       "provider": "openai",
+       "model": "fake-openai-image",
+       "prompt_version": "v2",
+       "prompt_sha256": "6347fc15fb0ef567a8f9aaa8868fdcabbe112f5dbaa31ee77231452d22ba967f",
+       "references": [
+        {
+         "key": "kiro",
+         "role": "character",
+         "view": "three_quarter",
+         "asset_id": "e0f10631-db7f-434b-9517-7606ccc3ac4a"
+        },
+        {
+         "key": "mei",
+         "role": "character",
+         "view": "three_quarter",
+         "asset_id": "7b1b65d2-f8a7-4ccf-98bb-3bb993341dcc"
+        },
+        {
+         "key": "noodle_stall_night",
+         "role": "location",
+         "view": null,
+         "asset_id": "6620c0ac-6180-43ed-96ea-a2e420b04483"
+        },
+        {
+         "key": "5277d48c-3b4d-4ec9-a3dc-c9375041a64d",
+         "role": "continuity",
+         "view": null,
+         "asset_id": "27eece16-a754-42d2-a23e-7a65783af948"
+        }
+       ],
+       "qa_status": "pass",
+       "problems": [],
+       "fix_notes": [],
+       "qa_aspects": null,
+       "repeated_after_repair": false,
+       "identity_rating_avg": 5.0,
+       "cost_usd": "0.15346",
+       "latency_ms": null,
+       "current": true,
+       "image": "panels/p1-n2-a0-generate-pass.png",
+       "rebuilt_prompt": {
+        "status": "reproduced",
+        "note": null,
+        "prompt": "Clean-line manga illustration, screentone shading, bold black ink, warm limited palette. Medium shot, eye-level, 9:16 frame. Frame the characters from about the waist up.\nSetting: A street noodle stall at night in light rain, paper lanterns, night, light rain (image 3).\nOn the left: Kiro, small service robot, about 1.2 m tall, round body, short stubby legs, dome head with a single wide visor eye, red apron with a noodle-bowl patch; signature features: single visor eye, red apron, antenna with a bell from image 1, standing, nervous smile.\nOn the right: Mei, girl, about 10, slim, energetic, round face, short black bob, yellow raincoat; signature features: yellow raincoat, striped umbrella from image 2, standing, nervous smile.\nkiro offers a steaming bowl. Warm, cosy mood.\nMust be clearly visible: Kiro wears the red apron with a noodle-bowl patch.\nWhere it fits naturally: light rain in the air.\n\nContinue directly from the previous panel (image 4): same place, lighting and outfits.\nKeep all characters exactly as in their reference images.\nLeave clear empty space in the upper third of the frame.\nNo text, letters, speech bubbles, captions or watermarks."
+       }
+      }
+     ]
+    },
+    {
+     "index": 2,
+     "status": "ok",
+     "spec": {
+      "mood": "warm, cosy",
+      "shot": "close_up",
+      "angle": "eye-level",
+      "beats": [
+       "climax"
+      ],
+      "action": "kiro offers a steaming bowl",
+      "dialogue": [
+       {
+        "text": "I calculated you were hungry.",
+        "type": "speech",
+        "speaker": "kiro"
+       }
+      ],
+      "emphasis": "normal",
+      "characters": [
+       {
+        "id": "kiro",
+        "pose": "standing",
+        "position": "left",
+        "expression": "nervous smile"
+       }
+      ],
+      "location_id": "noodle_stall_night",
+      "time_of_day": "night, light rain",
+      "rule_exceptions": []
+     },
+     "aspect": "9:16",
+     "versions": [
+      {
+       "attempt": 0,
+       "kind": "generate",
+       "instruction": null,
+       "provider": "openai",
+       "model": "fake-openai-image",
+       "prompt_version": "v2",
+       "prompt_sha256": "9d5ea1e5f6f7820caaacfc1442e7341a30cdeaa79e2df6ce0dbc964dff420cf4",
+       "references": [
+        {
+         "key": "kiro",
+         "role": "character",
+         "view": "portrait",
+         "asset_id": "97640191-0bfa-40d6-8a01-6a9efa8e3035"
+        },
+        {
+         "key": "noodle_stall_night",
+         "role": "location",
+         "view": null,
+         "asset_id": "6620c0ac-6180-43ed-96ea-a2e420b04483"
+        },
+        {
+         "key": "d66ec70a-dda6-4ea4-9dd0-ddd2d4b20ace",
+         "role": "continuity",
+         "view": null,
+         "asset_id": "b067e12a-cc5f-4d9b-bbc3-92bae1375540"
+        }
+       ],
+       "qa_status": "pass",
+       "problems": [],
+       "fix_notes": [],
+       "qa_aspects": null,
+       "repeated_after_repair": false,
+       "identity_rating_avg": 5.0,
+       "cost_usd": "0.14527",
+       "latency_ms": null,
+       "current": true,
+       "image": "panels/p1-n3-a0-generate-pass.png",
+       "rebuilt_prompt": {
+        "status": "reproduced",
+        "note": null,
+        "prompt": "Clean-line manga illustration, screentone shading, bold black ink, warm limited palette. Close-up shot, eye-level, 9:16 frame. The main character's head and shoulders fill most of the frame; little background.\nSetting: A street noodle stall at night in light rain, paper lanterns, night, light rain (image 2).\nOn the left: Kiro, small service robot, about 1.2 m tall, round body, short stubby legs, dome head with a single wide visor eye, red apron with a noodle-bowl patch; signature features: single visor eye, red apron, antenna with a bell from image 1, standing, nervous smile.\nkiro offers a steaming bowl. Warm, cosy mood.\nMust be clearly visible: Kiro wears the red apron with a noodle-bowl patch.\nWhere it fits naturally: light rain in the air.\n\nContinue directly from the previous panel (image 3): same place, lighting and outfits.\nKeep all characters exactly as in their reference images.\nLeave clear empty space in the upper right of the frame.\nNo text, letters, speech bubbles, captions or watermarks."
+       }
+      }
+     ]
+    },
+    {
+     "index": 3,
+     "status": "ok",
+     "spec": {
+      "mood": "warm, cosy",
+      "shot": "wide",
+      "angle": "eye-level",
+      "beats": [
+       "resolution"
+      ],
+      "action": "kiro offers a steaming bowl",
+      "dialogue": [
+       {
+        "text": "You made this for me?",
+        "type": "speech",
+        "speaker": "mei"
+       },
+       {
+        "text": "Same time tomorrow?",
+        "type": "speech",
+        "speaker": "kiro"
+       }
+      ],
+      "emphasis": "large",
+      "characters": [
+       {
+        "id": "kiro",
+        "pose": "standing",
+        "position": "left",
+        "expression": "nervous smile"
+       },
+       {
+        "id": "mei",
+        "pose": "standing",
+        "position": "right",
+        "expression": "nervous smile"
+       }
+      ],
+      "location_id": "rooftop_dawn",
+      "time_of_day": "night, light rain",
+      "rule_exceptions": []
+     },
+     "aspect": "4:3",
+     "versions": [
+      {
+       "attempt": 0,
+       "kind": "generate",
+       "instruction": null,
+       "provider": "openai",
+       "model": "fake-openai-image",
+       "prompt_version": "v2",
+       "prompt_sha256": "d7596af3d92757c4c4974012e28db27682c06e420079bd9ab704148907e79f10",
+       "references": [
+        {
+         "key": "kiro",
+         "role": "character",
+         "view": "three_quarter",
+         "asset_id": "e0f10631-db7f-434b-9517-7606ccc3ac4a"
+        },
+        {
+         "key": "mei",
+         "role": "character",
+         "view": "three_quarter",
+         "asset_id": "7b1b65d2-f8a7-4ccf-98bb-3bb993341dcc"
+        },
+        {
+         "key": "rooftop_dawn",
+         "role": "location",
+         "view": null,
+         "asset_id": "fb3a6683-ea97-48e0-ab58-2cfd468d48ef"
+        }
+       ],
+       "qa_status": "pass",
+       "problems": [],
+       "fix_notes": [],
+       "qa_aspects": null,
+       "repeated_after_repair": false,
+       "identity_rating_avg": 5.0,
+       "cost_usd": "0.14543",
+       "latency_ms": null,
+       "current": true,
+       "image": "panels/p1-n4-a0-generate-pass.png",
+       "rebuilt_prompt": {
+        "status": "reproduced",
+        "note": null,
+        "prompt": "Clean-line manga illustration, screentone shading, bold black ink, warm limited palette. Wide shot, eye-level, 4:3 frame. Show full figures small within the setting, with the surroundings clearly visible. This is the climactic moment of the page: give it the most dramatic composition.\nSetting: A flat rooftop at dawn above the city, water tanks, pink sky, night, light rain (image 3).\nOn the left: Kiro, small service robot, about 1.2 m tall, round body, short stubby legs, dome head with a single wide visor eye, red apron with a noodle-bowl patch; signature features: single visor eye, red apron, antenna with a bell from image 1, standing, nervous smile.\nOn the right: Mei, girl, about 10, slim, energetic, round face, short black bob, yellow raincoat; signature features: yellow raincoat, striped umbrella from image 2, standing, nervous smile.\nkiro offers a steaming bowl. Warm, cosy mood.\nMust be clearly visible: Kiro wears the red apron with a noodle-bowl patch.\n\nKeep all characters exactly as in their reference images.\nLeave clear empty space in the upper third of the frame.\nNo text, letters, speech bubbles, captions or watermarks."
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "exports": {
+  "pdf": {
+   "print_quality": {
+    "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+    "method": "local_resample",
+    "panels": [
+     {
+      "dpi": 211,
+      "page": 1,
+      "panel": 1,
+      "source_px": [
+       432,
+       768
+      ],
+      "printed_in": [
+       1.75,
+       3.64
+      ]
+     },
+     {
+      "dpi": 211,
+      "page": 1,
+      "panel": 2,
+      "source_px": [
+       432,
+       768
+      ],
+      "printed_in": [
+       1.75,
+       3.64
+      ]
+     },
+     {
+      "dpi": 211,
+      "page": 1,
+      "panel": 3,
+      "source_px": [
+       432,
+       768
+      ],
+      "printed_in": [
+       1.75,
+       3.64
+      ]
+     },
+     {
+      "dpi": 122,
+      "page": 1,
+      "panel": 4,
+      "source_px": [
+       768,
+       576
+      ],
+      "printed_in": [
+       5.52,
+       4.73
+      ]
+     }
+    ],
+    "min_dpi": 122,
+    "warnings": [
+     "1 panel(s) below 150 DPI at a 6-inch print width: they will look blurry in print. Fine on screen.",
+     "3 panel(s) between 150 and 300 DPI: may look soft in print."
+    ],
+    "lettering": [
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 1,
+      "text_size": 22.0
+     },
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 2,
+      "text_size": 22.0
+     },
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 3,
+      "text_size": 22.0
+     },
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 4,
+      "text_size": 22.0
+     }
+    ],
+    "min_letter_pt": 9.5,
+    "min_letter_px": 44.0,
+    "print_width_in": 6.0
+   }
+  },
+  "png": {
+   "print_quality": {
+    "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+    "method": "local_resample",
+    "panels": [
+     {
+      "dpi": 211,
+      "page": 1,
+      "panel": 1,
+      "source_px": [
+       432,
+       768
+      ],
+      "printed_in": [
+       1.75,
+       3.64
+      ]
+     },
+     {
+      "dpi": 211,
+      "page": 1,
+      "panel": 2,
+      "source_px": [
+       432,
+       768
+      ],
+      "printed_in": [
+       1.75,
+       3.64
+      ]
+     },
+     {
+      "dpi": 211,
+      "page": 1,
+      "panel": 3,
+      "source_px": [
+       432,
+       768
+      ],
+      "printed_in": [
+       1.75,
+       3.64
+      ]
+     },
+     {
+      "dpi": 122,
+      "page": 1,
+      "panel": 4,
+      "source_px": [
+       768,
+       576
+      ],
+      "printed_in": [
+       5.52,
+       4.73
+      ]
+     }
+    ],
+    "min_dpi": 122,
+    "warnings": [
+     "1 panel(s) below 150 DPI at a 6-inch print width: they will look blurry in print. Fine on screen.",
+     "3 panel(s) between 150 and 300 DPI: may look soft in print."
+    ],
+    "lettering": [
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 1,
+      "text_size": 22.0
+     },
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 2,
+      "text_size": 22.0
+     },
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 3,
+      "text_size": 22.0
+     },
+     {
+      "pt": 9.5,
+      "px": 44.0,
+      "page": 1,
+      "panel": 4,
+      "text_size": 22.0
+     }
+    ],
+    "min_letter_pt": 9.5,
+    "min_letter_px": 44.0,
+    "print_width_in": 6.0
+   }
+  }
+ }
+}

@@ -60,7 +60,10 @@ async def test_exhausted_quality_retries_become_needs_attention(client: Any, hea
     async with transaction() as db:
         per_panel = (await db.execute(select(func.count()).select_from(PanelVersion)
                                       .group_by(PanelVersion.panel_id))).scalars().all()  # fmt: skip
-        assert per_panel == [3, 3, 3, 3]  # first attempt + exactly two automatic retries
+        # first attempt + one repair; the same problems survived it, so the second repair is not paid for
+        assert per_panel == [2, 2, 2, 2]
+        flagged = (await db.execute(select(PanelVersion.qa_scores).where(PanelVersion.attempt == 1))).scalars().all()
+        assert all(f.get("repeated_after_repair") for f in flagged)
         notes = (await db.execute(select(PanelVersion.qa_scores))).scalars().first()
         assert notes["fix_notes"]
     assert await balances() == (200 - 8 - 4, 0)  # retries are free; one credit per panel

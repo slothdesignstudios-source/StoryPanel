@@ -148,8 +148,30 @@ def compile_panel(
     locations: dict[str, LocationSpec], character_refs: dict[str, dict[str, str]],
     location_refs: dict[str, str], continuity: tuple[str, str] | None, max_references: int,
     fix_notes: tuple[str, ...] = (), rules: list[ContinuityRule] | None = None,
+    panel_size: tuple[float, float] | None = None, prompt_version: str = PROMPT_VERSION,
 ) -> CompiledPanel:  # fmt: skip
-    """Fixed order: style token, shot, setting, characters, action, mood, constraints."""
+    """The panel prompt in the given prompt version. v2 is kept byte-identical so the prompts of
+    existing comics can be rebuilt and checked against their recorded hashes."""
+    if prompt_version == "v2":
+        return _compile_panel_v2(panel=panel, aspect=aspect, style_preset=style_preset, cast=cast,
+                                 locations=locations, character_refs=character_refs, location_refs=location_refs,
+                                 continuity=continuity, max_references=max_references, fix_notes=fix_notes,
+                                 rules=rules)  # fmt: skip
+    if prompt_version != "v3":
+        raise AppError(ErrorCode.INVALID_STATE, f"Panel prompts {prompt_version} can't be compiled.", retryable=False)
+    return _compile_panel_v3(panel=panel, aspect=aspect, style_preset=style_preset, cast=cast, locations=locations,
+                             character_refs=character_refs, location_refs=location_refs, continuity=continuity,
+                             max_references=max_references, fix_notes=fix_notes, rules=rules,
+                             panel_size=panel_size or (600.0, 600.0))  # fmt: skip
+
+
+def _compile_panel_v2(
+    *, panel: PanelSpec, aspect: str, style_preset: str, cast: dict[str, CharacterSpec],
+    locations: dict[str, LocationSpec], character_refs: dict[str, dict[str, str]],
+    location_refs: dict[str, str], continuity: tuple[str, str] | None, max_references: int,
+    fix_notes: tuple[str, ...] = (), rules: list[ContinuityRule] | None = None,
+) -> CompiledPanel:  # fmt: skip
+    """Prompts v2 (frozen). Fixed order: style token, shot, setting, characters, action, mood, constraints."""
     style = styles().get(style_preset)
     view = view_for(panel)
     slots: list[RefSlot] = []
@@ -179,7 +201,7 @@ def compile_panel(
     must, prefer = rules_for_panel(rules or [], panel)
     composition = COMPOSITION[panel.shot] + (CLIMAX if panel.emphasis == "large" else "")
     prompt = render_prompt(
-        "panel", style_token=style.token, shot=SHOT_WORDS[panel.shot], composition=composition,
+        "panel", "v2", style_token=style.token, shot=SHOT_WORDS[panel.shot], composition=composition,
         must_rules=[_rule_text(r) for r in must], prefer_rules=[_rule_text(r) for r in prefer],
         angle=panel.angle.strip().rstrip("."), aspect=aspect,
         location_description=location.description.strip().rstrip("."),
@@ -193,7 +215,162 @@ def compile_panel(
         {"id": ch.id, "position": ch.position, "palette": cast[ch.id].visual.palette,
          "signature_features": cast[ch.id].visual.signature_features}
         for ch in panel.characters], "required_rules": [r.id for r in must]}  # fmt: skip
-    return CompiledPanel(prompt, PROMPT_VERSION, prompt_sha256(prompt), aspect, tuple(slots), inputs)
+    return CompiledPanel(prompt, "v2", prompt_sha256(prompt), aspect, tuple(slots), inputs)
+
+
+# ------------------------------------------------------------------ v3 visual plan
+VIEW_WORDS = {"portrait": "full-body front view", "front": "front view", "three_quarter": "three-quarter view",
+              "side": "side view", "back": "back view"}  # fmt: skip
+COMPOSITION_V3 = {
+    "wide": "Full figures, small enough that the surroundings tell the reader where we are.",
+    "medium": "Characters framed from about the waist up, close enough to read faces and hands.",
+    "close_up": "{who} head and shoulders fill most of the frame; keep the background simple.",
+}
+CLIMAX_V3 = " This is the most important moment on the page: the strongest, clearest composition, larger figures."
+
+
+def frame_words(aspect: str) -> str:
+    """What the panel's real shape means for the composition (the slot in the page layout)."""
+    a, b = (float(x) for x in aspect.split(":"))
+    r = a / b
+    if r >= 1.8:
+        return f"a very wide {aspect} frame: spread the subjects across the width"
+    if r >= 1.2:
+        return f"a landscape {aspect} frame"
+    if r > 0.83:
+        return f"a square {aspect} frame"
+    return f"a tall {aspect} frame: use the height (full figures, or foreground and background)"
+
+
+@dataclass(frozen=True)
+class LetteringPlan:
+    """Where a panel's lettering is planned, shared by the image prompt and the letterer so the
+    space the picture leaves free is the space the balloons go to. Normalised to the panel."""
+
+    zone: tuple[float, float, float, float] | None
+    phrase: str
+    items: int
+
+
+def lettering_plan(panel: PanelSpec, panel_size: tuple[float, float]) -> LetteringPlan:
+    """Estimate how much room the panel's balloons and captions need at the normal lettering size,
+    and put it above the first speaker (where the letterer places speech). Sound effects get no
+    reserved space: they sit near the action. A panel without lettering reserves nothing."""
+    from storypanel.pipeline import lettering
+
+    items = [d for d in panel.dialogue if d.type != "sfx"]
+    if not items:
+        return LetteringPlan(None, "", 0)
+    pw, ph = panel_size
+    area = 0.0
+    for d in items:
+        max_w = pw * (0.92 if d.type == "caption" else 0.62)
+        w, h = lettering._balloon_size(d.type, " ".join(d.text.split()), "comic_neue", lettering.FONT_MAX,
+                                        max_w - (0 if d.type == "caption" else 8))  # fmt: skip
+        area += min(w, max_w) * h * 1.25  # room around each balloon
+    position = {c.id: c.position for c in panel.characters}
+    sides = [position.get(d.speaker or "", "center") for d in items if d.type in ("speech", "thought")]
+    if not sides:  # captions only: the letterer starts at the top-left corner
+        x, width, where = 0.0, 1.0, "of the frame"
+    elif len(set(sides)) > 1:
+        x, width, where = 0.0, 1.0, "of the frame, above the speakers,"
+    else:
+        x, width, where = {"left": (0.0, 0.55, "of the left side of the frame, above the speaker,"),
+                           "center": (0.2, 0.6, "of the middle of the frame, above the speaker,"),
+                           "right": (0.45, 0.55, "of the right side of the frame, above the speaker,")}[sides[0]]  # fmt: skip
+    height = min(0.45, max(0.14, area / (pw * ph) / width))
+    pct = int(round(height * 20) * 5)
+    noun = "caption" if not sides else "balloon"
+    phrase = (f"keep the top {pct}% {where} free of faces, hands and important objects, with plain background "
+              f"there (sky, wall or floor) for {len(items)} {noun if len(items) == 1 else noun + 's'}")
+    return LetteringPlan((x, 0.0, width, height), phrase, len(items))
+
+
+def _reference_slots(panel: PanelSpec, cast: dict[str, CharacterSpec], character_refs: dict[str, dict[str, str]],
+                     location_refs: dict[str, str], continuity: tuple[str, str] | None,
+                     max_references: int) -> tuple[list[RefSlot], list[str]]:  # fmt: skip
+    """Characters first (every drawn character needs one: never dropped silently), then the location,
+    then the previous panel. Returns the slots and what was left out, with the reason."""
+    view = view_for(panel)
+    slots: list[RefSlot] = []
+    for ch in panel.characters:
+        views = character_refs.get(ch.id, {})
+        chosen = next((v for v in VIEW_FALLBACKS[view] if v in views), None)
+        if chosen is None:
+            raise AppError(ErrorCode.INVALID_STATE, f"{cast[ch.id].name} has no approved reference image, so this "
+                                                    "panel can't be drawn consistently.", retryable=False)  # fmt: skip
+        slots.append(RefSlot("character", ch.id, chosen, views[chosen]))
+    if len(slots) > max_references:
+        raise AppError(ErrorCode.VALIDATION, f"This panel has {len(slots)} characters, but the image model accepts "
+                                             f"{max_references} reference images. Take a character out of the panel.",
+                       retryable=False)  # fmt: skip
+    omitted: list[str] = []
+    if panel.location_id in location_refs:
+        if len(slots) < max_references:
+            slots.append(RefSlot("location", panel.location_id, None, location_refs[panel.location_id]))
+        else:
+            omitted.append("location: no reference slot left after the characters")
+    if continuity:
+        if len(slots) < max_references:
+            slots.append(RefSlot("continuity", continuity[0], None, continuity[1]))
+        else:
+            omitted.append("previous panel: no reference slot left")
+    return slots, omitted
+
+
+def _compile_panel_v3(
+    *, panel: PanelSpec, aspect: str, style_preset: str, cast: dict[str, CharacterSpec],
+    locations: dict[str, LocationSpec], character_refs: dict[str, dict[str, str]],
+    location_refs: dict[str, str], continuity: tuple[str, str] | None, max_references: int,
+    fix_notes: tuple[str, ...], rules: list[ContinuityRule] | None, panel_size: tuple[float, float],
+) -> CompiledPanel:  # fmt: skip
+    """The panel's visual plan, in priority order: what each reference image is for, the panel's
+    purpose, framing for its real shape, subjects (position, identity, pose, expression), action,
+    required elements, setting and mood, focal point, corrections, and the planned lettering space."""
+    style = styles().get(style_preset)
+    slots, omitted = _reference_slots(panel, cast, character_refs, location_refs, continuity, max_references)
+    index = {(s.role, s.key): n + 1 for n, s in enumerate(slots)}
+    location = locations[panel.location_id]
+    purposes = []
+    for n, slot in enumerate(slots, start=1):
+        if slot.role == "character":
+            purposes.append({"n": n, "purpose": f"{cast[slot.key].name}'s identity ({VIEW_WORDS.get(slot.view or '', slot.view)}"
+                                                f" from the approved sheet): face, body, proportions, colours, outfit and "
+                                                "signature features; not the pose or the background"})  # fmt: skip
+        elif slot.role == "location":
+            purposes.append({"n": n, "purpose": f"the location, {location.name}: architecture, props, colours and light; "
+                                                "not the camera angle or the composition"})  # fmt: skip
+        else:
+            purposes.append({"n": n, "purpose": "the previous panel, only to keep lighting, time of day and the state of "
+                                                "objects consistent; choose a new camera position and composition for "
+                                                "this panel"})  # fmt: skip
+    characters = [{
+        "position_phrase": POSITION_PHRASES[ch.position], "name": cast[ch.id].name,
+        "canonical_description": cast[ch.id].canonical_description(), "ref": index.get(("character", ch.id)),
+        "pose": ch.pose.strip().rstrip("."), "expression": ch.expression.strip().rstrip("."),
+    } for ch in panel.characters]  # fmt: skip
+    who = (cast[panel.characters[0].id].name + "'s") if panel.characters else "The subject's"
+    composition = COMPOSITION_V3[panel.shot].format(who=who) + (CLIMAX_V3 if panel.emphasis == "large" else "")
+    focus = panel.focus.strip().rstrip(".")
+    if not focus and panel.shot == "close_up" and panel.characters:
+        focus = f"{cast[panel.characters[0].id].name}'s face"
+    plan = lettering_plan(panel, panel_size)
+    must, prefer = rules_for_panel(rules or [], panel)
+    prompt = render_prompt(
+        "panel", "v3", style_token=style.token, references=purposes, purpose=panel.purpose.strip().rstrip("."),
+        shot=SHOT_WORDS[panel.shot], angle=panel.angle.strip().rstrip("."), frame=frame_words(aspect),
+        composition=composition, characters=characters, relative_scale=len(panel.characters) > 1,
+        action=panel.action.strip().rstrip("."), must_rules=[_rule_text(r) for r in must],
+        prefer_rules=[_rule_text(r) for r in prefer], location_description=location.description.strip().rstrip("."),
+        time_of_day=panel.time_of_day.strip().rstrip("."), mood=panel.mood.strip().rstrip(".").capitalize(),
+        focus=focus, fix_notes=list(fix_notes), lettering=plan.phrase,
+    )  # fmt: skip
+    inputs = {"kind": "panel", "characters": [
+        {"id": ch.id, "position": ch.position, "palette": cast[ch.id].visual.palette,
+         "signature_features": cast[ch.id].visual.signature_features}
+        for ch in panel.characters], "required_rules": [r.id for r in must],
+        "references_omitted": omitted, "lettering_zone": list(plan.zone) if plan.zone else None}  # fmt: skip
+    return CompiledPanel(prompt, "v3", prompt_sha256(prompt), aspect, tuple(slots), inputs)
 
 
 def compile_sheet_prompt(kind: str, spec: CharacterSpec, style_preset: str,

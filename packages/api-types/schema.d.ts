@@ -716,8 +716,18 @@ export interface components {
             palette: {
                 [key: string]: string;
             };
+            /**
+             * Proportions
+             * @default
+             */
+            proportions: string;
             /** Signature Features */
             signature_features: string[];
+            /**
+             * Silhouette
+             * @default
+             */
+            silhouette: string;
             /** Type */
             type: string;
         };
@@ -1317,10 +1327,20 @@ export interface components {
              * @enum {string}
              */
             emphasis: "normal" | "large";
+            /**
+             * Focus
+             * @default
+             */
+            focus: string;
             /** Location Id */
             location_id: string;
             /** Mood */
             mood: string;
+            /**
+             * Purpose
+             * @default
+             */
+            purpose: string;
             /** Rule Exceptions */
             rule_exceptions?: string[];
             /**

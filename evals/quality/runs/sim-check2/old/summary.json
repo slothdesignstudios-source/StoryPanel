@@ -1,0 +1,590 @@
+{
+ "run_id": "sim-check2",
+ "arm": "old",
+ "mode": "SIMULATED",
+ "commit": "fb4a1cc8e90973864b8995fdffaba897ccbe85f1",
+ "cases": [
+  {
+   "case": "prop-lighthouse",
+   "arm": "old",
+   "prompt": "A lighthouse keeper who always carries a brass lantern and a cheeky seagull argue over the last sandwich, as a 3 panel strip.",
+   "project_id": "36ca6d67-50b6-4b82-8555-c2eac13927d5",
+   "cast_flags": [],
+   "script_issues": [],
+   "panel_status": [
+    "ok",
+    "ok",
+    "ok"
+   ],
+   "status": "completed",
+   "print_quality": {
+    "pdf": {
+     "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+     "method": "local_resample",
+     "panels": [
+      {
+       "dpi": 417,
+       "page": 1,
+       "panel": 1,
+       "source_px": [
+        768,
+        768
+       ],
+       "printed_in": [
+        1.84,
+        1.8
+       ]
+      },
+      {
+       "dpi": 417,
+       "page": 1,
+       "panel": 2,
+       "source_px": [
+        768,
+        768
+       ],
+       "printed_in": [
+        1.84,
+        1.8
+       ]
+      },
+      {
+       "dpi": 417,
+       "page": 1,
+       "panel": 3,
+       "source_px": [
+        768,
+        768
+       ],
+       "printed_in": [
+        1.84,
+        1.8
+       ]
+      }
+     ],
+     "min_dpi": 417,
+     "warnings": [
+      "Page 1: lettering in panel(s) 1, 2, 3 prints at 5.94 pt at the 6-inch print width, below the 6.48 pt readable size. Fine on screen. This page needs at least 6.6 in of print width for its smallest text to reach 6.48 pt."
+     ],
+     "lettering": [
+      {
+       "pt": 5.94,
+       "px": 27.5,
+       "page": 1,
+       "panel": 1,
+       "text_size": 22.0
+      },
+      {
+       "pt": 5.94,
+       "px": 27.5,
+       "page": 1,
+       "panel": 2,
+       "text_size": 22.0
+      },
+      {
+       "pt": 5.94,
+       "px": 27.5,
+       "page": 1,
+       "panel": 3,
+       "text_size": 22.0
+      }
+     ],
+     "min_letter_pt": 5.94,
+     "min_letter_px": 27.5,
+     "print_width_in": 6.0
+    },
+    "png": {
+     "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+     "method": "local_resample",
+     "panels": [
+      {
+       "dpi": 417,
+       "page": 1,
+       "panel": 1,
+       "source_px": [
+        768,
+        768
+       ],
+       "printed_in": [
+        1.84,
+        1.8
+       ]
+      },
+      {
+       "dpi": 417,
+       "page": 1,
+       "panel": 2,
+       "source_px": [
+        768,
+        768
+       ],
+       "printed_in": [
+        1.84,
+        1.8
+       ]
+      },
+      {
+       "dpi": 417,
+       "page": 1,
+       "panel": 3,
+       "source_px": [
+        768,
+        768
+       ],
+       "printed_in": [
+        1.84,
+        1.8
+       ]
+      }
+     ],
+     "min_dpi": 417,
+     "warnings": [
+      "Page 1: lettering in panel(s) 1, 2, 3 prints at 5.94 pt at the 6-inch print width, below the 6.48 pt readable size. Fine on screen. This page needs at least 6.6 in of print width for its smallest text to reach 6.48 pt."
+     ],
+     "lettering": [
+      {
+       "pt": 5.94,
+       "px": 27.5,
+       "page": 1,
+       "panel": 1,
+       "text_size": 22.0
+      },
+      {
+       "pt": 5.94,
+       "px": 27.5,
+       "page": 1,
+       "panel": 2,
+       "text_size": 22.0
+      },
+      {
+       "pt": 5.94,
+       "px": 27.5,
+       "page": 1,
+       "panel": 3,
+       "text_size": 22.0
+      }
+     ],
+     "min_letter_pt": 5.94,
+     "min_letter_px": 27.5,
+     "print_width_in": 6.0
+    }
+   },
+   "timings_s": {
+    "cast": 2.2,
+    "sheet_review": 2.2,
+    "script": 4.3,
+    "pages": 6.4,
+    "export_pdf": 8.5,
+    "export_png": 10.6
+   },
+   "ledger": {
+    "by_stage": {
+     "bible": {
+      "calls": 1,
+      "usd": "0.003342",
+      "latency_ms": 5,
+      "unresolved": 0
+     },
+     "character_sheet": {
+      "calls": 6,
+      "usd": "0.756800",
+      "latency_ms": 157,
+      "unresolved": 0
+     },
+     "identity_visual": {
+      "calls": 3,
+      "usd": "0.006483",
+      "latency_ms": 13,
+      "unresolved": 0
+     },
+     "image_safety": {
+      "calls": 11,
+      "usd": "0.001287",
+      "latency_ms": 208,
+      "unresolved": 0
+     },
+     "intake": {
+      "calls": 1,
+      "usd": "0.000137",
+      "latency_ms": 10,
+      "unresolved": 0
+     },
+     "location_ref": {
+      "calls": 2,
+      "usd": "0.240840",
+      "latency_ms": 78,
+      "unresolved": 0
+     },
+     "moderation.bible": {
+      "calls": 1,
+      "usd": "0.000154",
+      "latency_ms": 4,
+      "unresolved": 0
+     },
+     "moderation.prompt": {
+      "calls": 1,
+      "usd": "0.000139",
+      "latency_ms": 4,
+      "unresolved": 0
+     },
+     "moderation.script": {
+      "calls": 1,
+      "usd": "0.000141",
+      "latency_ms": 5,
+      "unresolved": 0
+     },
+     "panel_generate": {
+      "calls": 3,
+      "usd": "0.435870",
+      "latency_ms": 54,
+      "unresolved": 0
+     },
+     "script": {
+      "calls": 1,
+      "usd": "0.004572",
+      "latency_ms": 6,
+      "unresolved": 0
+     },
+     "script_consistency": {
+      "calls": 1,
+      "usd": "0.000156",
+      "latency_ms": 4,
+      "unresolved": 0
+     },
+     "sheet_check": {
+      "calls": 2,
+      "usd": "0.000270",
+      "latency_ms": 10,
+      "unresolved": 0
+     },
+     "vision_qa": {
+      "calls": 3,
+      "usd": "0.000443",
+      "latency_ms": 14,
+      "unresolved": 0
+     }
+    },
+    "total_usd": "1.450634"
+   },
+   "panel_attempts": 3,
+   "repairs": 0,
+   "repairs_stopped_as_repeat": 0,
+   "needs_attention": 0,
+   "lettering_flags": {},
+   "mode": "SIMULATED"
+  },
+  {
+   "case": "dialogue-roadtrip",
+   "arm": "old",
+   "prompt": "Two siblings in a tiny car argue about directions on a desert road trip, until they realise the map is upside down. 1 page, lots of bickering dialogue, funny.",
+   "project_id": "1c5e49c3-0e0d-441c-b573-25d12e970ef9",
+   "cast_flags": [],
+   "script_issues": [],
+   "panel_status": [
+    "ok",
+    "ok",
+    "ok",
+    "ok"
+   ],
+   "status": "completed",
+   "print_quality": {
+    "pdf": {
+     "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+     "method": "local_resample",
+     "panels": [
+      {
+       "dpi": 211,
+       "page": 1,
+       "panel": 1,
+       "source_px": [
+        432,
+        768
+       ],
+       "printed_in": [
+        1.75,
+        3.64
+       ]
+      },
+      {
+       "dpi": 211,
+       "page": 1,
+       "panel": 2,
+       "source_px": [
+        432,
+        768
+       ],
+       "printed_in": [
+        1.75,
+        3.64
+       ]
+      },
+      {
+       "dpi": 211,
+       "page": 1,
+       "panel": 3,
+       "source_px": [
+        432,
+        768
+       ],
+       "printed_in": [
+        1.75,
+        3.64
+       ]
+      },
+      {
+       "dpi": 122,
+       "page": 1,
+       "panel": 4,
+       "source_px": [
+        768,
+        576
+       ],
+       "printed_in": [
+        5.52,
+        4.73
+       ]
+      }
+     ],
+     "min_dpi": 122,
+     "warnings": [
+      "1 panel(s) below 150 DPI at a 6-inch print width: they will look blurry in print. Fine on screen.",
+      "3 panel(s) between 150 and 300 DPI: may look soft in print."
+     ],
+     "lettering": [
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 1,
+       "text_size": 22.0
+      },
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 2,
+       "text_size": 22.0
+      },
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 3,
+       "text_size": 22.0
+      },
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 4,
+       "text_size": 22.0
+      }
+     ],
+     "min_letter_pt": 9.5,
+     "min_letter_px": 44.0,
+     "print_width_in": 6.0
+    },
+    "png": {
+     "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+     "method": "local_resample",
+     "panels": [
+      {
+       "dpi": 211,
+       "page": 1,
+       "panel": 1,
+       "source_px": [
+        432,
+        768
+       ],
+       "printed_in": [
+        1.75,
+        3.64
+       ]
+      },
+      {
+       "dpi": 211,
+       "page": 1,
+       "panel": 2,
+       "source_px": [
+        432,
+        768
+       ],
+       "printed_in": [
+        1.75,
+        3.64
+       ]
+      },
+      {
+       "dpi": 211,
+       "page": 1,
+       "panel": 3,
+       "source_px": [
+        432,
+        768
+       ],
+       "printed_in": [
+        1.75,
+        3.64
+       ]
+      },
+      {
+       "dpi": 122,
+       "page": 1,
+       "panel": 4,
+       "source_px": [
+        768,
+        576
+       ],
+       "printed_in": [
+        5.52,
+        4.73
+       ]
+      }
+     ],
+     "min_dpi": 122,
+     "warnings": [
+      "1 panel(s) below 150 DPI at a 6-inch print width: they will look blurry in print. Fine on screen.",
+      "3 panel(s) between 150 and 300 DPI: may look soft in print."
+     ],
+     "lettering": [
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 1,
+       "text_size": 22.0
+      },
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 2,
+       "text_size": 22.0
+      },
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 3,
+       "text_size": 22.0
+      },
+      {
+       "pt": 9.5,
+       "px": 44.0,
+       "page": 1,
+       "panel": 4,
+       "text_size": 22.0
+      }
+     ],
+     "min_letter_pt": 9.5,
+     "min_letter_px": 44.0,
+     "print_width_in": 6.0
+    }
+   },
+   "timings_s": {
+    "cast": 2.1,
+    "sheet_review": 2.1,
+    "script": 4.2,
+    "pages": 6.3,
+    "export_pdf": 8.4,
+    "export_png": 10.5
+   },
+   "ledger": {
+    "by_stage": {
+     "bible": {
+      "calls": 1,
+      "usd": "0.003362",
+      "latency_ms": 4,
+      "unresolved": 0
+     },
+     "character_sheet": {
+      "calls": 6,
+      "usd": "0.756800",
+      "latency_ms": 157,
+      "unresolved": 0
+     },
+     "identity_visual": {
+      "calls": 4,
+      "usd": "0.008682",
+      "latency_ms": 24,
+      "unresolved": 0
+     },
+     "image_safety": {
+      "calls": 12,
+      "usd": "0.001404",
+      "latency_ms": 226,
+      "unresolved": 0
+     },
+     "intake": {
+      "calls": 1,
+      "usd": "0.000138",
+      "latency_ms": 7,
+      "unresolved": 0
+     },
+     "location_ref": {
+      "calls": 2,
+      "usd": "0.240840",
+      "latency_ms": 63,
+      "unresolved": 0
+     },
+     "moderation.bible": {
+      "calls": 1,
+      "usd": "0.000155",
+      "latency_ms": 4,
+      "unresolved": 0
+     },
+     "moderation.prompt": {
+      "calls": 1,
+      "usd": "0.000140",
+      "latency_ms": 6,
+      "unresolved": 0
+     },
+     "moderation.script": {
+      "calls": 1,
+      "usd": "0.000143",
+      "latency_ms": 4,
+      "unresolved": 0
+     },
+     "panel_generate": {
+      "calls": 4,
+      "usd": "0.581300",
+      "latency_ms": 50,
+      "unresolved": 0
+     },
+     "script": {
+      "calls": 1,
+      "usd": "0.004586",
+      "latency_ms": 6,
+      "unresolved": 0
+     },
+     "script_consistency": {
+      "calls": 1,
+      "usd": "0.000163",
+      "latency_ms": 6,
+      "unresolved": 0
+     },
+     "sheet_check": {
+      "calls": 2,
+      "usd": "0.000270",
+      "latency_ms": 13,
+      "unresolved": 0
+     },
+     "vision_qa": {
+      "calls": 4,
+      "usd": "0.000592",
+      "latency_ms": 20,
+      "unresolved": 0
+     }
+    },
+    "total_usd": "1.598575"
+   },
+   "panel_attempts": 4,
+   "repairs": 0,
+   "repairs_stopped_as_repeat": 0,
+   "needs_attention": 0,
+   "lettering_flags": {},
+   "mode": "SIMULATED"
+  }
+ ],
+ "total_usd": "3.049209"
+}

@@ -1,0 +1,312 @@
+{
+ "case": "dialogue-roadtrip",
+ "arm": "old",
+ "prompt": "Two siblings in a tiny car argue about directions on a desert road trip, until they realise the map is upside down. 1 page, lots of bickering dialogue, funny.",
+ "project_id": "1c5e49c3-0e0d-441c-b573-25d12e970ef9",
+ "cast_flags": [],
+ "script_issues": [],
+ "panel_status": [
+  "ok",
+  "ok",
+  "ok",
+  "ok"
+ ],
+ "status": "completed",
+ "print_quality": {
+  "pdf": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 211,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      432,
+      768
+     ],
+     "printed_in": [
+      1.75,
+      3.64
+     ]
+    },
+    {
+     "dpi": 211,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      432,
+      768
+     ],
+     "printed_in": [
+      1.75,
+      3.64
+     ]
+    },
+    {
+     "dpi": 211,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      432,
+      768
+     ],
+     "printed_in": [
+      1.75,
+      3.64
+     ]
+    },
+    {
+     "dpi": 122,
+     "page": 1,
+     "panel": 4,
+     "source_px": [
+      768,
+      576
+     ],
+     "printed_in": [
+      5.52,
+      4.73
+     ]
+    }
+   ],
+   "min_dpi": 122,
+   "warnings": [
+    "1 panel(s) below 150 DPI at a 6-inch print width: they will look blurry in print. Fine on screen.",
+    "3 panel(s) between 150 and 300 DPI: may look soft in print."
+   ],
+   "lettering": [
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 1,
+     "text_size": 22.0
+    },
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 2,
+     "text_size": 22.0
+    },
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 3,
+     "text_size": 22.0
+    },
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 4,
+     "text_size": 22.0
+    }
+   ],
+   "min_letter_pt": 9.5,
+   "min_letter_px": 44.0,
+   "print_width_in": 6.0
+  },
+  "png": {
+   "note": "Panels are resampled locally (Lanczos); this does not add detail.",
+   "method": "local_resample",
+   "panels": [
+    {
+     "dpi": 211,
+     "page": 1,
+     "panel": 1,
+     "source_px": [
+      432,
+      768
+     ],
+     "printed_in": [
+      1.75,
+      3.64
+     ]
+    },
+    {
+     "dpi": 211,
+     "page": 1,
+     "panel": 2,
+     "source_px": [
+      432,
+      768
+     ],
+     "printed_in": [
+      1.75,
+      3.64
+     ]
+    },
+    {
+     "dpi": 211,
+     "page": 1,
+     "panel": 3,
+     "source_px": [
+      432,
+      768
+     ],
+     "printed_in": [
+      1.75,
+      3.64
+     ]
+    },
+    {
+     "dpi": 122,
+     "page": 1,
+     "panel": 4,
+     "source_px": [
+      768,
+      576
+     ],
+     "printed_in": [
+      5.52,
+      4.73
+     ]
+    }
+   ],
+   "min_dpi": 122,
+   "warnings": [
+    "1 panel(s) below 150 DPI at a 6-inch print width: they will look blurry in print. Fine on screen.",
+    "3 panel(s) between 150 and 300 DPI: may look soft in print."
+   ],
+   "lettering": [
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 1,
+     "text_size": 22.0
+    },
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 2,
+     "text_size": 22.0
+    },
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 3,
+     "text_size": 22.0
+    },
+    {
+     "pt": 9.5,
+     "px": 44.0,
+     "page": 1,
+     "panel": 4,
+     "text_size": 22.0
+    }
+   ],
+   "min_letter_pt": 9.5,
+   "min_letter_px": 44.0,
+   "print_width_in": 6.0
+  }
+ },
+ "timings_s": {
+  "cast": 2.1,
+  "sheet_review": 2.1,
+  "script": 4.2,
+  "pages": 6.3,
+  "export_pdf": 8.4,
+  "export_png": 10.5
+ },
+ "ledger": {
+  "by_stage": {
+   "bible": {
+    "calls": 1,
+    "usd": "0.003362",
+    "latency_ms": 4,
+    "unresolved": 0
+   },
+   "character_sheet": {
+    "calls": 6,
+    "usd": "0.756800",
+    "latency_ms": 157,
+    "unresolved": 0
+   },
+   "identity_visual": {
+    "calls": 4,
+    "usd": "0.008682",
+    "latency_ms": 24,
+    "unresolved": 0
+   },
+   "image_safety": {
+    "calls": 12,
+    "usd": "0.001404",
+    "latency_ms": 226,
+    "unresolved": 0
+   },
+   "intake": {
+    "calls": 1,
+    "usd": "0.000138",
+    "latency_ms": 7,
+    "unresolved": 0
+   },
+   "location_ref": {
+    "calls": 2,
+    "usd": "0.240840",
+    "latency_ms": 63,
+    "unresolved": 0
+   },
+   "moderation.bible": {
+    "calls": 1,
+    "usd": "0.000155",
+    "latency_ms": 4,
+    "unresolved": 0
+   },
+   "moderation.prompt": {
+    "calls": 1,
+    "usd": "0.000140",
+    "latency_ms": 6,
+    "unresolved": 0
+   },
+   "moderation.script": {
+    "calls": 1,
+    "usd": "0.000143",
+    "latency_ms": 4,
+    "unresolved": 0
+   },
+   "panel_generate": {
+    "calls": 4,
+    "usd": "0.581300",
+    "latency_ms": 50,
+    "unresolved": 0
+   },
+   "script": {
+    "calls": 1,
+    "usd": "0.004586",
+    "latency_ms": 6,
+    "unresolved": 0
+   },
+   "script_consistency": {
+    "calls": 1,
+    "usd": "0.000163",
+    "latency_ms": 6,
+    "unresolved": 0
+   },
+   "sheet_check": {
+    "calls": 2,
+    "usd": "0.000270",
+    "latency_ms": 13,
+    "unresolved": 0
+   },
+   "vision_qa": {
+    "calls": 4,
+    "usd": "0.000592",
+    "latency_ms": 20,
+    "unresolved": 0
+   }
+  },
+  "total_usd": "1.598575"
+ },
+ "panel_attempts": 4,
+ "repairs": 0,
+ "repairs_stopped_as_repeat": 0,
+ "needs_attention": 0,
+ "lettering_flags": {},
+ "mode": "SIMULATED"
+}

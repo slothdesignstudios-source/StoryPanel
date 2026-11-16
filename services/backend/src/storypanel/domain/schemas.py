@@ -135,6 +135,9 @@ class CharacterVisual(Strict):
     outfit: str
     palette: dict[str, str]
     signature_features: list[str]
+    # Added with prompts v3; empty for characters designed earlier (their descriptions are unchanged).
+    silhouette: str = ""  # what makes the character recognisable as a solid shape
+    proportions: str = ""  # height in heads and size relative to the rest of the cast
 
 
 class CharacterSpec(Strict):
@@ -159,7 +162,8 @@ class CharacterSpec(Strict):
         parts.append(v.outfit)
         desc = ", ".join(p.strip().rstrip(".") for p in parts if p.strip())
         feats = ", ".join(f.strip() for f in v.signature_features)
-        return f"{desc}; signature features: {feats}"
+        shape = "; ".join(x.strip().rstrip(".") for x in (v.silhouette, v.proportions) if x.strip())
+        return f"{desc}; signature features: {feats}" + (f"; shape: {shape}" if shape else "")
 
 
 class CastDesign(Strict):
@@ -210,6 +214,10 @@ class PanelSpec(Strict):
     beats: list[str] = Field(default_factory=list)
     # Continuity rules the user decided do not apply to this panel (recorded, versioned).
     rule_exceptions: list[str] = Field(default_factory=list)
+    # Added with prompts v3 (empty in earlier scripts): what this panel changes for the reader, and
+    # the one thing the eye should land on. Both feed the panel's visual plan.
+    purpose: str = ""
+    focus: str = ""
 
 
 class PageSpec(Strict):
@@ -256,6 +264,11 @@ class PanelConsistency(Strict):
     panel: int  # 1-based
     rules: list[RuleVerdict]
     beats: list[BeatVerdict]
+    # Storytelling judgments (prompts v3; informational, never blocking): does the panel change
+    # something for the reader, and does its lettering only restate what the picture shows?
+    adds: Literal["yes", "no", "uncertain"] = "yes"
+    restates_art: bool = False
+    note: str = ""
 
 
 class ConsistencyConflict(Strict):
@@ -267,6 +280,9 @@ class ConsistencyConflict(Strict):
 class ScriptConsistencyReport(Strict):
     panels: list[PanelConsistency]
     conflicts: list[ConsistencyConflict]
+    # Does the last panel pay off the premise set up at the start? (prompts v3; informational)
+    payoff: Literal["yes", "weak", "no", "uncertain"] = "yes"
+    payoff_reason: str = ""
 
 
 class SheetCheckItem(Strict):
@@ -307,6 +323,7 @@ class CharacterObservation(Strict):
 class RequiredElement(Strict):
     rule_id: str
     visible: Literal["yes", "no", "uncertain"]
+    box: Box | None = None  # where it is drawn (prompts v3), so lettering can keep it clear
 
 
 class VisionQAReport(Strict):

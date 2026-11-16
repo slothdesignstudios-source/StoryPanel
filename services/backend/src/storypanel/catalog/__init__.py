@@ -97,7 +97,7 @@ def layout_version() -> str:
 
 
 # ------------------------------------------------------------------ prompts
-PROMPT_VERSION = "v2"  # v1 kept: earlier images record the version that drew them
+PROMPT_VERSION = "v3"  # v1 and v2 kept: earlier images record the version that drew them
 
 
 @lru_cache
