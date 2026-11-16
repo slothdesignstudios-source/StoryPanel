@@ -44,7 +44,10 @@ export function useProjectEvents(projectId: string, enabled: boolean, onEvent?: 
             signal: abort.signal,
             cache: "no-store",
           });
-          if (res.status === 401 || res.status === 404) return;
+          if (res.status === 401) return;
+          // A 404 here can be temporary (a proxy or a restarting API): keep retrying with backoff and
+          // refetch meanwhile, so the page never silently stops updating.
+          if (res.status === 404) { refresh(); throw new Error("stream 404"); }
           if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
           setState("live");
           attempt = 0;

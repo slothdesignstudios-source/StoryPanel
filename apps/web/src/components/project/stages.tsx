@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, Dialog, DialogClose, DialogContent, DialogTrigger, Field, Input, Notice, Select, Spinner, Textarea, cn } from "@/components/ui";
-import { ApiError, api, describeError } from "@/lib/api";
+import { ApiError, api, describeError, errorDetails, needsFreshReview } from "@/lib/api";
 import { wordCount } from "@/lib/text";
 import { STATUS_LABEL, type Character, type DialogueItem, type PanelSpec, type Project, type Script } from "@/lib/types";
 import { onIdentityReset, pk } from "@/lib/session";
@@ -237,6 +237,18 @@ function ReviewList({ items, acks, setAcks }: { items: NonNullable<ReviewItem>[]
   );
 }
 
+/** An error message plus each item it names (for example, every flagged sheet), so nothing is hidden. */
+function ErrorWithDetails({ error, fresh = false }: { error: unknown; fresh?: boolean }) {
+  const details = errorDetails(error);
+  return (
+    <>
+      {describeError(error)}
+      {details.length > 0 && <ul className="mt-1 list-inside list-disc text-sm">{details.map((d) => <li key={d}>{d}</li>)}</ul>}
+      {fresh && <p className="mt-1 text-xs">This page was out of date and has been reloaded. Click Approve again to review and confirm these items.</p>}
+    </>
+  );
+}
+
 type SheetItem = { item: string; note?: string; visible?: string; depicted_correctly?: string };
 
 /** The reference-sheet review: flags for the user to look at. Nothing is redrawn automatically. */
@@ -245,9 +257,11 @@ function SheetReview({ c, onFix }: { c: Character; onFix: (text: string) => void
   if (!check) return null;
   if (check.status === "pending") return <p className="text-sm text-muted" role="status">Reviewing the sheet against the design…</p>;
   if (check.status === "ok" && c.sheet_rules_current === false) return <Notice tone="warn" title="Reviewed against older rules">The continuity rules for {c.name} changed after this sheet was reviewed, so the new rules weren&apos;t checked against it. Look it over yourself; you&apos;ll be asked to confirm when you approve the cast.</Notice>;
-  if (check.status === "ok") return <p className="text-sm text-ok">Sheet reviewed: the listed features and rules look right.</p>;
   if (check.status === "unavailable") return <Notice tone="warn" title="Sheet not reviewed">The checking service didn&apos;t answer. Look over the sheet yourself; you&apos;ll be asked to confirm when you approve the cast.</Notice>;
   const problems = check.problems ?? [], unsure = check.uncertain ?? [];
+  const situational = (c.sheet_check as { situational?: SheetItem[] }).situational ?? [];
+  const aside = situational.length > 0 && <p className="mt-1 text-xs text-muted">Not checkable on a reference sheet (checked in the panels instead): {situational.map((p) => p.item.replace(/[.;:\s]+$/, "")).join("; ")}.</p>;
+  if (check.status === "ok") return <div><p className="text-sm text-ok">Sheet reviewed: the listed features and rules look right.</p>{aside}</div>;
   return (
     <Notice tone="warn" title="Please check this sheet">
       <ul className="list-inside list-disc space-y-1">
@@ -255,6 +269,7 @@ function SheetReview({ c, onFix }: { c: Character; onFix: (text: string) => void
         {unsure.map((p) => <li key={p.item}><b>{p.item}</b>: couldn&apos;t tell from the sheet</li>)}
         {(check.whole_figures === "no" || check.layout_unverified) && <li>A turnaround view may be cut off or missing.</li>}
       </ul>
+      {aside}
       {c.sheet_rules_current === false && <p className="mt-1 text-xs font-semibold">This review was made before the continuity rules changed.</p>}
       <p className="mt-1 text-xs">This review is a model&apos;s judgment and can be wrong. Revising redraws the sheet and costs 1 credit if it succeeds.</p>
     </Notice>
@@ -326,7 +341,7 @@ export function Cast({ project }: { project: Project }) {
   const approve = useMutation({
     mutationFn: async () => (await api.POST("/v1/projects/{project_id}/characters/approve", { ...path(project.id), body: { cast_version: project.cast_version, acknowledged: acks } })).data,
     onSuccess: refresh,
-    onError: (e) => { if (e instanceof ApiError && e.status === 409) refresh(); },
+    onError: (e) => { if ((e instanceof ApiError && e.status === 409) || needsFreshReview(e)) refresh(); },
   });
   const reviewing = project.characters.some((c) => (c.sheet_check as { status?: string } | null)?.status === "pending");
   const updating = project.characters.some((c) => c.revising || c.sheet_status !== "ready") || reviewing;
@@ -350,7 +365,7 @@ export function Cast({ project }: { project: Project }) {
               <DialogTrigger asChild><Button variant="primary" size="lg" busy={approve.isPending || waiting} disabled={updating || unsaved}>{waiting ? "Starting the script" : "Approve cast and write the script"}</Button></DialogTrigger>
               <DialogContent title="Approve with flagged sheets?" description="These sheets were flagged or couldn't be reviewed. Every panel is drawn from them, so problems here repeat across the comic. Confirm each one to approve anyway; your choice is recorded.">
                 <ReviewList items={reviews} acks={acks} setAcks={setAcks} />
-                {approve.isError && <Notice tone="danger" title="Couldn't approve">{describeError(approve.error)}</Notice>}
+                {approve.isError && <Notice tone="danger" title="Couldn't approve"><ErrorWithDetails error={approve.error} /></Notice>}
                 <div className="mt-4 flex justify-end gap-3">
                   <DialogClose asChild><Button variant="ghost">Go back and revise</Button></DialogClose>
                   <Button variant="primary" busy={approve.isPending} disabled={!allAcked} onClick={() => approve.mutate()}>Approve anyway</Button>
@@ -361,7 +376,7 @@ export function Cast({ project }: { project: Project }) {
           <p className="mt-1 text-xs text-muted">{reviewing ? "Reviewing the reference sheets…" : updating ? "Wait for the sheet to finish updating." : unsaved ? (draft.saving ? "Saving the Story Bible…" : "Save or discard your Story Bible and continuity rule changes first. Approval covers only what is saved.") : price ? `The cast (${price.cast} credits) has been charged; ${price.script} stay held for the script. A revision holds ${price.character_revision} and is charged only if the new sheet is delivered.` : "The script is already covered by the credits held at the start."}</p>
         </div>
       </div>
-      {approve.isError && <Notice tone="danger" title={approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "The cast changed since you opened this page" : "Couldn't approve the cast"}>{approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "We've loaded the latest version. Review it and approve again." : describeError(approve.error)}</Notice>}
+      {approve.isError && <Notice tone="danger" title={approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "The cast changed since you opened this page" : "Couldn't approve the cast"}>{approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "We've loaded the latest version. Review it and approve again." : <ErrorWithDetails error={approve.error} fresh={needsFreshReview(approve.error)} />}</Notice>}
       <ul className="grid gap-6 lg:grid-cols-2">
         {project.characters.map((c) => <li key={c.slug}><CharacterCard project={project} c={c} /></li>)}
       </ul>
@@ -481,7 +496,7 @@ export function ScriptReview({ project }: { project: Project }) {
   const approve = useMutation({
     mutationFn: async () => (await api.POST("/v1/projects/{project_id}/script/approve", { ...path(project.id), body: { script_version: script.version, acknowledged: acks } })).data,
     onSuccess: refresh,
-    onError: (e) => { if (e instanceof ApiError && e.status === 409) refresh(); },
+    onError: (e) => { if ((e instanceof ApiError && e.status === 409) || needsFreshReview(e)) refresh(); },
   });
   const issuesFor = (pi: number, ni: number, sev: "error" | "review" = "error") => script.issues.filter((i) => i.path.startsWith(`pages[${pi}].panels[${ni}]`) && (i.severity ?? "error") === sev).map((i) => i.message);
   const checking = script.consistency?.status === "pending";
@@ -542,7 +557,7 @@ export function ScriptReview({ project }: { project: Project }) {
                     <ReviewList items={review} acks={acks} setAcks={setAcks} />
                   </div>
                 )}
-                {approve.isError && <Notice tone="danger" title="Couldn't start">{approve.error instanceof ApiError && approve.error.code === "insufficient_credits" ? <>You don&apos;t have enough credits. <Link className="underline" href="/billing">Add credits</Link></> : describeError(approve.error)}</Notice>}
+                {approve.isError && <Notice tone="danger" title="Couldn't start">{approve.error instanceof ApiError && approve.error.code === "insufficient_credits" ? <>You don&apos;t have enough credits. <Link className="underline" href="/billing">Add credits</Link></> : <ErrorWithDetails error={approve.error} fresh={needsFreshReview(approve.error)} />}</Notice>}
                 <div className="mt-4 flex justify-end gap-3">
                   <DialogClose asChild><Button variant="ghost">Not yet</Button></DialogClose>
                   <Button variant="primary" busy={approve.isPending} disabled={!allAcked} onClick={() => approve.mutate()}>Approve and draw</Button>

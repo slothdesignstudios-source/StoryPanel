@@ -272,7 +272,9 @@ class ScriptConsistencyReport(Strict):
 class SheetCheckItem(Strict):
     item: str
     kind: Literal["signature_feature", "rule"]
-    visible: Literal["yes", "no", "uncertain"]
+    # "situational": a rule that only applies in a situation a reference sheet does not show
+    # (weather, place, time of day, an action). It is listed for information and never flags the sheet.
+    visible: Literal["yes", "no", "uncertain", "situational"]
     depicted_correctly: Literal["yes", "no", "uncertain"]
     note: str
 

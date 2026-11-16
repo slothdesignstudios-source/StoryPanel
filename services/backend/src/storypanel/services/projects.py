@@ -266,6 +266,11 @@ def panel_rules_current(qa_scores: dict[str, Any] | None, spec: dict[str, Any],
     return bool(qa_scores["rules_sha"] == consistency.rules_fingerprint(required))
 
 
+def _clause(text: str) -> str:
+    """A sentence used inside a longer message: no trailing full stop, so joins don't double it."""
+    return text.strip().rstrip(".;:").rstrip()
+
+
 def sheet_review(c: Character, cast_version: int = 0,
                  rules: list[ContinuityRule] | None = None) -> api.ReviewItem | None:  # fmt: skip
     """What approving the cast acknowledges for this character's current sheet, if anything."""
@@ -287,9 +292,10 @@ def sheet_review(c: Character, cast_version: int = 0,
         msg = f"{c.name}'s reference sheet wasn't reviewed (the checking service didn't answer)."
     else:
         bits = [
-            f"{p['item']}: {p.get('note') or 'not drawn as described'}" for p in check.get("problems", [])
+            f"{_clause(p['item'])}: {_clause(p.get('note') or 'not drawn as described')}"
+            for p in check.get("problems", [])
         ][:3]
-        bits += [f"{u['item']}: uncertain" for u in check.get("uncertain", [])][:2]
+        bits += [f"{_clause(u['item'])}: uncertain" for u in check.get("uncertain", [])][:2]
         if check.get("whole_figures") == "no" or check.get("layout_unverified"):
             bits.append("a turnaround view may be cut off")
         msg = f"{c.name}'s reference sheet was flagged: " + "; ".join(bits or ["see the sheet review"]) + "."

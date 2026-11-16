@@ -182,6 +182,12 @@ async def check_sheet(spec: CharacterSpec, rules: list[ContinuityRule], portrait
     asked = {t for _, t in items}
     found = [i for i in report.items if i.item in asked]
     missing = asked - {i.item for i in found}
+    # Only a continuity rule can be situational; a signature feature must always be on the sheet.
+    situational = [i.model_dump() for i in found if i.kind == "rule" and i.visible == "situational"
+                   and i.depicted_correctly != "no"]  # fmt: skip
+    # A signature feature marked situational, or a situational rule drawn wrong: judged normally.
+    found = [i.model_copy(update={"visible": "uncertain"}) if i.visible == "situational" else i
+             for i in found if i.model_dump() not in situational]  # fmt: skip
     problems = [i.model_dump() for i in found if "no" in (i.visible, i.depicted_correctly)]
     unsure = [
         i.model_dump()
@@ -194,5 +200,5 @@ async def check_sheet(spec: CharacterSpec, rules: list[ContinuityRule], portrait
     from storypanel.pipeline.art import rules_for_character
 
     return {"status": "flagged" if flagged else "ok", "problems": problems, "uncertain": unsure,
-            "rules_sha": rules_fingerprint(rules_for_character(rules, spec.id)),
+            "situational": situational, "rules_sha": rules_fingerprint(rules_for_character(rules, spec.id)),
             "whole_figures": report.whole_figures, "notes": report.notes[:4]}  # fmt: skip

@@ -506,3 +506,52 @@ async def test_beat_check_judges_panel_content_not_only_the_tag(monkeypatch: pyt
         assert content in sent["user"], content
     (issue,) = issues
     assert issue.code == "beat_not_expressed" and issue.severity == "review" and "twist" in issue.message
+
+
+# ------------------------------------------------------------------ situational rules on a reference sheet
+FOG = ContinuityRule(id="fog_lantern", text="Kiro carries a glowing lantern whenever out in the fog.",
+                     applies_to="character", target="kiro")  # fmt: skip
+
+
+async def _sheet(monkeypatch: pytest.MonkeyPatch, verdicts: list[dict[str, Any]]) -> dict[str, Any]:
+    from storypanel.domain.schemas import SheetCheckReport
+    from storypanel.providers import metering
+    from storypanel.providers.base import CallContext
+
+    async def structured(**_: Any) -> SheetCheckReport:
+        return SheetCheckReport.model_validate({"items": verdicts, "whole_figures": "yes", "notes": []})
+
+    monkeypatch.setattr(metering, "structured", structured)
+    return await consistency.check_sheet(spec(), [FOG], b"", b"", CallContext("sheet_check", "u", "p"))
+
+
+async def test_a_rule_whose_situation_a_sheet_cannot_show_does_not_flag_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ok = {
+        "item": "visor eye",
+        "kind": "signature_feature",
+        "visible": "yes",
+        "depicted_correctly": "yes",
+        "note": "",
+    }
+    fog = {"item": FOG.text, "kind": "rule", "visible": "situational", "depicted_correctly": "yes",
+           "note": "No fog on the sheet; the lantern glows in every view."}  # fmt: skip
+    r = await _sheet(monkeypatch, [ok, fog])
+    assert r["status"] == "ok" and r["situational"][0]["item"] == FOG.text and not r["uncertain"]
+    # drawn wrong where it is shown: still a problem
+    r = await _sheet(monkeypatch, [ok, {**fog, "depicted_correctly": "no", "note": "no lantern"}])
+    assert r["status"] == "flagged" and r["problems"][0]["item"] == FOG.text
+    # a signature feature cannot be excused as situational
+    r = await _sheet(monkeypatch, [{**ok, "visible": "situational"}, fog])
+    assert r["status"] == "flagged" and r["uncertain"][0]["item"] == "visor eye"
+
+
+def test_flag_message_does_not_double_punctuation() -> None:
+    from storypanel.services.projects import sheet_review
+
+    c = type("C", (), {"name": "Kiro", "slug": "kiro", "sheet_version": 1, "sheet_check": {
+        "sheet_version": 1, "status": "flagged", "checked_at": "t",
+        "problems": [{"item": FOG.text, "note": "The lantern is missing."}], "uncertain": []}})()  # fmt: skip
+    msg = sheet_review(c).message  # type: ignore[arg-type]
+    assert ".." not in msg and ".:" not in msg and msg.endswith("lantern is missing.")

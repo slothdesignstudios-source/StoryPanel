@@ -76,6 +76,17 @@ const middleware: Middleware = {
 export const api = createClient<paths>({ baseUrl: API_URL });
 api.use(middleware);
 
+/** The per-item reasons a validation error carries (for example, each flagged sheet), without duplicates. */
+export function errorDetails(error: unknown): string[] {
+  if (!(error instanceof ApiError)) return [];
+  return [...new Set(error.fields.map((f) => f.message).filter((m) => m && m !== error.message))];
+}
+
+/** A rejected approval whose confirmations no longer match: the page was out of date. */
+export function needsFreshReview(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 422 && error.fields.some((f) => f.field === "acknowledged");
+}
+
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   return "Something went wrong. Please try again.";
