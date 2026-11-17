@@ -285,7 +285,16 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
                    CharacterRef.sheet_version == Character.sheet_version,
                    Character.slug.in_([ch.id for ch in spec.characters])))).all()  # fmt: skip
         bible_now = await repo.latest_bible(db, project.id)
-        required = art.rules_for_panel(bible_now.continuity_rules if bible_now else [], spec)[0]
+        rules_now = bible_now.continuity_rules if bible_now else []
+        elements: list[tuple[str, str]] = []
+        if version.prompt_version in ("v1", "v2", "v3"):
+            required = art.rules_for_panel(rules_now, spec)[0]
+        else:  # checked against exactly what the prompt asked: exceptions, opposites and story timing applied
+            pr = art.effective_rules(rules_now, spec)
+            required = pr.must
+            elements = [(e.element, e.state) for e in spec.element_states] + [
+                (r.text, "contrary") for r in pr.contrary
+            ]
         ref_images: dict[str, bytes] = {}
         ref_vectors: dict[str, list[list[float]]] = {}
         identity_refs: dict[str, list[bytes]] = {}  # approved portrait + front view, for visual QA
@@ -301,8 +310,7 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
     outcome = await qa.evaluate_panel(image=image, panel=spec, cast=cast, audience=c["audience"], required=required,
                                       reference_images=ref_images,
                                       reference_embeddings=ref_vectors, identity_references=identity_refs,
-                                      elements=[(e.element, e.state) for e in spec.element_states]
-                                      if version.prompt_version not in ("v1", "v2", "v3") else [],
+                                      elements=elements,
                                       ctx=ctx)  # fmt: skip
     async with transaction() as db:
         version = (await db.execute(select(PanelVersion).where(PanelVersion.id == version_id)
@@ -435,6 +443,57 @@ async def page_doc(db: Any, page: Page, panels: list[Panel], *, watermark: bool,
     return render.PageDoc(template.page, tuple(docs), style.font, style.sfx_font, watermark)
 
 
+def letter_panel(*, spec: PanelSpec, rect: tuple[float, float, float, float], page_size: tuple[float, float],
+                 scores: dict[str, Any], image_size: tuple[int, int] | None, prompt_version: str | None,
+                 kind: str | None, font: str, version_id: str | None,
+                 image: bytes | None = None) -> tuple[list[lettering.Placed], dict[str, Any]]:  # fmt: skip
+    """Place one panel's lettering from what the panel check located in its CURRENT image.
+
+    The check's boxes are fractions of the generated image; they are mapped through the same crop the
+    renderer applies (lettering.image_box_to_panel). A missing, malformed or out-of-range box is not
+    repaired: that character counts as not located, so overlaps with it are reported as uncertain.
+    The returned basis records what the placement was based on, so a later image (a regenerate or an
+    edit) can be recognised as making it stale."""
+    panel_size = (rect[2], rect[3])
+    problems: dict[str, str] = {}
+
+    def convert(boxes: Any, what: str) -> dict[str, dict[str, float]]:
+        out: dict[str, dict[str, float]] = {}
+        for key, box in (boxes or {}).items() if isinstance(boxes, dict) else []:
+            mapped, problem = lettering.image_box_to_panel(box, image_size, panel_size)
+            if problem:
+                problems[f"{what}:{key}"] = problem
+            if mapped is not None:
+                out[key] = mapped
+        return out
+
+    present = [ch.id for ch in spec.characters]
+    heads = {k: v for k, v in convert(scores.get("head_boxes"), "head").items() if k in present}
+    bodies = {k: v for k, v in convert(scores.get("body_boxes"), "body").items() if k in present}
+    props = convert(scores.get("prop_boxes"), "prop")
+    action = (
+        convert({"action": scores["action_box"]}, "action").get("action")
+        if scores.get("action_box")
+        else None
+    )
+    zone = None
+    if (
+        prompt_version not in (None, "v1", "v2") and kind != "edit"
+    ):  # the picture was asked to leave this space free
+        plan_zone = art.lettering_plan(spec, panel_size).zone
+        zone = dict(zip(("x", "y", "w", "h"), plan_zone, strict=True)) if plan_zone else None
+    placed = lettering.layout_panel(
+        panel_rect=rect, page_size=page_size, dialogue=[d.model_dump() for d in spec.dialogue],
+        characters=[ch.model_dump() for ch in spec.characters], head_boxes=heads, action_box=action,
+        body_boxes=bodies, prop_boxes=props, zone=zone, font=font,
+        detail=lettering.art_detail(image, rect[2], rect[3]) if image else None,
+    )  # fmt: skip
+    located = sorted(heads)
+    basis = {"version_id": version_id, "faces": "located" if located and len(located) == len(present) else
+             "partial" if located else "guessed", "located": located, "box_problems": problems}  # fmt: skip
+    return placed, basis
+
+
 async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
     """Place balloons for panels that have none yet, then render the page preview.
     Balloons a user has already edited are never recomputed."""
@@ -448,37 +507,49 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
         preset = project.style_preset or styles().default
         flags: list[str] = []
         for panel in panels:
-            has = (await db.execute(select(func.count()).select_from(Balloon).where(
-                Balloon.panel_id == panel.id))).scalar_one()  # fmt: skip
+            existing = list((await db.execute(select(Balloon).where(Balloon.panel_id == panel.id))).scalars())
             spec = PanelSpec.model_validate(panel.spec)
-            if has or not spec.dialogue:
+            current = str(panel.current_version_id) if panel.current_version_id else None
+            stale = [
+                x
+                for x in existing
+                if ((x.style or {}).get("basis") or {}).get("version_id") not in (None, current)
+            ]
+            if stale and not any(x.user_edited for x in existing):
+                # The picture changed (regenerated or edited) since these balloons were placed for it:
+                # nobody has touched them, so they are placed again for the new picture.
+                for x in existing:
+                    await db.delete(x)
+                await db.flush()
+                existing = []
+            elif stale:
+                # The user positioned them by hand: never moved, but the faces may have moved under them.
+                for x in stale:
+                    if "lettering_stale" not in (x.flags or []):
+                        x.flags = [*(x.flags or []), "lettering_stale"]
+                        flags.append("lettering_stale")
+            if existing or not spec.dialogue:
                 continue
             scores: dict[str, Any] = {}
-            zone = None
+            prompt_version, kind, image_size, version_id = None, None, None, None
             if panel.current_version_id:
-                row = (await db.execute(select(PanelVersion.qa_scores, PanelVersion.prompt_version, PanelVersion.kind)
-                                        .where(PanelVersion.id == panel.current_version_id))).one()  # fmt: skip
-                scores = row[0] or {}
-                if (
-                    row[1] not in ("v1", "v2") and row[2] != "edit"
-                ):  # the picture was asked to leave this space free
-                    _, _, rw, rh = panel_rect(page, panel)
-                    plan_zone = art.lettering_plan(spec, (rw, rh)).zone
-                    zone = dict(zip(("x", "y", "w", "h"), plan_zone, strict=True)) if plan_zone else None
-            placed = lettering.layout_panel(
-                panel_rect=panel_rect(page, panel), page_size=template.page,
-                dialogue=[d.model_dump() for d in spec.dialogue],
-                characters=[ch.model_dump() for ch in spec.characters],
-                head_boxes=scores.get("head_boxes"), action_box=scores.get("action_box"),
-                body_boxes=scores.get("body_boxes"), prop_boxes=scores.get("prop_boxes"), zone=zone,
-                font=styles().get(preset).font,
-            )  # fmt: skip
+                row = (await db.execute(
+                    select(PanelVersion.qa_scores, PanelVersion.prompt_version, PanelVersion.kind, Asset.width, Asset.height)
+                    .join(Asset, Asset.id == PanelVersion.image_asset_id)
+                    .where(PanelVersion.id == panel.current_version_id))).one()  # fmt: skip
+                scores, prompt_version, kind = row[0] or {}, row[1], row[2]
+                image_size = (row[3], row[4]) if row[3] and row[4] else None
+                version_id = str(panel.current_version_id)
+            placed, basis = letter_panel(spec=spec, rect=panel_rect(page, panel), page_size=template.page,
+                                         scores=scores, image_size=image_size, prompt_version=prompt_version,
+                                         kind=kind, font=styles().get(preset).font, version_id=version_id)  # fmt: skip
             for b in placed:
                 flags += b.flags
                 db.add(Balloon(project_id=project.id, panel_id=panel.id, order_index=b.index,
                                type=b.type, speaker_id=b.speaker, text=b.text,
                                moderated_sha=moderation.text_sha(b.text),  # moderated with the script
-                               geometry=b.geometry(styles().get(preset).font), flags=b.flags))  # fmt: skip
+                               geometry=b.geometry(styles().get(preset).font), flags=b.flags,
+                               style={"basis": basis}))  # fmt: skip
         await db.flush()
         for flag in flags:
             metrics.lettering_flags.labels(flag).inc()
@@ -542,6 +613,21 @@ async def stage_end(project_id: uuid.UUID, *, status: str, code: str, message: s
 
 
 # ------------------------------------------------------------------ export
+def _export_flags(b: Balloon, version_id: str | None) -> list[str]:
+    """A balloon's flags, plus "lettering_stale" when it was placed for a different picture than the one
+    being exported (a version restored in the editor doesn't re-run lettering)."""
+    flags = list(b.flags or [])
+    placed_for = ((b.style or {}).get("basis") or {}).get("version_id")
+    if (
+        placed_for is not None
+        and version_id is not None
+        and placed_for != version_id
+        and "lettering_stale" not in flags
+    ):
+        flags.append("lettering_stale")
+    return flags
+
+
 async def snapshot_revision(db: Any, project: Project) -> dict[str, Any]:
     """Freeze everything an export needs. Later edits cannot change this document."""
     plan = await repo.owner_plan(db, project.owner_id)
@@ -559,8 +645,8 @@ async def snapshot_revision(db: Any, project: Project) -> dict[str, Any]:
                                               .order_by(Balloon.order_index))).scalars())  # fmt: skip
             panel_docs.append({
                 "rect": list(panel_rect(page, panel)), "version_id": version_id,
-                "balloons": [{"type": b.type, "text": b.text, "geometry": b.geometry,
-                              "order_index": b.order_index, "flags": list(b.flags or [])} for b in balloons]})  # fmt: skip
+                "balloons": [{"type": b.type, "text": b.text, "geometry": b.geometry, "order_index": b.order_index,
+                              "flags": _export_flags(b, version_id)} for b in balloons]})  # fmt: skip
         pages.append({"index": page.index, "size": list(template.page), "panels": panel_docs})
     return {"title": project.title, "edit_version": project.edit_version, "font": style.font,
             "sfx_font": style.sfx_font, "watermark": plan == "free", "pages": pages}  # fmt: skip
@@ -702,8 +788,9 @@ EXPORT_FLAG_TEXT = {
     "sfx_covers_character": "a sound effect covers a character",
     "face_position_estimated": "possibly: a balloon may cover a face (faces weren't located automatically; please check)",
     "tail_target_estimated": "possibly: a tail may not point at its speaker (faces weren't located automatically)",
+    "lettering_stale": "possibly: the picture changed after these balloons were placed by hand; faces may have moved",
 }
-UNCERTAIN_FLAGS = frozenset({"face_position_estimated", "tail_target_estimated"})
+UNCERTAIN_FLAGS = frozenset({"face_position_estimated", "tail_target_estimated", "lettering_stale"})
 
 
 def lettering_problems(page_index: int, page: dict[str, Any]) -> list[dict[str, Any]]:

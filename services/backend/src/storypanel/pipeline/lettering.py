@@ -346,14 +346,67 @@ def default_head(position: str, panel: Rect) -> Rect:
 
 
 def _tail_tip(balloon: Rect, head: Rect) -> tuple[float, float]:
-    """Point at the mouth without entering the head box."""
+    """Point at the mouth and stop just outside the head, so the tail clearly reaches its speaker.
+    (It used to stop a fixed share of the head size short, which on a small, distant head left the
+    tip well away from it: the final Train panel.)"""
     bx, by = balloon[0] + balloon[2] / 2, balloon[1] + balloon[3] / 2
-    mx, my = head[0] + head[2] / 2, head[1] + head[3] * 0.7
+    # aim at the head's centre line where hair meets face: a tail from above then ends on the head,
+    # not beside it (Train p6, where a tail to the mouth line ended next to the sun)
+    mx, my = head[0] + head[2] / 2, head[1] + head[3] * (0.3 if by < head[1] else 0.7)
     dx, dy = mx - bx, my - by
     dist = math.hypot(dx, dy) or 1.0
-    # Stop just short of the head box, but always leave a visible tail.
-    reach = max(dist * 0.45, dist - max(head[2], head[3]) * 0.55)
+    gap = max(3.0, 0.08 * min(head[2], head[3]))
+    # where the line from the balloon to the mouth enters the head box
+    t_enter = 0.0
+    for lo, hi, start, delta in ((head[0], head[0] + head[2], bx, dx), (head[1], head[1] + head[3], by, dy)):
+        if abs(delta) > 1e-9:
+            t0, t1 = sorted(((lo - start) / delta, (hi - start) / delta))
+            t_enter = max(t_enter, t0)
+    reach = max(dist * 0.45, t_enter * dist - gap) if 0.0 < t_enter < 1.0 else dist * 0.45
     return (bx + dx / dist * reach, by + dy / dist * reach)
+
+
+def face_core(head: Rect) -> Rect:
+    """The part of a head box holding the eyes and mouth: below the crown (hair, hat)."""
+    return (head[0], head[1] + head[3] * 0.3, head[2], head[3] * 0.7)
+
+
+def crown(head: Rect) -> Rect:
+    return (head[0], head[1], head[2], head[3] * 0.3)
+
+
+def image_box_to_panel(box: Any, image_size: tuple[int, int] | None,
+                       panel_size: tuple[float, float]) -> tuple[dict[str, float] | None, str | None]:  # fmt: skip
+    """A box from the panel check is a fraction of the generated IMAGE; the renderer crops that image
+    to fill the panel (render._cover), so it must be mapped with the same crop. Returns (box as a
+    fraction of the panel, or None; a problem code, or None). Never guesses a fix for a bad box."""
+    try:
+        x, y, w, h = (float(box[k]) for k in ("x", "y", "w", "h"))
+    except (TypeError, KeyError, ValueError):
+        return None, "box_malformed"
+    if (
+        not all(math.isfinite(v) for v in (x, y, w, h))
+        or w <= 0
+        or h <= 0
+        or x < -0.01
+        or y < -0.01
+        or x + w > 1.02
+        or y + h > 1.02
+    ):
+        return None, "box_out_of_range"  # not a fraction of the image: wrong units or a bad answer
+    if not image_size or image_size[0] <= 0 or image_size[1] <= 0:
+        return {"x": x, "y": y, "w": w, "h": h}, "image_size_unknown"  # mapped as if uncropped
+    iw, ih = image_size
+    pw, ph = panel_size
+    scale = max(pw / iw, ph / ih)
+    rw, rh = iw * scale, ih * scale
+    left, top = (rw - pw) / 2, (rh - ph) / 2
+    x0, y0 = (x * rw - left) / pw, (y * rh - top) / ph
+    x1, y1 = ((x + w) * rw - left) / pw, ((y + h) * rh - top) / ph
+    x0, y0, x1, y1 = max(0.0, x0), max(0.0, y0), min(1.0, x1), min(1.0, y1)
+    if x1 <= x0 or y1 <= y0:
+        return None, "cropped_out"  # entirely in the part of the image the panel doesn't show
+    return {"x": x0, "y": y0, "w": x1 - x0, "h": y1 - y0}, None
 
 
 def layout_panel(
@@ -389,7 +442,10 @@ def layout_panel(
         if found is None:
             guessed.add(ch["id"])
         heads[ch["id"]] = found or default_head(ch.get("position", "center"), panel_rect)
-    no_go: list[Rect] = list(heads.values())  # guessed heads still steer placement, as before
+    # Faces (eyes, mouth) are avoided strongly; the crown (hair, hat) lightly, so a balloon may rest on
+    # hair when nothing else fits, as letterers do. Guessed heads still steer placement, as before.
+    no_go: list[Rect] = [face_core(z) for z in heads.values()]
+    crowns: list[Rect] = [crown(z) for z in heads.values()]
     # A guessed head is a script-based estimate: tested on real art it was often wrong, and steering by a
     # wider guess made placement worse. The wider area is used only to report possible overlaps.
     bands = [
@@ -431,6 +487,7 @@ def layout_panel(
                         cost = sum(overlap(ink, _ink_rect(q)) for q in placed) / (ink[2] * ink[3]) * 40.0
                         # sound effects sit near the action but not across faces or bodies
                         cost += sum(overlap(ink, z) for z in no_go) / (ink[2] * ink[3]) * 12.0
+                        cost += sum(overlap(ink, z) for z in crowns) / (ink[2] * ink[3]) * 3.0
                         cost += sum(overlap(ink, z) for z in bodies) / (ink[2] * ink[3]) * 4.0
                         if detail:
                             cost += _detail_under(detail, ink, panel_rect) * 1.5
@@ -447,7 +504,9 @@ def layout_panel(
                 sfx.flags.append("overlaps_lettering")
             ink_r = _ink_rect(sfx)
             if any(
-                overlap(ink_r, z) > 0.15 * z[2] * z[3] for k, z in heads.items() if k not in guessed
+                overlap(ink_r, face_core(z)) > 0.15 * z[2] * z[3] * 0.7
+                for k, z in heads.items()
+                if k not in guessed
             ) or any(overlap(ink_r, z) > 0.3 * ink_r[2] * ink_r[3] for z in bodies):
                 sfx.flags.append("sfx_covers_character")
             placed.append(sfx)
@@ -515,6 +574,7 @@ def layout_panel(
                     cy = y0 + (y1 - y0) * iy / steps
                     rect = (cx, cy, w, h)
                     cost = sum(overlap(rect, z) for z in no_go) / (w * h) * 12.0
+                    cost += sum(overlap(rect, z) for z in crowns) / (w * h) * 3.0
                     cost += sum(overlap(rect, z) for z in props) / (w * h) * 10.0
                     cost += sum(overlap(rect, z) for z in bodies) / (w * h) * 4.0
                     if planned:
@@ -548,10 +608,24 @@ def layout_panel(
         sx, sy, sw, sh = safe_rect(page_size)
         w, h = min(w, sw), min(h, sh)
         cost, x, y = search(grow, w, h)
+        if grow == 0.0 and kind in ("speech", "thought") and cost > 0.5:
+            # The usual wide shape has no good place (a tall close-up): try narrower, taller shapes at
+            # the same text size, never smaller, and keep one only if it is clearly better.
+            for share in (0.45, 0.34):
+                nw, nh = _balloon_size(kind, text, font, size, pw * share - 8)
+                if nw > pw * share or nh > ph * 0.6:
+                    continue
+                nc, nx, ny = search(0.0, nw, nh)
+                if nc < cost - 0.3:
+                    cost, x, y, w, h = nc, nx, ny, nw, nh
         if cost >= 100.0:
             flags.append("reading_order")
         rect = (x, y, w, h)
-        if any(overlap(rect, z) > 0.15 * z[2] * z[3] for k, z in heads.items() if k not in guessed):
+        if any(
+            overlap(rect, face_core(z)) > 0.15 * z[2] * z[3] * 0.7
+            for k, z in heads.items()
+            if k not in guessed
+        ):
             flags.append("covers_face")
         elif any(overlap(rect, z) > 0.05 * w * h for z in bands):
             # where a face really is wasn't reported: an overlap can't be ruled out
