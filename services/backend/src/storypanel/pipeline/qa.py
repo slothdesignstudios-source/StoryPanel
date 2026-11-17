@@ -147,7 +147,7 @@ async def evaluate_panel(
     *, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec], audience: AgeRating,
     reference_images: dict[str, bytes], reference_embeddings: dict[str, list[list[float]]],
     ctx: CallContext, identity_references: dict[str, list[bytes]] | None = None,
-    required: list[ContinuityRule] | None = None,
+    required: list[ContinuityRule] | None = None, absent: list[str] | None = None,
 ) -> QAOutcome:  # fmt: skip
     s = get_settings()
     required = required or []
@@ -169,6 +169,10 @@ async def evaluate_panel(
     if required:
         spec_lines.append("Required elements (report each by rule id):")
         spec_lines += [f"- {r.id}: {r.text}" for r in required]
+    absent = [a for a in (absent or []) if a.strip()]
+    if absent:
+        spec_lines.append("Must NOT be visible yet, the story reveals them later (report each by number):")
+        spec_lines += [f"- {n}: {a}" for n, a in enumerate(absent, start=1)]
     report = await metering.structured(
         role="vision",
         system=render_prompt("vision_qa"),
@@ -192,6 +196,7 @@ async def evaluate_panel(
                     for c in expected
                 ],
                 "required_rules": [r.id for r in required],
+                "absent": absent,
             },
         ),  # fmt: skip
     )
@@ -215,6 +220,12 @@ async def evaluate_panel(
             problems.append(f"rule_missing:{r.id}")
         elif verdict == "uncertain":
             problems.append(f"rule_uncertain:{r.id}")
+    # Something the story reveals later is in the picture: the reveal would be spoiled. Only a clear
+    # "yes" counts; an unsure or missing answer is not evidence either way.
+    seen_absent = {e.number: e.visible for e in report.absent_elements}
+    for n, _ in enumerate(absent, start=1):
+        if seen_absent.get(n) == "yes":
+            problems.append(f"shown_too_early:{n}")
     ratings: list[int] = []
     for ch in expected:
         o = observed.get(ch.id)
@@ -278,6 +289,11 @@ async def evaluate_panel(
         if p.startswith("rule_missing:") and p.split(":", 1)[1] in by_rule:
             notes.append(f"Draw this clearly: {by_rule[p.split(':', 1)[1]].text}")
     for p in problems:
+        if p.startswith("shown_too_early:"):
+            notes.append(
+                f"Remove {absent[int(p.split(':')[1]) - 1]} from this panel: it must not be visible yet."
+            )
+    for p in problems:
         if p.startswith("identity_embedding:") and not notes:
             notes.append(f"Match {cast[p.split(':')[1]].name} to the reference image exactly.")
     for f in (identity.get("report") or {}).get("characters", []):
@@ -323,6 +339,7 @@ ASPECT = {
     "identity_check_invalid": "identity", "identity_flagged_repair": "identity",
     "identity_flagged_manual_review": "identity", "no_reference": "identity", "unlocalised": "identity",
     "character_count": "composition", "anatomy": "composition", "stray_text": "composition",
+    "shown_too_early": "story",
 }  # fmt: skip
 SEVERITY = {"ok": 0, "not_checked": 1, "uncertain": 2, "defect": 3}
 
@@ -360,10 +377,14 @@ def actionable_notes(blocking: list[str], notes: list[str], *, panel: PanelSpec,
         name = cast[subject].name if subject in cast else subject
         if code == "missing" and name.lower() not in text:
             pos = next((c.position for c in expected if c.id == subject), "")
-            out.append(f"Draw {name}{' on the ' + pos if pos and pos != 'center' else ''}, as in the reference image.")
+            out.append(
+                f"Draw {name}{' on the ' + pos if pos and pos != 'center' else ''}, as in the reference image."
+            )
         elif code == "character_count" and "character" not in text:
             names = ", ".join(cast[c.id].name for c in expected) or "no characters"
-            out.append(f"Show exactly {len(expected)} character{'s' if len(expected) != 1 else ''} ({names}); no one else.")
+            out.append(
+                f"Show exactly {len(expected)} character{'s' if len(expected) != 1 else ''} ({names}); no one else."
+            )
         elif code == "action" and not out:
             out.append(f"Show this action clearly: {panel.action.strip().rstrip('.')}.")
         elif code == "stray_text" and "text" not in text and "letter" not in text:
@@ -387,7 +408,7 @@ QA_CATEGORY = {
     "identity_visual": "visual_mismatch", "identity_rating": "visual_mismatch", "features": "visual_mismatch",
     "identity_embedding": "visual_mismatch", "action": "visual_mismatch", "character_count": "visual_mismatch",
     "anatomy": "visual_mismatch", "stray_text": "visual_mismatch", "identity_flagged_repair": "visual_mismatch",
-    "missing": "missing", "rule_missing": "missing",
+    "missing": "missing", "rule_missing": "missing", "shown_too_early": "visual_mismatch",
     "identity_uncertain": "uncertain", "rule_uncertain": "uncertain", "identity_flagged_manual_review": "uncertain",
     "identity_unverified": "not_checked", "identity_check_invalid": "not_checked", "no_reference": "not_checked",
     "unlocalised": "not_checked",
@@ -417,6 +438,7 @@ def qa_reasons(qa_status: str | None, problems: list[str], *, names: dict[str, s
             "stray_text": "There is unwanted text in the picture",
             "missing": f"{who} isn't in the picture",
             "rule_missing": f"Not visible: {rules.get(subject, subject)}",
+            "shown_too_early": "Shows something the story reveals later",
             "identity_uncertain": f"Couldn't tell whether {who} matches the reference",
             "rule_uncertain": f"Couldn't tell whether this is visible: {rules.get(subject, subject)}",
             "identity_flagged_manual_review": "The identity check asked for a person to look",

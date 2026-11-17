@@ -106,6 +106,7 @@ def contact_sheet(tiles: list[tuple[str, bytes]], out: Path) -> None:
 async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
     from sqlalchemy import select, text
 
+    from storypanel import storage
     from storypanel.catalog import layouts, styles
     from storypanel.db.models import (
         Asset,
@@ -122,7 +123,6 @@ async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
     from storypanel.domain.schemas import StoryBible
     from storypanel.pipeline import art, render
     from storypanel.pipeline.stages_art import page_doc
-    from storypanel import storage
     from storypanel.services import repo
 
     for d in ("refs", "panels", "pages", "exports"):

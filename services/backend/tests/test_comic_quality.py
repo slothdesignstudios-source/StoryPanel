@@ -1,4 +1,4 @@
-"""Comic quality (prompts v3): the per-panel visual plan, reference purposes and limits, the
+"""Comic quality (prompts v3, frozen; v4 is in test_comic_quality_v4.py): the per-panel visual plan, reference purposes and limits, the
 lettering plan shared by the image prompt and the letterer, deterministic story checks, the
 storytelling judgments of the Story Bible check, QA aspects and bounded repair.
 
@@ -38,11 +38,18 @@ def char(cid: str, name: str, **visual: Any) -> CharacterSpec:
                    "signature_features": ["brass lantern", "round spectacles"], **visual}})  # fmt: skip
 
 
-INGRID = char("ingrid", "Ingrid", silhouette="tall and narrow with a lantern held out", proportions="about 7 heads tall")
+INGRID = char(
+    "ingrid", "Ingrid", silhouette="tall and narrow with a lantern held out", proportions="about 7 heads tall"
+)
 GULL = char("gull", "Gull", type="seagull", hair="none", outfit="none")
-LANTERN = ContinuityRule(id="lantern", text="Ingrid carries a brass lantern", applies_to="character", target="ingrid")
+LANTERN = ContinuityRule(
+    id="lantern", text="Ingrid carries a brass lantern", applies_to="character", target="ingrid"
+)
 LOCS = {"cliff": LocationSpec(id="cliff", name="Cliff path", description="A windy cliff path above the sea")}
-REFS = {"ingrid": {"three_quarter": "i3q", "portrait": "ip", "side": "iside"}, "gull": {"three_quarter": "g3q"}}
+REFS = {
+    "ingrid": {"three_quarter": "i3q", "portrait": "ip", "side": "iside"},
+    "gull": {"three_quarter": "g3q"},
+}
 
 
 def panel(**over: Any) -> PanelSpec:
@@ -59,7 +66,7 @@ def compile_(**kw: Any) -> art.CompiledPanel:
     args: dict[str, Any] = dict(panel=panel(), aspect="4:3", style_preset="clean_manga_warm",
                                 cast={"ingrid": INGRID, "gull": GULL}, locations=LOCS, character_refs=REFS,
                                 location_refs={"cliff": "loc"}, continuity=("prev", "prev-asset"), max_references=4,
-                                rules=[LANTERN], panel_size=(560.0, 420.0))  # fmt: skip
+                                rules=[LANTERN], panel_size=(560.0, 420.0), prompt_version="v3")  # fmt: skip
     return art.compile_panel(**{**args, **kw})
 
 
@@ -85,7 +92,13 @@ def test_new_comics_use_v3_and_v2_prompts_are_unchanged() -> None:
                            prompt_version="v2")  # fmt: skip
     assert v2.prompt_version == "v2"
     assert v2.prompt_sha256 == "7d9a19d6d6502f4b5e8c01ea9e163ffd0515262400224d5ea21fa8855190f931"
-    assert PROMPT_VERSION == "v3" and compile_().prompt_version == "v3"
+    assert PROMPT_VERSION == "v4"
+    # v3 is frozen too (comics made with it keep reproducible prompts): hashes recorded at cfa4534
+    assert compile_().prompt_version == "v3"
+    assert compile_().prompt_sha256 == "85d4fdac2e2835a20658abe00af762382fc7f80ddaec8a1c1f45820db3e40ec8"
+    assert compile_(fix_notes=("Draw the lantern.",)).prompt_sha256 == (
+        "86b29d3bf42492f60666366d39eaabcd0eedc59957a9467c557b5e569a05b527"
+    )
     with pytest.raises(AppError):
         compile_(prompt_version="v1")
 
@@ -114,9 +127,15 @@ def test_each_reference_image_is_labelled_with_its_purpose() -> None:
                                                        ("location", "cliff"), ("continuity", "prev")]  # fmt: skip
     assert "Image 1: Ingrid's identity (three-quarter view" in c.prompt
     assert "Image 2: Gull's identity" in c.prompt
-    assert "Image 3: the location, Cliff path: architecture, props, colours and light; not the camera angle" in c.prompt
+    assert (
+        "Image 3: the location, Cliff path: architecture, props, colours and light; not the camera angle"
+        in c.prompt
+    )
     # the previous panel keeps lighting and objects consistent but must not dictate the composition
-    assert "Image 4: the previous panel, only to keep lighting" in c.prompt and "new camera position and composition" in c.prompt
+    assert (
+        "Image 4: the previous panel, only to keep lighting" in c.prompt
+        and "new camera position and composition" in c.prompt
+    )
     assert "(as in image 1)" in c.prompt and "(as in image 2)" in c.prompt
     assert "Keep the characters' relative heights" in c.prompt
 
@@ -141,8 +160,14 @@ def test_reference_view_follows_the_shot() -> None:
     assert compile_(panel=panel(shot="wide")).references[0].view == "three_quarter"
 
 
-@pytest.mark.parametrize(("aspect", "words"), [("21:9", "very wide 21:9 frame: spread the subjects"),
-                                               ("1:1", "square 1:1 frame"), ("2:3", "tall 2:3 frame: use the height")])
+@pytest.mark.parametrize(
+    ("aspect", "words"),
+    [
+        ("21:9", "very wide 21:9 frame: spread the subjects"),
+        ("1:1", "square 1:1 frame"),
+        ("2:3", "tall 2:3 frame: use the height"),
+    ],
+)
 def test_framing_matches_the_real_panel_shape(aspect: str, words: str) -> None:
     assert words in compile_(aspect=aspect).prompt
 
@@ -159,7 +184,10 @@ def test_shot_labels_and_emphasis_change_the_composition() -> None:
 
 def test_corrections_keep_what_already_works() -> None:
     text = compile_(fix_notes=("Draw the lantern in Ingrid's right hand.",)).prompt
-    assert "Corrections from the review of the previous attempt (keep everything else that already matches" in text
+    assert (
+        "Corrections from the review of the previous attempt (keep everything else that already matches"
+        in text
+    )
     assert "- Draw the lantern in Ingrid's right hand." in text
 
 
@@ -174,7 +202,9 @@ def test_lettering_space_follows_the_speaker_and_the_amount_of_text() -> None:
     left = art.lettering_plan(panel(), (560, 420))
     assert left.zone is not None and left.zone[0] == 0.0 and left.zone[2] < 0.6
     assert "left side of the frame, above the speaker" in left.phrase and "1 balloon" in left.phrase
-    right = art.lettering_plan(panel(characters=[{"id": "ingrid", "position": "right", "pose": "p", "expression": "e"}]), (560, 420))
+    right = art.lettering_plan(
+        panel(characters=[{"id": "ingrid", "position": "right", "pose": "p", "expression": "e"}]), (560, 420)
+    )
     assert right.zone is not None and right.zone[0] > 0.4
     wordy = art.lettering_plan(panel(dialogue=[{"type": "speech", "speaker": "ingrid",
                                                 "text": "That bird has taken my lunch three days running and I am done."}]),
@@ -204,9 +234,13 @@ def test_letterer_uses_the_planned_space_and_keeps_props_clear() -> None:
     chars = [{"id": "ingrid", "position": "right"}]
     speech = [{"type": "speech", "speaker": "ingrid", "text": "Not again."}]
     zone = {"x": 0.45, "y": 0.0, "w": 0.55, "h": 0.3}
-    placed = lettering.layout_panel(panel_rect=RECT, page_size=(1000, 1500), dialogue=speech, characters=chars, zone=zone)[0]
+    placed = lettering.layout_panel(
+        panel_rect=RECT, page_size=(1000, 1500), dialogue=speech, characters=chars, zone=zone
+    )[0]
     zx, zy, zw, zh = RECT[0] + zone["x"] * RECT[2], RECT[1], zone["w"] * RECT[2], zone["h"] * RECT[3]
-    inside = lettering.overlap((placed.x, placed.y, placed.w, placed.h), (zx, zy, zw, zh)) / (placed.w * placed.h)
+    inside = lettering.overlap((placed.x, placed.y, placed.w, placed.h), (zx, zy, zw, zh)) / (
+        placed.w * placed.h
+    )
     assert inside > 0.9 and "covers_face" not in placed.flags
     # a required prop exactly where the balloon would go: the balloon moves off it
     prop = {"lantern": {"x": (placed.x - RECT[0]) / RECT[2], "y": (placed.y - RECT[1]) / RECT[3],
@@ -214,7 +248,9 @@ def test_letterer_uses_the_planned_space_and_keeps_props_clear() -> None:
     moved = lettering.layout_panel(panel_rect=RECT, page_size=(1000, 1500), dialogue=speech, characters=chars,
                                    zone=zone, prop_boxes=prop)[0]  # fmt: skip
     pr = lettering._abs(prop["lantern"], RECT)
-    assert pr is not None and lettering.overlap((moved.x, moved.y, moved.w, moved.h), pr) < 0.25 * pr[2] * pr[3]
+    assert (
+        pr is not None and lettering.overlap((moved.x, moved.y, moved.w, moved.h), pr) < 0.25 * pr[2] * pr[3]
+    )
     assert "covers_prop" not in moved.flags
 
 
@@ -258,7 +294,10 @@ def test_a_well_formed_strip_gets_no_story_warnings() -> None:
 
 
 def test_story_checks_find_repeats_lookalikes_flat_framing_and_a_missing_payoff() -> None:
-    same = panel(beats=["setup"], dialogue=[{"type": "speech", "speaker": "ingrid", "text": "I calculated you were hungry."}])
+    same = panel(
+        beats=["setup"],
+        dialogue=[{"type": "speech", "speaker": "ingrid", "text": "I calculated you were hungry."}],
+    )
     issues = story_checks(script(same, same.model_copy(update={"beats": ["development"]}),
                                  same.model_copy(update={"beats": ["turn"], "action": "Ingrid sighs"})), BEATS)  # fmt: skip
     codes = [i.code for i in issues]
@@ -294,14 +333,20 @@ def test_story_bible_check_storytelling_judgments_are_advice() -> None:
     issues = consistency.issues_from_report(report, s, [])
     codes = {i.code: i for i in issues}
     assert set(codes) >= {"panel_adds_nothing", "dialogue_restates_art", "weak_payoff"}
-    assert all(codes[c].severity == "warning" for c in ("panel_adds_nothing", "dialogue_restates_art", "weak_payoff"))
+    assert all(
+        codes[c].severity == "warning" for c in ("panel_adds_nothing", "dialogue_restates_art", "weak_payoff")
+    )
     assert "It repeats panel 1." in codes["panel_adds_nothing"].message
     assert "The gull simply leaves." in codes["weak_payoff"].message
     # a report without the new fields (older prompt) raises nothing extra
     plain = ScriptConsistencyReport.model_validate({"panels": [{"page": 1, "panel": 1, "rules": [], "beats": []}],
                                                     "conflicts": []})  # fmt: skip
-    assert not [i for i in consistency.issues_from_report(plain, s, []) if i.code in consistency.CONSISTENCY_CODES
-                and i.code in ("panel_adds_nothing", "dialogue_restates_art", "weak_payoff")]
+    assert not [
+        i
+        for i in consistency.issues_from_report(plain, s, [])
+        if i.code in consistency.CONSISTENCY_CODES
+        and i.code in ("panel_adds_nothing", "dialogue_restates_art", "weak_payoff")
+    ]
 
 
 # ------------------------------------------------------------------ QA aspects and repair
@@ -313,7 +358,12 @@ def report(**over: Any) -> VisionQAReport:
 
 def test_aspects_keep_story_elements_identity_and_composition_apart() -> None:
     a = qa.aspects(["action", "rule_uncertain:lantern", "identity_unverified:ingrid", "anatomy"])
-    assert a == {"story": "defect", "required_elements": "uncertain", "identity": "not_checked", "composition": "defect"}
+    assert a == {
+        "story": "defect",
+        "required_elements": "uncertain",
+        "identity": "not_checked",
+        "composition": "defect",
+    }
     assert qa.aspects([]) == {"story": "ok", "required_elements": "ok", "identity": "ok", "composition": "ok"}
     assert qa.aspects(["identity_uncertain:ingrid", "identity_visual:ingrid"])["identity"] == "defect"
 
@@ -339,5 +389,7 @@ def test_every_blocking_problem_gets_a_concrete_repair_note() -> None:
 def test_a_second_repair_of_the_same_problem_is_not_paid_for() -> None:
     assert qa.repeated_after_repair(["features:ingrid"], ["features:ingrid", "action"])
     assert not qa.repeated_after_repair(["features:ingrid", "anatomy"], ["features:ingrid"])  # something new
-    assert not qa.repeated_after_repair(["identity_uncertain:ingrid"], ["identity_uncertain:ingrid"])  # review only
+    assert not qa.repeated_after_repair(
+        ["identity_uncertain:ingrid"], ["identity_uncertain:ingrid"]
+    )  # review only
     assert not qa.repeated_after_repair([], ["action"])

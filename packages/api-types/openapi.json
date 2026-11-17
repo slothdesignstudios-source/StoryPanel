@@ -2138,6 +2138,13 @@
       "title": "Mood",
       "type": "string"
      },
+     "not_shown": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Not Shown",
+      "type": "array"
+     },
      "purpose": {
       "default": "",
       "title": "Purpose",

@@ -428,6 +428,7 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
         <Field label="What this panel adds" hint="New information, action, emotion or the payoff. Guides the drawing.">{(ids) => <Input {...ids} maxLength={200} value={panel.purpose ?? ""} onChange={(e) => onChange({ ...panel, purpose: e.target.value })} />}</Field>
         <Field label="Focal point" hint="The one thing the eye should land on.">{(ids) => <Input {...ids} maxLength={120} value={panel.focus ?? ""} onChange={(e) => onChange({ ...panel, focus: e.target.value })} />}</Field>
       </div>
+      <Field label="Not visible yet" hint="Things the story reveals later, kept out of this picture. One per line, up to 4.">{(ids) => <Textarea {...ids} className="min-h-12" value={(panel.not_shown ?? []).join("\n")} onChange={(e) => onChange({ ...panel, not_shown: e.target.value.split("\n").slice(0, 4).map((x) => x.slice(0, 120)) })} />}</Field>
       <div className="space-y-2">
         <p className="text-sm font-semibold">Lettering ({dialogue.length} of {maxBalloons})</p>
         {dialogue.map((d, i) => {

@@ -1336,6 +1336,8 @@ export interface components {
             location_id: string;
             /** Mood */
             mood: string;
+            /** Not Shown */
+            not_shown?: string[];
             /**
              * Purpose
              * @default

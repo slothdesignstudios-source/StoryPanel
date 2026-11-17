@@ -1,0 +1,5 @@
+{{ style_token }}. Edit the comic panel in image 1. Change requested: {{ instruction }}
+Keep the composition, setting and every character's design exactly as they are unless the change says otherwise.{% for c in characters %} {{ c.name }} must still match image {{ c.ref }}.{% endfor %}
+{% for r in must_rules %}Must still be clearly visible: {{ r }}
+{% endfor %}
+No text, letters, speech bubbles, captions or watermarks.

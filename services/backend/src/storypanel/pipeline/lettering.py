@@ -335,6 +335,7 @@ def layout_panel(
     captions = 0
     pad = min(pw, ph) * 0.03
     prev_key = -1.0
+    prev_rect: Rect | None = None  # the previous speech or thought balloon
 
     for index, item in enumerate(dialogue):
         kind, text = item["type"], " ".join(str(item["text"]).split())
@@ -413,39 +414,72 @@ def layout_panel(
             continue
 
         head = heads.get(speaker or "")
-        x0, x1 = px + pad - grow * pw, px + pw - w - pad + grow * pw
-        y0, y1 = py + pad - grow * ph, py + ph - h - pad
-        sx, sy, sw, sh = safe_rect(page_size)  # never into the print margin, even when breaking the border
+
+        def search(
+            grow: float,
+            w: float,
+            h: float,
+            head: Rect | None = head,
+            prev_key: float = prev_key,
+            prev_rect: Rect | None = prev_rect,
+        ) -> tuple[float, float, float]:
+            x0, x1 = px + pad - grow * pw, px + pw - w - pad + grow * pw
+            y0, y1 = py + pad - grow * ph, py + ph - h - pad
+            sx, sy, sw, sh = safe_rect(
+                page_size
+            )  # never into the print margin, even when breaking the border
+            x0, x1 = max(sx, x0), min(sx + sw - w, max(x0, x1))
+            y0, y1 = max(sy, y0), min(sy + sh - h, max(y0, y1))
+            steps = 14
+            best: tuple[float, float, float] | None = None
+            for iy in range(steps + 1):
+                for ix in range(steps + 1):
+                    cx = x0 + (x1 - x0) * ix / steps
+                    cy = y0 + (y1 - y0) * iy / steps
+                    rect = (cx, cy, w, h)
+                    cost = sum(overlap(rect, z) for z in no_go) / (w * h) * 12.0
+                    cost += sum(overlap(rect, z) for z in props) / (w * h) * 10.0
+                    cost += sum(overlap(rect, z) for z in bodies) / (w * h) * 4.0
+                    if planned:
+                        cost += (1.0 - overlap(rect, planned) / (w * h)) * 0.8
+                    if action:
+                        cost += overlap(rect, action) / (w * h) * 3.0
+                    cost += sum(overlap(rect, _ink_rect(p)) for p in placed) / (w * h) * 40.0
+                    cost += (cy - py) / ph * 1.2  # prefer the top of the panel
+                    if head:
+                        hx, hy = head[0] + head[2] / 2, head[1]
+                        cost += math.hypot(cx + w / 2 - hx, cy + h - hy) / math.hypot(pw, ph) * 2.0
+                        if cy + h > head[1] + head[3]:
+                            cost += 1.5  # balloons belong above the speaker, not across the body
+                    if reading_key(rect, panel_rect) <= prev_key + 0.02:
+                        cost += 100.0  # must read after the previous balloon
+                    elif (
+                        prev_rect is not None
+                        and cx + w / 2 < prev_rect[0] + prev_rect[2] / 2
+                        and cy < prev_rect[1] + prev_rect[3] * 0.6
+                    ):
+                        # left of the previous balloon (the speakers stand in reverse order): it must sit
+                        # clearly lower, or it is read first
+                        cost += 100.0
+                    if best is None or cost < best[0] - 1e-9:
+                        best = (cost, cx, cy)
+            assert best is not None
+            return best
+
+        sx, sy, sw, sh = safe_rect(page_size)
         w, h = min(w, sw), min(h, sh)
-        x0, x1 = max(sx, x0), min(sx + sw - w, max(x0, x1))
-        y0, y1 = max(sy, y0), min(sy + sh - h, max(y0, y1))
-        steps = 14
-        best: tuple[float, float, float] | None = None
-        for iy in range(steps + 1):
-            for ix in range(steps + 1):
-                cx = x0 + (x1 - x0) * ix / steps
-                cy = y0 + (y1 - y0) * iy / steps
-                rect = (cx, cy, w, h)
-                cost = sum(overlap(rect, z) for z in no_go) / (w * h) * 12.0
-                cost += sum(overlap(rect, z) for z in props) / (w * h) * 10.0
-                cost += sum(overlap(rect, z) for z in bodies) / (w * h) * 4.0
-                if planned:
-                    cost += (1.0 - overlap(rect, planned) / (w * h)) * 0.8
-                if action:
-                    cost += overlap(rect, action) / (w * h) * 3.0
-                cost += sum(overlap(rect, _ink_rect(p)) for p in placed) / (w * h) * 40.0
-                cost += (cy - py) / ph * 1.2  # prefer the top of the panel
-                if head:
-                    hx, hy = head[0] + head[2] / 2, head[1]
-                    cost += math.hypot(cx + w / 2 - hx, cy + h - hy) / math.hypot(pw, ph) * 2.0
-                    if cy + h > head[1] + head[3]:
-                        cost += 1.5  # balloons belong above the speaker, not across the body
-                if reading_key(rect, panel_rect) <= prev_key + 0.02:
-                    cost += 100.0  # must read after the previous balloon
-                if best is None or cost < best[0] - 1e-9:
-                    best = (cost, cx, cy)
-        assert best is not None
-        cost, x, y = best
+        cost, x, y = search(grow, w, h)
+        if grow == 0 and any(overlap((x, y, w, h), z) > 0.15 * z[2] * z[3] for z in heads.values()):
+            # No room inside the panel without covering a face: let the balloon cross the panel border
+            # into the gutter, as letterers do, rather than sit on a face.
+            c2, x2, y2 = search(BORDER_BREAK, w, h)
+
+            def face(r: Rect) -> float:
+                return sum(overlap(r, z) for z in heads.values())
+
+            if face((x2, y2, w, h)) < face((x, y, w, h)) and c2 < 100.0:
+                cost, x, y = c2, x2, y2
+                flags.append("breaks_border")
         if cost >= 100.0:
             flags.append("reading_order")
         rect = (x, y, w, h)
@@ -465,6 +499,7 @@ def layout_panel(
             flags.append("overlaps_lettering")  # the panel is too full: shown to the user to fix
         placed.append(Placed(index, kind, speaker, text, x, y, w, h, size, tail=tail, flags=flags))
         prev_key = reading_key(rect, panel_rect)
+        prev_rect = rect
     return placed
 
 

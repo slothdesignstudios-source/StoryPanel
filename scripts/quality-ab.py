@@ -39,7 +39,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "services/backend/src"))
-CASES = json.loads((ROOT / "evals/quality/quality-v1.json").read_text())
+CASES = json.loads((ROOT / "evals/quality/quality-v2.json").read_text())
 API = os.environ.get("SP_QUALITY_API", "http://127.0.0.1:8000")
 RUNS = ROOT / "evals/quality/runs"
 
@@ -55,7 +55,7 @@ TEXT_PER_COMIC, TEXT_PER_PANEL = Decimal("0.14"), Decimal("0.03")
 SHAPE = {  # characters, locations, panels: assumptions for the estimate, not limits
     "prop-lighthouse": (2, 2, 3), "twist-cat-fishbowl": (2, 2, 4), "action-apprentice": (1, 2, 5),
     "emotion-garden": (1, 2, 5), "dialogue-roadtrip": (2, 2, 5), "page-dragon-mail": (2, 3, 5),
-    "strip-robot-noodles": (2, 2, 4),
+    "strip-robot-noodles": (2, 2, 4), "reveal-train-ticket": (2, 2, 6), "reveal-tulips-garden": (1, 1, 5),
 }
 
 

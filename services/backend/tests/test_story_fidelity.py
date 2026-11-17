@@ -79,7 +79,10 @@ def test_must_rules_reach_every_panel_they_apply_to_and_only_those() -> None:
 
 def test_shot_and_climax_reach_the_prompt() -> None:
     close = compile_(panel(shot="close_up", emphasis="large"), [])
-    assert "Kiro's head and shoulders fill most of the frame" in close and "most important moment on the page" in close
+    assert (
+        "Kiro's head and shoulders fill most of the frame" in close
+        and "most important moment on the page" in close
+    )
     assert "Full figures, small enough that the surroundings" in compile_(panel(shot="wide"), [])
 
 

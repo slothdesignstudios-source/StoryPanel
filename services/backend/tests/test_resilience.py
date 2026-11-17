@@ -62,7 +62,11 @@ async def test_exhausted_quality_retries_become_needs_attention(client: Any, hea
                                       .group_by(PanelVersion.panel_id))).scalars().all()  # fmt: skip
         # first attempt + one repair; the same problems survived it, so the second repair is not paid for
         assert per_panel == [2, 2, 2, 2]
-        flagged = (await db.execute(select(PanelVersion.qa_scores).where(PanelVersion.attempt == 1))).scalars().all()
+        flagged = (
+            (await db.execute(select(PanelVersion.qa_scores).where(PanelVersion.attempt == 1)))
+            .scalars()
+            .all()
+        )
         assert all(f.get("repeated_after_repair") for f in flagged)
         notes = (await db.execute(select(PanelVersion.qa_scores))).scalars().first()
         assert notes["fix_notes"]

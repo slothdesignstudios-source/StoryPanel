@@ -157,8 +157,15 @@ def compile_panel(
                                  locations=locations, character_refs=character_refs, location_refs=location_refs,
                                  continuity=continuity, max_references=max_references, fix_notes=fix_notes,
                                  rules=rules)  # fmt: skip
+    if prompt_version == "v4":
+        return _compile_panel_v4(panel=panel, aspect=aspect, style_preset=style_preset, cast=cast, locations=locations,
+                                 character_refs=character_refs, location_refs=location_refs, continuity=continuity,
+                                 max_references=max_references, fix_notes=fix_notes, rules=rules,
+                                 panel_size=panel_size or (600.0, 600.0))  # fmt: skip
     if prompt_version != "v3":
-        raise AppError(ErrorCode.INVALID_STATE, f"Panel prompts {prompt_version} can't be compiled.", retryable=False)
+        raise AppError(
+            ErrorCode.INVALID_STATE, f"Panel prompts {prompt_version} can't be compiled.", retryable=False
+        )
     return _compile_panel_v3(panel=panel, aspect=aspect, style_preset=style_preset, cast=cast, locations=locations,
                              character_refs=character_refs, location_refs=location_refs, continuity=continuity,
                              max_references=max_references, fix_notes=fix_notes, rules=rules,
@@ -226,7 +233,9 @@ COMPOSITION_V3 = {
     "medium": "Characters framed from about the waist up, close enough to read faces and hands.",
     "close_up": "{who} head and shoulders fill most of the frame; keep the background simple.",
 }
-CLIMAX_V3 = " This is the most important moment on the page: the strongest, clearest composition, larger figures."
+CLIMAX_V3 = (
+    " This is the most important moment on the page: the strongest, clearest composition, larger figures."
+)
 
 
 def frame_words(aspect: str) -> str:
@@ -281,14 +290,16 @@ def lettering_plan(panel: PanelSpec, panel_size: tuple[float, float]) -> Letteri
     height = min(0.45, max(0.14, area / (pw * ph) / width))
     pct = int(round(height * 20) * 5)
     noun = "caption" if not sides else "balloon"
-    phrase = (f"keep the top {pct}% {where} free of faces, hands and important objects, with plain background "
-              f"there (sky, wall or floor) for {len(items)} {noun if len(items) == 1 else noun + 's'}")
+    phrase = (
+        f"keep the top {pct}% {where} free of faces, hands and important objects, with plain background "
+        f"there (sky, wall or floor) for {len(items)} {noun if len(items) == 1 else noun + 's'}"
+    )
     return LetteringPlan((x, 0.0, width, height), phrase, len(items))
 
 
 def _reference_slots(panel: PanelSpec, cast: dict[str, CharacterSpec], character_refs: dict[str, dict[str, str]],
                      location_refs: dict[str, str], continuity: tuple[str, str] | None,
-                     max_references: int) -> tuple[list[RefSlot], list[str]]:  # fmt: skip
+                     max_references: int, continuity_needs_no_location: bool = False) -> tuple[list[RefSlot], list[str]]:  # fmt: skip
     """Characters first (every drawn character needs one: never dropped silently), then the location,
     then the previous panel. Returns the slots and what was left out, with the reason."""
     view = view_for(panel)
@@ -310,7 +321,9 @@ def _reference_slots(panel: PanelSpec, cast: dict[str, CharacterSpec], character
             slots.append(RefSlot("location", panel.location_id, None, location_refs[panel.location_id]))
         else:
             omitted.append("location: no reference slot left after the characters")
-    if continuity:
+    if continuity and continuity_needs_no_location and panel.location_id in location_refs:
+        omitted.append("previous panel: not needed, the location reference anchors the setting")
+    elif continuity:
         if len(slots) < max_references:
             slots.append(RefSlot("continuity", continuity[0], None, continuity[1]))
         else:
@@ -350,7 +363,9 @@ def _compile_panel_v3(
         "pose": ch.pose.strip().rstrip("."), "expression": ch.expression.strip().rstrip("."),
     } for ch in panel.characters]  # fmt: skip
     who = (cast[panel.characters[0].id].name + "'s") if panel.characters else "The subject's"
-    composition = COMPOSITION_V3[panel.shot].format(who=who) + (CLIMAX_V3 if panel.emphasis == "large" else "")
+    composition = COMPOSITION_V3[panel.shot].format(who=who) + (
+        CLIMAX_V3 if panel.emphasis == "large" else ""
+    )
     focus = panel.focus.strip().rstrip(".")
     if not focus and panel.shot == "close_up" and panel.characters:
         focus = f"{cast[panel.characters[0].id].name}'s face"
@@ -423,3 +438,84 @@ def compile_repair_prompt(spec: CharacterSpec, style_preset: str, fix_notes: tup
     repaired figure is described in exactly the words every other prompt uses."""
     return render_prompt("repair", style_token=styles().get(style_preset).token, name=spec.name,
                          canonical_description=spec.canonical_description(), fix_notes=list(fix_notes))  # fmt: skip
+
+
+# ------------------------------------------------------------------ v4: reveals stay hidden
+def excepted_rules(rules: list[ContinuityRule], panel: PanelSpec) -> list[ContinuityRule]:
+    """Visual rules that would apply to this panel but that the user marked as not applying here."""
+    present = {c.id for c in panel.characters}
+    return [r for r in rules if r.visual and r.id in panel.rule_exceptions and (
+        r.applies_to == "every_panel"
+        or (r.applies_to == "character" and r.target in present)
+        or (r.applies_to == "location" and r.target == panel.location_id))]  # fmt: skip
+
+
+def _compile_panel_v4(
+    *, panel: PanelSpec, aspect: str, style_preset: str, cast: dict[str, CharacterSpec],
+    locations: dict[str, LocationSpec], character_refs: dict[str, dict[str, str]],
+    location_refs: dict[str, str], continuity: tuple[str, str] | None, max_references: int,
+    fix_notes: tuple[str, ...], rules: list[ContinuityRule] | None, panel_size: tuple[float, float],
+) -> CompiledPanel:  # fmt: skip
+    """v3's visual plan, plus what real comics showed was missing:
+    - things the story reveals later are named as not in this panel, and a rule the user excepted
+      for this panel is stated as not holding here (it used to be silently left out, so the
+      location reference, which shows the place in every state, won);
+    - when a panel differs from its location's usual state, the location reference is limited to
+      architecture and light;
+    - the previous panel is only sent when no location reference anchors the setting, so it can't
+      set the composition of every panel in a place."""
+    style = styles().get(style_preset)
+    slots, omitted = _reference_slots(panel, cast, character_refs, location_refs, continuity, max_references,
+                                      continuity_needs_no_location=True)  # fmt: skip
+    index = {(s.role, s.key): n + 1 for n, s in enumerate(slots)}
+    location = locations[panel.location_id]
+    excepted = excepted_rules(rules or [], panel)
+    not_shown = [x.strip().rstrip(".") for x in panel.not_shown if x.strip()]
+    differs = bool(not_shown) or any(r.applies_to == "location" for r in excepted)
+    purposes = []
+    for n, slot in enumerate(slots, start=1):
+        if slot.role == "character":
+            purposes.append({"n": n, "purpose": f"{cast[slot.key].name}'s identity ({VIEW_WORDS.get(slot.view or '', slot.view)}"
+                                                f" from the approved sheet): face, body, proportions, colours, outfit and "
+                                                "signature features; not the pose or the background"})  # fmt: skip
+        elif slot.role == "location":
+            purposes.append({"n": n, "purpose": (
+                f"the location, {location.name}: architecture and light only; plants, objects and their state as "
+                "described for this panel, not as in this image") if differs else (
+                f"the location, {location.name}: architecture, props, colours and light; not the camera angle or "
+                "the composition")})  # fmt: skip
+        else:
+            purposes.append({"n": n, "purpose": "the previous panel, only to keep lighting, time of day and the state of "
+                                                "objects consistent; choose a new camera position and composition for "
+                                                "this panel"})  # fmt: skip
+    characters = [{
+        "position_phrase": POSITION_PHRASES[ch.position], "name": cast[ch.id].name,
+        "canonical_description": cast[ch.id].canonical_description(), "ref": index.get(("character", ch.id)),
+        "pose": ch.pose.strip().rstrip("."), "expression": ch.expression.strip().rstrip("."),
+    } for ch in panel.characters]  # fmt: skip
+    who = (cast[panel.characters[0].id].name + "'s") if panel.characters else "The subject's"
+    composition = COMPOSITION_V3[panel.shot].format(who=who) + (
+        CLIMAX_V3 if panel.emphasis == "large" else ""
+    )
+    focus = panel.focus.strip().rstrip(".")
+    if not focus and panel.shot == "close_up" and panel.characters:
+        focus = f"{cast[panel.characters[0].id].name}'s face"
+    plan = lettering_plan(panel, panel_size)
+    must, prefer = rules_for_panel(rules or [], panel)
+    prompt = render_prompt(
+        "panel", "v4", style_token=style.token, references=purposes, purpose=panel.purpose.strip().rstrip("."),
+        shot=SHOT_WORDS[panel.shot], angle=panel.angle.strip().rstrip("."), frame=frame_words(aspect),
+        composition=composition, characters=characters, relative_scale=len(panel.characters) > 1,
+        action=panel.action.strip().rstrip("."), must_rules=[_rule_text(r) for r in must],
+        prefer_rules=[_rule_text(r) for r in prefer], exceptions=[r.text.strip().rstrip(".") for r in excepted],
+        not_shown=not_shown, location_description=location.description.strip().rstrip("."),
+        time_of_day=panel.time_of_day.strip().rstrip("."), mood=panel.mood.strip().rstrip(".").capitalize(),
+        focus=focus, fix_notes=list(fix_notes), lettering=plan.phrase,
+    )  # fmt: skip
+    inputs = {"kind": "panel", "characters": [
+        {"id": ch.id, "position": ch.position, "palette": cast[ch.id].visual.palette,
+         "signature_features": cast[ch.id].visual.signature_features}
+        for ch in panel.characters], "required_rules": [r.id for r in must], "not_shown": not_shown,
+        "excepted_rules": [r.id for r in excepted], "references_omitted": omitted,
+        "lettering_zone": list(plan.zone) if plan.zone else None}  # fmt: skip
+    return CompiledPanel(prompt, "v4", prompt_sha256(prompt), aspect, tuple(slots), inputs)

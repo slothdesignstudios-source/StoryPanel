@@ -57,6 +57,10 @@ class FakeControl:
     qa_fail_attempts: int = 0  # each panel fails QA on its first N attempts
     qa_fail_targets: set[str] = field(default_factory=set)  # these targets always fail QA
     no_panel_purpose: bool = False  # the fake script leaves purpose and focus empty (legacy-like)
+    script_not_shown: list[str] = field(default_factory=list)  # kept out of every panel but the last
+    shown_early_attempts: int = (
+        0  # things that must not be visible yet are judged visible on the first N attempts
+    )
     unsafe_targets: set[str] = field(default_factory=set)  # image safety blocks these
     unsafe_attempts: int = 0  # every image is unsafe on its first N attempts
     stray_text_targets: set[str] = field(default_factory=set)
@@ -304,6 +308,7 @@ class FakeTextProvider:
                     "action": f"{who[0]} offers a steaming bowl", "mood": "warm, cosy",
                     "purpose": f"Panel {k + 1} moves the story on" if not control.no_panel_purpose else "",
                     "focus": "the steaming bowl" if not control.no_panel_purpose else "",
+                    "not_shown": list(control.script_not_shown),
                     "emphasis": "large" if (p == climax_page and k == n_panels - 1
                                             and not strip) else "normal",
                     "dialogue": dialogue,
@@ -312,6 +317,7 @@ class FakeTextProvider:
         beats = (["setup", "development", "twist", "payoff"] if strip
                  else ["hook", "setup", "rising conflict", "climax", "resolution"])  # fmt: skip
         flat = [pn for pg in out_pages for pn in pg["panels"]]
+        flat[-1]["not_shown"] = []  # the reveal panel shows it
         for n, pn in enumerate(flat):  # every beat claimed by a panel, in order (two per panel if needed)
             pn["beats"] = [b for m, b in enumerate(beats) if m * len(flat) // len(beats) == n]
         if control.script_untagged_beat:
@@ -366,6 +372,8 @@ class FakeTextProvider:
                  "box": None if target in control.rule_uncertain_targets or ctx.attempt < control.rule_missing_attempts
                  else {"x": 0.56, "y": 0.5, "w": 0.12, "h": 0.14}}
                 for r in ctx.inputs.get("required_rules", [])],
+            "absent_elements": [{"number": n, "visible": "yes" if ctx.attempt < control.shown_early_attempts else "no"}
+                                for n, _ in enumerate(ctx.inputs.get("absent", []), start=1)],
         }  # fmt: skip
 
     def _consistency(self, ctx: CallContext, user: str) -> dict[str, Any]:

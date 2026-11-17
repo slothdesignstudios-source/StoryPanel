@@ -218,6 +218,8 @@ class PanelSpec(Strict):
     # the one thing the eye should land on. Both feed the panel's visual plan.
     purpose: str = ""
     focus: str = ""
+    # Added with prompts v4: things the story reveals later that must not be visible in this panel yet.
+    not_shown: list[str] = Field(default_factory=list)
 
 
 class PageSpec(Strict):
@@ -268,6 +270,7 @@ class PanelConsistency(Strict):
     # something for the reader, and does its lettering only restate what the picture shows?
     adds: Literal["yes", "no", "uncertain"] = "yes"
     restates_art: bool = False
+    reveals_early: bool = False  # prompts v4: shows something the beat sheet reveals later
     note: str = ""
 
 
@@ -326,6 +329,11 @@ class RequiredElement(Strict):
     box: Box | None = None  # where it is drawn (prompts v3), so lettering can keep it clear
 
 
+class AbsentElement(Strict):
+    number: int  # 1-based, as listed in the request
+    visible: Literal["yes", "no", "uncertain"]
+
+
 class VisionQAReport(Strict):
     character_count: int
     characters: list[CharacterObservation]
@@ -336,6 +344,8 @@ class VisionQAReport(Strict):
     fix_notes: list[str]
     # one entry per required visual continuity rule listed in the request
     required_elements: list[RequiredElement] = Field(default_factory=list)
+    # prompts v4: one entry per thing that must not be visible yet, by its number in the request
+    absent_elements: list[AbsentElement] = Field(default_factory=list)
 
 
 # Gemini visual identity QA: a categorical judgment from comparing the panel with the approved

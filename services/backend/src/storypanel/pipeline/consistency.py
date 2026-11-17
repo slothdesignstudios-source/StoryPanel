@@ -41,7 +41,7 @@ from storypanel.providers.base import CallContext, ImageInput
 CONSISTENCY_CODES = frozenset({
     "rule_violation", "rule_uncertain", "beat_not_expressed", "beat_uncertain", "rule_conflict",
     "consistency_incomplete", "consistency_unavailable", "panel_adds_nothing", "dialogue_restates_art",
-    "weak_payoff",
+    "weak_payoff", "reveal_too_early",
 })  # fmt: skip
 
 
@@ -83,6 +83,7 @@ async def check_script(script: ComicScript, beats: BeatSheet | None, rules: list
                 "characters": [c.id for c in p.characters],
                 "dialogue": [f"{d.type}{' ' + d.speaker if d.speaker else ''}: {d.text}" for d in p.dialogue],
                 "beats": p.beats, "rules": [r.id for r in musts if _applies(r, p)], "purpose": p.purpose,
+                "not_shown": p.not_shown,
                 "excepted": [r for r in p.rule_exceptions if r in by_id],
             })  # fmt: skip
     lines = ["Continuity rules (must hold where they apply):"]
@@ -95,6 +96,7 @@ async def check_script(script: ComicScript, beats: BeatSheet | None, rules: list
     for d in panels:
         lines.append(f"- page {d['page']} panel {d['panel']} at {d['location']}, drawn: {', '.join(d['characters']) or 'nobody'}; "
                      f"action: {d['action']}; " + (f"purpose: {d['purpose']}; " if d["purpose"] else "")
+                     + (f"kept out of view until later: {', '.join(d['not_shown'])}; " if d["not_shown"] else "")
                      + f"lettering: {' | '.join(d['dialogue']) or 'none'}; "
                      f"claims beats: {', '.join(d['beats']) or 'none'}; check rules: {', '.join(d['rules']) or 'none'}")  # fmt: skip
     report = await metering.structured(
@@ -147,6 +149,10 @@ def issues_from_report(report: ScriptConsistencyReport, script: ComicScript,
             out.append(ScriptIssue(code="panel_adds_nothing", path=path, severity="warning",
                                    message=f"{where}doesn't seem to change anything for the reader.{note} Give it new "
                                            "information, action or emotion, or merge it with a neighbour."))  # fmt: skip
+        if pc.reveals_early:
+            out.append(ScriptIssue(code="reveal_too_early", path=path, severity="warning",
+                                   message=f"{where}already shows what the story reveals later.{note} Keep it out of this "
+                                           "panel (list it under “Not visible yet”) so the reveal still lands."))  # fmt: skip
         if pc.restates_art and panel.dialogue:
             out.append(ScriptIssue(code="dialogue_restates_art", path=f"{path}.dialogue", severity="warning",
                                    message=f"{where}the lettering only describes what the picture already shows.{note} "
@@ -185,14 +191,15 @@ def sheet_items(spec: CharacterSpec, rules: list[ContinuityRule]) -> list[tuple[
 
 
 async def check_sheet(spec: CharacterSpec, rules: list[ContinuityRule], portrait: bytes, turnaround: bytes,
-                      ctx: CallContext) -> dict[str, Any]:  # fmt: skip
+                      ctx: CallContext, expressions: bytes | None = None) -> dict[str, Any]:  # fmt: skip
     """Review result for one sheet version: status ok | flagged, with the item verdicts."""
     items = sheet_items(spec, rules)
     report = await metering.structured(
         role="vision", system=render_prompt("sheet_check"),
         user=f"Character: {spec.name}. Must show:\n" + "\n".join(f"- ({k}) {t}" for k, t in items),
         schema=SheetCheckReport,
-        images=(ImageInput(portrait, label="Hero portrait:"), ImageInput(turnaround, label="Turnaround sheet:")),
+        images=(ImageInput(portrait, label="Hero portrait:"), ImageInput(turnaround, label="Turnaround sheet:"),
+                *([ImageInput(expressions, label="Expression sheet (close-ups of the face):")] if expressions else [])),
         ctx=CallContext("sheet_check", ctx.user_id, ctx.project_id, target_id=spec.id, prompt_version=PROMPT_VERSION,
                         inputs={"items": [t for _, t in items], "character": spec.id}),
     )  # fmt: skip

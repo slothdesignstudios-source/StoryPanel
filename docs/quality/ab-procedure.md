@@ -1,4 +1,6 @@
-# Live A/B round 1: procedure (only after your approval)
+# Live A/B: procedure (only after your approval)
+
+Proposal: [`v4.md`](v4.md). Arm **old** is cfa4534 (prompts v3); arm **new** is this release (prompts v4).
 
 This runs on **your machine** with your live keys. This session has no connection to your computer.
 
@@ -18,10 +20,10 @@ cd ~/storypanel
 git fetch origin && git checkout --detach origin/main && git log -1 --oneline
 ```
 
-## Arm "old" (the release before prompts v3)
+## Arm "old" (prompts v3, what you run now)
 
 ```bash
-git worktree add --detach ~/storypanel-old fb4a1cc8e90973864b8995fdffaba897ccbe85f1
+git worktree add --detach ~/storypanel-old cfa4534b4eaaf1afbf3724d5045ef4d3b9ac668d
 ```
 
 ```bash
@@ -37,7 +39,7 @@ scripts/native-stack.sh stop-app
 ```
 
 ```bash
-scripts/live-env.sh services/backend/.venv/bin/python scripts/quality-ab.py run --run-id r1 --arm old --commit fb4a1cc8e90973864b8995fdffaba897ccbe85f1 --approve-usd 17.42 --cases prop-lighthouse,dialogue-roadtrip,twist-cat-fishbowl
+scripts/live-env.sh services/backend/.venv/bin/python scripts/quality-ab.py run --run-id v4ab --arm old --commit cfa4534b4eaaf1afbf3724d5045ef4d3b9ac668d --approve-usd 18.45 --cases reveal-train-ticket,reveal-tulips-garden,twist-cat-fishbowl
 ```
 
 Wait until it prints `arm old: 3 case(s) …`. Then stop the old app:
@@ -46,7 +48,7 @@ Wait until it prints `arm old: 3 case(s) …`. Then stop the old app:
 (cd ~/storypanel-old && scripts/native-stack.sh stop-app)
 ```
 
-## Arm "new" (prompts v3)
+## Arm "new" (prompts v4)
 
 ```bash
 rm -rf apps/web/.next
@@ -57,18 +59,18 @@ SP_STACK_LIVE=1 scripts/native-stack.sh start-app
 ```
 
 ```bash
-scripts/live-env.sh services/backend/.venv/bin/python scripts/quality-ab.py run --run-id r1 --arm new --commit "$(git rev-parse HEAD)" --approve-usd 17.42 --cases prop-lighthouse,dialogue-roadtrip,twist-cat-fishbowl
+scripts/live-env.sh services/backend/.venv/bin/python scripts/quality-ab.py run --run-id v4ab --arm new --commit "$(git rev-parse HEAD)" --approve-usd 18.45 --cases reveal-train-ticket,reveal-tulips-garden,twist-cat-fishbowl
 ```
 
 ## Blind review
 
 ```bash
-services/backend/.venv/bin/python scripts/quality-ab.py blind --run-id r1 --arms old,new
+services/backend/.venv/bin/python scripts/quality-ab.py blind --run-id v4ab --arms old,new
 ```
 
-1. Score `evals/quality/runs/r1/blind/*.png` with `evals/quality/criteria.md`. Fill in `review-form.csv`.
-2. Only then open `evals/quality/runs/r1/key.json`.
-3. Send me the folder `evals/quality/runs/r1` (it has no keys). I'll write the comparison from it,
+1. Score `evals/quality/runs/v4ab/blind/*.png` with `evals/quality/criteria.md`. Fill in `review-form.csv`.
+2. Only then open `evals/quality/runs/v4ab/key.json`.
+3. Send me the folder `evals/quality/runs/v4ab` (it has no keys). I'll write the comparison from it,
    including every failure, repair count, timing and counted cost.
 
 **What can stop a case:**

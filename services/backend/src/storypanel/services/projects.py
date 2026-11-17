@@ -445,7 +445,8 @@ async def patch_script(db: AsyncSession, project: Project, body: api.PatchScript
     bible = await repo.latest_bible(db, project.id)
     current = await repo.script_row(db, project.id, project.script_version)
     assert bible is not None and current is not None
-    text = " ".join(f"{p.action} " + " ".join(d.text for d in p.dialogue)
+    # every field that reaches an image prompt or the lettering is checked
+    text = " ".join(f"{p.action} {p.purpose} {p.focus} " + " ".join(p.not_shown) + " " + " ".join(d.text for d in p.dialogue)
                     for page in body.script.pages for p in page.panels)  # fmt: skip
     verdict = moderation.rule_check(text)
     if verdict is not None:
@@ -455,7 +456,8 @@ async def patch_script(db: AsyncSession, project: Project, body: api.PatchScript
         if bible.format.type is ComicFormat.WESTERN_PAGE else 1,
         character_ids=set((await repo.cast_specs(db, project.id)).keys()),
         location_ids={loc.id for loc in bible.locations}, limits=story.script_limits(bible),
-        beats=BeatSheet.model_validate(current.beats) if current.beats else None)  # fmt: skip
+        beats=BeatSheet.model_validate(current.beats) if current.beats else None,
+        rules=bible.continuity_rules)  # fmt: skip
     project.script_version += 1
     row = Script(project_id=project.id, version=project.script_version, beats=current.beats,
                  content=body.script.model_dump(), issues=[i.model_dump() for i in issues],

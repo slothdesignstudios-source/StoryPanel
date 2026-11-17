@@ -524,6 +524,13 @@ async def stage_script_unchecked(project_id: uuid.UUID, version: int) -> None:
         await events.notify_after_commit(db)
 
 
+def layout_flags_sheet(layout: dict[str, Any]) -> bool:
+    """Only the turnaround's views are identity references in panels. An expression sheet whose
+    close-ups fill their cells edge to edge can't be split automatically; that is not a defect of the
+    character, so it doesn't flag the sheet (it used to be reported as a cut-off turnaround view)."""
+    return (layout.get("turnaround") or {}).get("method") == "unverified"
+
+
 async def stage_check_sheet(project_id: uuid.UUID, slug: str) -> dict[str, Any]:
     """Review the current reference sheet of one character; flags are shown, nothing is redrawn."""
     async with transaction() as db:
@@ -535,23 +542,28 @@ async def stage_check_sheet(project_id: uuid.UUID, slug: str) -> dict[str, Any]:
             return {"outcome": "skipped"}
         refs = dict((await db.execute(select(CharacterRef.view, CharacterRef.asset_id).where(
             CharacterRef.character_id == char.id, CharacterRef.sheet_version == char.sheet_version,
-            CharacterRef.view.in_(("portrait", "turnaround_sheet"))))).all())  # fmt: skip
+            CharacterRef.view.in_(("portrait", "turnaround_sheet", "expression_sheet"))))).all())  # fmt: skip
         if "portrait" not in refs or "turnaround_sheet" not in refs:
             return {"outcome": "skipped"}
         portrait, turnaround = (await repo.asset_bytes(db, refs["portrait"]),
                                 await repo.asset_bytes(db, refs["turnaround_sheet"]))  # fmt: skip
+        # Close-ups of the face, so small facial details are judged where they are large enough to see.
+        expressions = (
+            await repo.asset_bytes(db, refs["expression_sheet"]) if "expression_sheet" in refs else None
+        )
         spec = CharacterSpec.model_validate(char.spec)
         bible = await repo.latest_bible(db, project_id)
         owner, version = project.owner_id, char.sheet_version
     result = await consistency.check_sheet(spec, bible.continuity_rules if bible else [], portrait, turnaround,
-                                           CallContext("sheet_check", str(owner), str(project_id), target_id=slug))  # fmt: skip
+                                           CallContext("sheet_check", str(owner), str(project_id), target_id=slug),
+                                           expressions=expressions)  # fmt: skip
     async with transaction() as db:
         char = (await db.execute(select(Character).where(Character.project_id == project_id,
                                                          Character.slug == slug).with_for_update())).scalar_one()  # fmt: skip
         if char.sheet_version != version:
             return {"outcome": "skipped"}  # a newer sheet replaced it meanwhile
         layout = (char.sheet_check or {}).get("layout") or {}
-        if any(r.get("method") == "unverified" for r in layout.values()):
+        if layout_flags_sheet(layout):
             result["status"] = "flagged"
             result["layout_unverified"] = True
         char.sheet_check = {"sheet_version": version, "layout": layout,

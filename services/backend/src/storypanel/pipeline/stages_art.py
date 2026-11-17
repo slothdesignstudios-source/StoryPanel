@@ -298,6 +298,7 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
     outcome = await qa.evaluate_panel(image=image, panel=spec, cast=cast, audience=c["audience"], required=required,
                                       reference_images=ref_images,
                                       reference_embeddings=ref_vectors, identity_references=identity_refs,
+                                      absent=list(spec.not_shown) if version.prompt_version not in ("v1", "v2", "v3") else [],
                                       ctx=ctx)  # fmt: skip
     async with transaction() as db:
         version = (await db.execute(select(PanelVersion).where(PanelVersion.id == version_id)
@@ -454,7 +455,9 @@ async def stage_letter_page(page_id: uuid.UUID) -> dict[str, Any]:
                 row = (await db.execute(select(PanelVersion.qa_scores, PanelVersion.prompt_version, PanelVersion.kind)
                                         .where(PanelVersion.id == panel.current_version_id))).one()  # fmt: skip
                 scores = row[0] or {}
-                if row[1] not in ("v1", "v2") and row[2] != "edit":  # the picture was asked to leave this space free
+                if (
+                    row[1] not in ("v1", "v2") and row[2] != "edit"
+                ):  # the picture was asked to leave this space free
                     _, _, rw, rh = panel_rect(page, panel)
                     plan_zone = art.lettering_plan(spec, (rw, rh)).zone
                     zone = dict(zip(("x", "y", "w", "h"), plan_zone, strict=True)) if plan_zone else None
@@ -553,7 +556,7 @@ async def snapshot_revision(db: Any, project: Project) -> dict[str, Any]:
             panel_docs.append({
                 "rect": list(panel_rect(page, panel)), "version_id": version_id,
                 "balloons": [{"type": b.type, "text": b.text, "geometry": b.geometry,
-                              "order_index": b.order_index} for b in balloons]})  # fmt: skip
+                              "order_index": b.order_index, "flags": list(b.flags or [])} for b in balloons]})  # fmt: skip
         pages.append({"index": page.index, "size": list(template.page), "panels": panel_docs})
     return {"title": project.title, "edit_version": project.edit_version, "font": style.font,
             "sfx_font": style.sfx_font, "watermark": plan == "free", "pages": pages}  # fmt: skip
@@ -634,7 +637,8 @@ async def stage_export_page(export_id: uuid.UUID, page_index: int) -> dict[str, 
             export.pages_done = {**(export.pages_done or {}), str(page_index): str(asset.id)}
             export.print_quality = merge_print_quality(export.print_quality, page_index, quality,
                                                       "external_upscale" if external_upscale else "local_resample",
-                                                      letters=lettering_sizes(page_index, page))  # fmt: skip
+                                                      letters=lettering_sizes(page_index, page),
+                                                      flagged=lettering_problems(page_index, page))  # fmt: skip
     for q in quality:
         metrics.provider_print_dpi.observe(q["dpi"])
     return {"skipped": False}
@@ -681,8 +685,29 @@ def lettering_sizes(page_index: int, page: dict[str, Any]) -> list[dict[str, Any
     return rows
 
 
+# Lettering problems worth a warning on the export, with what each needs from the user.
+EXPORT_FLAG_TEXT = {
+    "covers_face": "a balloon covers a face",
+    "covers_prop": "a balloon covers an important object",
+    "overflow": "text doesn't fit at a readable size",
+    "reading_order": "balloons may read out of order",
+    "overlaps_lettering": "lettering overlaps other lettering",
+}
+
+
+def lettering_problems(page_index: int, page: dict[str, Any]) -> list[dict[str, Any]]:
+    """Unresolved lettering flags per panel, from the export's own snapshot of the balloons."""
+    rows = []
+    for n, p in enumerate(page["panels"]):
+        flags = sorted({f for b in p["balloons"] for f in b.get("flags") or [] if f in EXPORT_FLAG_TEXT})
+        if flags:
+            rows.append({"page": page_index + 1, "panel": n + 1, "flags": flags})
+    return rows
+
+
 def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels: list[dict[str, Any]],
-                        method: str, letters: list[dict[str, Any]] | None = None) -> dict[str, Any]:  # fmt: skip
+                        method: str, letters: list[dict[str, Any]] | None = None,
+                        flagged: list[dict[str, Any]] | None = None) -> dict[str, Any]:  # fmt: skip
     from storypanel.pipeline.lettering import MIN_PRINT_PT
 
     lrows = [r for r in (current or {}).get("lettering", []) if r["page"] != page_index + 1] + (letters or [])
@@ -710,7 +735,15 @@ def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels:
                         f"{PRINT_WIDTH_IN:g}-inch print width, below the {MIN_PRINT_PT:g} pt readable size. Fine on "
                         f"screen. This page needs at least {needed:.1f} in of print width for its smallest text to "
                         f"reach {MIN_PRINT_PT:g} pt.")  # fmt: skip
-    return {"lettering": lrows, "min_letter_pt": min((r["pt"] for r in lrows), default=None),
+    frows = [r for r in (current or {}).get("lettering_flags", []) if r["page"] != page_index + 1] + (
+        flagged or []
+    )
+    frows.sort(key=lambda r: (r["page"], r["panel"]))
+    for r in frows:
+        what = "; ".join(EXPORT_FLAG_TEXT[f] for f in r["flags"])
+        warnings.append(f"Page {r['page']}, panel {r['panel']}: {what}. In the editor, move or shorten the balloon, "
+                        "or redraw the panel.")  # fmt: skip
+    return {"lettering": lrows, "lettering_flags": frows, "min_letter_pt": min((r["pt"] for r in lrows), default=None),
             "min_letter_px": min((r["px"] for r in lrows), default=None), "method": method, "print_width_in": PRINT_WIDTH_IN,
             "note": "Panels are resampled locally (Lanczos); this does not add detail." if method == "local_resample"
             else "Panels were upscaled by an external model.",

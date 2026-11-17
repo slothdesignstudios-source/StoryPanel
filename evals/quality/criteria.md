@@ -1,4 +1,4 @@
-# Comic quality criteria (quality-v1)
+# Comic quality criteria (quality-v1 and v2)
 
 These criteria are for **people** reading finished comics. A model may help (for example, by
 listing panels where a prop seems missing), but a model's score is never the evidence that quality
@@ -21,7 +21,7 @@ improved.
 | Criterion | 4 | 3 | 2 | 1 |
 |---|---|---|---|---|
 | **Story clarity**: can a new reader follow what happens? | Clear from the pictures alone; the lettering adds to it | Clear with the lettering; one moment needs a second look | One jump or unexplained change confuses | Can't tell what happens |
-| **Payoff**: does the ending use the setup? | The last panel lands a reveal or reversal that the first panels made possible | Ends on the premise, but softly | Generic ending (a shrug, everyone laughs) | No ending, or unrelated to the setup |
+| **Payoff**: does the ending use the setup? | The last panel lands a reveal or reversal that the first panels made possible, and nothing it reveals is visible earlier | Ends on the premise, but softly; or a small hint of the reveal shows early | Generic ending (a shrug, everyone laughs), or the reveal is plainly visible before it lands | No ending, or unrelated to the setup |
 | **Identity consistency**: the same characters throughout? | Every character instantly the same design in every panel | Small drift (a colour, an accessory) in one panel | A character is hard to recognise in a panel | A character becomes someone else |
 | **Prop continuity**: required props and states carry over? | Every required prop present, same shape and colour, in the right hands | One small deviation | A required prop missing or malformed once | Missing or changing repeatedly |
 | **Composition**: framing serves each panel? | Each panel's framing fits its moment; clear focal point; no two panels interchangeable | Mostly; one flat or redundant panel | Several panels look alike or cramped; focal point unclear | Panels are near-copies or unreadable |
