@@ -264,6 +264,12 @@ def _segment_hits(a: tuple[float, float], b: tuple[float, float], r: Rect, steps
                for t in range(1, steps))  # fmt: skip
 
 
+def _dist_to(pt: tuple[float, float], r: Rect) -> float:
+    dx = max(r[0] - pt[0], 0.0, pt[0] - (r[0] + r[2]))
+    dy = max(r[1] - pt[1], 0.0, pt[1] - (r[1] + r[3]))
+    return math.hypot(dx, dy)
+
+
 def overlap(a: Rect, b: Rect) -> float:
     w = min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])
     h = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
@@ -284,6 +290,53 @@ def _abs(box: dict[str, float] | None, panel: Rect) -> Rect | None:
     x = min(max(box["x"], 0.0), 1.0)
     y = min(max(box["y"], 0.0), 1.0)
     return (px + x * pw, py + y * ph, min(box["w"], 1 - x) * pw, min(box["h"], 1 - y) * ph)
+
+
+# ------------------------------------------------------------------ what the artwork shows
+DETAIL_GRID = 32
+
+
+def art_detail(image: bytes, panel_w: float, panel_h: float, n: int = DETAIL_GRID) -> list[list[float]]:
+    """How busy the panel's actual artwork is, as an n x n grid of 0..1 (0 = plain sky or wall, 1 =
+    the busiest part: faces, hands, props, texture). Computed locally from the stored image, cropped
+    exactly as the renderer crops it into the panel, so it lines up with the page. Free and
+    deterministic; a proxy for "important visual regions", not an object detector."""
+    import io
+
+    from PIL import Image, ImageFilter
+
+    with Image.open(io.BytesIO(image)) as raw:
+        img = raw.convert("L")
+    w, h = n * 6, max(1, round(n * 6 * panel_h / panel_w))
+    scale = max(w / img.width, h / img.height)
+    img = img.resize((max(w, round(img.width * scale)), max(h, round(img.height * scale))))
+    left, top = (img.width - w) // 2, (img.height - h) // 2
+    edges = img.crop((left, top, left + w, top + h)).filter(ImageFilter.FIND_EDGES)
+    cells = edges.resize((n, n), Image.Resampling.BOX)
+    values = list(cells.getdata())
+    top_v = sorted(values)[int(len(values) * 0.95)] or 1
+    return [[min(1.0, values[r * n + c] / top_v) for c in range(n)] for r in range(n)]
+
+
+def _detail_under(detail: list[list[float]], rect: Rect, panel: Rect) -> float:
+    """Mean busyness of the artwork under a rectangle (page units)."""
+    n = len(detail)
+    px, py, pw, ph = panel
+    c0 = max(0, int((rect[0] - px) / pw * n))
+    c1 = min(n, max(c0 + 1, int((rect[0] + rect[2] - px) / pw * n + 0.999)))
+    r0 = max(0, int((rect[1] - py) / ph * n))
+    r1 = min(n, max(r0 + 1, int((rect[1] + rect[3] - py) / ph * n + 0.999)))
+    cells = [detail[r][c] for r in range(r0, r1) for c in range(c0, c1)]
+    return sum(cells) / len(cells) if cells else 0.0
+
+
+def guessed_face_band(position: str, panel: Rect) -> Rect:
+    """Where a face may be when the check didn't report it: the upper part of the character's column
+    for its script position. Deliberately wide: a guess must not be treated as a known position."""
+    px, py, pw, ph = panel
+    cx = {"left": 0.22, "center": 0.5, "right": 0.78}.get(position, 0.5)
+    x0 = max(0.0, cx - 0.2)
+    return (px + x0 * pw, py + 0.05 * ph, (min(1.0, cx + 0.2) - x0) * pw, 0.6 * ph)
 
 
 def default_head(position: str, panel: Rect) -> Rect:
@@ -310,6 +363,7 @@ def layout_panel(
     body_boxes: dict[str, dict[str, float]] | None = None,
     prop_boxes: dict[str, dict[str, float]] | None = None,
     zone: dict[str, float] | None = None,
+    detail: list[list[float]] | None = None,
 ) -> list[Placed]:  # fmt: skip
     """Place every dialogue item of one panel. `dialogue` is in reading order.
 
@@ -320,13 +374,29 @@ def layout_panel(
     `prop_boxes` are required story elements the QA check located (the lantern, the key): kept clear
     almost as strongly as faces ("covers_prop" when that fails). `zone` is the lettering space the
     picture was asked to leave free (art.lettering_plan): balloons prefer it, but never at the cost
-    of a face, a prop or the reading order."""
+    of a face, a prop or the reading order.
+
+    `detail` is how busy the actual artwork is (art_detail): balloons prefer plain areas. It matters
+    most when the check didn't locate the faces: then their positions are only guessed from the
+    script ("left", "right"), and any overlap with a guessed face is reported as uncertain
+    ("face_position_estimated") rather than passed as clear. Balloons never leave the panel to avoid
+    a face; when no safe place exists the balloon is flagged for the user to fix."""
     px, py, pw, ph = panel_rect
     heads: dict[str, Rect] = {}
+    guessed: set[str] = set()  # faces whose position the check did not report
     for ch in characters:
-        heads[ch["id"]] = (_abs((head_boxes or {}).get(ch["id"]), panel_rect)
-                           or default_head(ch.get("position", "center"), panel_rect))  # fmt: skip
-    no_go: list[Rect] = list(heads.values())
+        found = _abs((head_boxes or {}).get(ch["id"]), panel_rect)
+        if found is None:
+            guessed.add(ch["id"])
+        heads[ch["id"]] = found or default_head(ch.get("position", "center"), panel_rect)
+    no_go: list[Rect] = list(heads.values())  # guessed heads still steer placement, as before
+    # A guessed head is a script-based estimate: tested on real art it was often wrong, and steering by a
+    # wider guess made placement worse. The wider area is used only to report possible overlaps.
+    bands = [
+        guessed_face_band(ch.get("position", "center"), panel_rect)
+        for ch in characters
+        if ch["id"] in guessed
+    ]
     bodies = [r for ch in characters if (r := _abs((body_boxes or {}).get(ch["id"]), panel_rect))]
     action = _abs(action_box, panel_rect)
     props = [r for b in (prop_boxes or {}).values() if (r := _abs(b, panel_rect))]
@@ -360,8 +430,10 @@ def layout_panel(
                         ink = ink_bounds(kind, text, g)
                         cost = sum(overlap(ink, _ink_rect(q)) for q in placed) / (ink[2] * ink[3]) * 40.0
                         # sound effects sit near the action but not across faces or bodies
-                        cost += sum(overlap(ink, z) for z in no_go) / (ink[2] * ink[3]) * 6.0
-                        cost += sum(overlap(ink, z) for z in bodies) / (ink[2] * ink[3]) * 1.5
+                        cost += sum(overlap(ink, z) for z in no_go) / (ink[2] * ink[3]) * 12.0
+                        cost += sum(overlap(ink, z) for z in bodies) / (ink[2] * ink[3]) * 4.0
+                        if detail:
+                            cost += _detail_under(detail, ink, panel_rect) * 1.5
                         cost += sum(overlap(ink, z) for z in props) / (ink[2] * ink[3]) * 6.0
                         cost += math.hypot(g["x"] - tx, g["y"] - ty) / math.hypot(pw, ph)
                         if cost < best_cost - 1e-9:
@@ -373,6 +445,11 @@ def layout_panel(
                          best_g["font_size"], rotation=-8.0)  # fmt: skip
             if any(overlap(_ink_rect(sfx), _ink_rect(q)) > 0 for q in placed):
                 sfx.flags.append("overlaps_lettering")
+            ink_r = _ink_rect(sfx)
+            if any(
+                overlap(ink_r, z) > 0.15 * z[2] * z[3] for k, z in heads.items() if k not in guessed
+            ) or any(overlap(ink_r, z) > 0.3 * ink_r[2] * ink_r[3] for z in bodies):
+                sfx.flags.append("sfx_covers_character")
             placed.append(sfx)
             continue
 
@@ -442,6 +519,8 @@ def layout_panel(
                     cost += sum(overlap(rect, z) for z in bodies) / (w * h) * 4.0
                     if planned:
                         cost += (1.0 - overlap(rect, planned) / (w * h)) * 0.8
+                    if detail:
+                        cost += _detail_under(detail, rect, panel_rect) * 3.0
                     if action:
                         cost += overlap(rect, action) / (w * h) * 3.0
                     cost += sum(overlap(rect, _ink_rect(p)) for p in placed) / (w * h) * 40.0
@@ -469,27 +548,28 @@ def layout_panel(
         sx, sy, sw, sh = safe_rect(page_size)
         w, h = min(w, sw), min(h, sh)
         cost, x, y = search(grow, w, h)
-        if grow == 0 and any(overlap((x, y, w, h), z) > 0.15 * z[2] * z[3] for z in heads.values()):
-            # No room inside the panel without covering a face: let the balloon cross the panel border
-            # into the gutter, as letterers do, rather than sit on a face.
-            c2, x2, y2 = search(BORDER_BREAK, w, h)
-
-            def face(r: Rect) -> float:
-                return sum(overlap(r, z) for z in heads.values())
-
-            if face((x2, y2, w, h)) < face((x, y, w, h)) and c2 < 100.0:
-                cost, x, y = c2, x2, y2
-                flags.append("breaks_border")
         if cost >= 100.0:
             flags.append("reading_order")
         rect = (x, y, w, h)
-        if any(overlap(rect, z) > 0.15 * z[2] * z[3] for z in heads.values()):
+        if any(overlap(rect, z) > 0.15 * z[2] * z[3] for k, z in heads.items() if k not in guessed):
             flags.append("covers_face")
-        elif any(overlap(rect, z) > 0.25 * z[2] * z[3] for z in props):
-            flags.append("covers_prop")  # a required story element is mostly hidden
-        elif any(overlap(rect, z) > 0.5 * w * h and overlap(rect, z) > 0.1 * z[2] * z[3] for z in bodies):
+        elif any(overlap(rect, z) > 0.05 * w * h for z in bands):
+            # where a face really is wasn't reported: an overlap can't be ruled out
+            flags.append("face_position_estimated")
+        if any(overlap(rect, z) > 0.25 * z[2] * z[3] for z in props):
+            flags.append("covers_prop")  # a required story element is mostly hidden (independent of faces)
+        elif "covers_face" not in flags and any(
+            overlap(rect, z) > 0.5 * w * h and overlap(rect, z) > 0.1 * z[2] * z[3] for z in bodies
+        ):
             flags.append("covers_subject")  # most of the balloon sits on a character
         tail = _tail_tip(rect, head) if head and kind in ("speech", "thought") else None
+        if tail is not None and speaker in heads:
+            others = [z for k, z in heads.items() if k != speaker]
+            to_speaker = _dist_to(tail, heads[speaker])
+            if speaker in guessed:
+                flags.append("tail_target_estimated")  # aimed at a guessed head position
+            elif any(_dist_to(tail, z) < to_speaker for z in others):
+                flags.append("tail_ambiguous")  # the tail ends nearer another character
         if tail is not None:  # a tail aimed at a speaker near the page edge stops inside the safe area
             sx, sy, sw, sh = safe_rect(page_size)
             tail = (min(max(tail[0], sx), sx + sw), min(max(tail[1], sy), sy + sh))

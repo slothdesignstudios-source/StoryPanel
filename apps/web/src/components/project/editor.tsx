@@ -241,6 +241,10 @@ const FLAG_LABELS: [string, string][] = [
   ["covers_subject", "Covers a character"],
   ["covers_prop", "Covers an important object"],
   ["reading_order", "Reads out of order"],
+  ["tail_ambiguous", "Tail points nearer another character"],
+  ["sfx_covers_character", "Sound effect covers a character"],
+  ["face_position_estimated", "May cover a face (faces weren't located; please check)"],
+  ["tail_target_estimated", "Tail may miss its speaker (faces weren't located; please check)"],
 ];
 
 

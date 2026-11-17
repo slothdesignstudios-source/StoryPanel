@@ -1,0 +1,20 @@
+{
+ "note": "Read off the existing artwork BY EYE (normalised to each panel), standing in for the panel check's head boxes, which are in the app's database and not in the PDF. Script positions and dialogue are as printed. Nothing here was produced by a model.",
+ "train": {"template": "w6_bottom_large", "panels": {
+  "1": {"characters": [["mira", "left"]], "dialogue": [["sfx", null, "CHUFF... CHUFF..."]],
+        "heads": {"mira": [0.13, 0.38, 0.17, 0.17]}, "bodies": {"teo_background": [0.30, 0.18, 0.18, 0.30]}},
+  "2": {"characters": [["mira", "left"], ["teo", "right"]],
+        "dialogue": [["speech", "teo", "Missed it again! Ha... sorry!"], ["speech", "mira", "It's... okay."]],
+        "heads": {"mira": [0.10, 0.18, 0.28, 0.37], "teo": [0.50, 0.02, 0.22, 0.30]}},
+  "3": {"characters": [["mira", "center"]], "dialogue": [["thought", "mira", "Every day, the same boy..."]],
+        "heads": {"mira": [0.25, 0.12, 0.50, 0.38]}, "props": {"sketchbook": [0.18, 0.55, 0.80, 0.37]}},
+  "4": {"characters": [["mira", "left"], ["teo", "right"]], "dialogue": [["speech", "teo", "Delayed! I can make it!"]],
+        "heads": {"mira": [0.05, 0.40, 0.32, 0.18], "teo": [0.58, 0.13, 0.30, 0.20]}},
+  "5": {"characters": [["mira", "center"]], "dialogue": [["speech", "mira", "Oh..."]],
+        "heads": {"mira": [0.25, 0.0, 0.50, 0.42]}, "props": {"ticket": [0.40, 0.80, 0.35, 0.12]}},
+  "6": {"characters": [["mira", "left"], ["teo", "right"]], "dialogue": [["speech", "mira", "Tomorrow... same table?"]],
+        "heads": {"mira": [0.24, 0.27, 0.06, 0.13], "teo": [0.88, 0.05, 0.06, 0.13]}}}},
+ "tulips": {"template": "w5_bottom_large", "panels": {
+  "3": {"characters": [["walter", "center"]], "dialogue": [["speech", "walter", "Oh... you remembered."]],
+        "heads": {"walter": [0.08, 0.0, 0.72, 0.58]}, "props": {"tulips": [0.62, 0.62, 0.38, 0.38]}}}}
+}

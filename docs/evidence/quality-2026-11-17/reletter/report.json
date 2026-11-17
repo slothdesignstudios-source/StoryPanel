@@ -1,0 +1,86 @@
+{
+ "train-guessed": {
+  "flags": [
+   {
+    "page": 1,
+    "panel": 2,
+    "flags": [
+     "face_position_estimated",
+     "tail_target_estimated"
+    ]
+   },
+   {
+    "page": 1,
+    "panel": 3,
+    "flags": [
+     "face_position_estimated",
+     "tail_target_estimated"
+    ]
+   },
+   {
+    "page": 1,
+    "panel": 4,
+    "flags": [
+     "face_position_estimated",
+     "tail_target_estimated"
+    ]
+   },
+   {
+    "page": 1,
+    "panel": 5,
+    "flags": [
+     "face_position_estimated",
+     "tail_target_estimated"
+    ]
+   },
+   {
+    "page": 1,
+    "panel": 6,
+    "flags": [
+     "face_position_estimated",
+     "tail_target_estimated"
+    ]
+   }
+  ],
+  "export_warnings": [
+   "Page 1, panel 2: possibly: a balloon may cover a face (faces weren't located automatically; please check); possibly: a tail may not point at its speaker (faces weren't located automatically).",
+   "Page 1, panel 3: possibly: a balloon may cover a face (faces weren't located automatically; please check); possibly: a tail may not point at its speaker (faces weren't located automatically).",
+   "Page 1, panel 4: possibly: a balloon may cover a face (faces weren't located automatically; please check); possibly: a tail may not point at its speaker (faces weren't located automatically).",
+   "Page 1, panel 5: possibly: a balloon may cover a face (faces weren't located automatically; please check); possibly: a tail may not point at its speaker (faces weren't located automatically).",
+   "Page 1, panel 6: possibly: a balloon may cover a face (faces weren't located automatically; please check); possibly: a tail may not point at its speaker (faces weren't located automatically)."
+  ]
+ },
+ "train-located": {
+  "flags": [
+   {
+    "page": 1,
+    "panel": 3,
+    "flags": [
+     "covers_face"
+    ]
+   }
+  ],
+  "export_warnings": [
+   "Page 1, panel 3: a balloon covers a face. In the editor: move the balloon, shorten the text, or redraw the panel to leave room."
+  ]
+ },
+ "tulips-guessed": {
+  "flags": [
+   {
+    "page": 1,
+    "panel": 3,
+    "flags": [
+     "face_position_estimated",
+     "tail_target_estimated"
+    ]
+   }
+  ],
+  "export_warnings": [
+   "Page 1, panel 3: possibly: a balloon may cover a face (faces weren't located automatically; please check); possibly: a tail may not point at its speaker (faces weren't located automatically)."
+  ]
+ },
+ "tulips-located": {
+  "flags": [],
+  "export_warnings": []
+ }
+}
