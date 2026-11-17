@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only quality dossier for ONE comic: everything needed to judge the comic itself.
 
+    scripts/live-env.sh services/backend/.venv/bin/python scripts/comic-dossier.py --list
     scripts/live-env.sh services/backend/.venv/bin/python scripts/comic-dossier.py <comic-id> OUT_DIR
 
 Writes into OUT_DIR (which must not exist yet):
@@ -205,6 +206,7 @@ async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
                                                    "geometry": b.geometry, "flags": b.flags} for b in balloons]})  # fmt: skip
             doc = await page_doc(db, page, panels, watermark=False, preset=preset)
             (out / "pages" / f"page-{page.index + 1}.png").write_bytes(render.render_page(doc, 2000))
+            pg["relettered_auto"] = await reletter_auto(db, page, panels, doc, preset, out)
             result["pages"].append(pg)
         for fmt in ("pdf", "png", "cbz"):
             ex = (await db.execute(select(Export).where(Export.project_id == pid, Export.format == fmt,
@@ -217,6 +219,45 @@ async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
     contact_sheet(tiles, out / "contact-sheet.png")
     result["review_flags"] = review_flags(result, bible)
     return result
+
+
+async def reletter_auto(db: Any, page: Any, panels: list[Any], doc: Any, preset: str, out: Path) -> list[dict[str, Any]]:
+    """Re-letter the page with the CURRENT code from what the panel checks stored (no hand-placed
+    faces, nothing written back): the automatic path on real records. Balloons a user edited are
+    shown as they are."""
+    from sqlalchemy import select
+
+    from storypanel.catalog import styles
+    from storypanel.db.models import Asset, Balloon, PanelVersion
+    from storypanel.domain.schemas import PanelSpec
+    from storypanel.pipeline import render
+    from storypanel.pipeline.stages_art import letter_panel, panel_rect
+    from storypanel.services import repo
+
+    report, docs = [], []
+    for panel, pdoc in zip(panels, doc.panels, strict=True):
+        spec = PanelSpec.model_validate(panel.spec)
+        edited = (await db.execute(select(Balloon.id).where(Balloon.panel_id == panel.id, Balloon.user_edited))).first()
+        if not spec.dialogue or edited or not panel.current_version_id:
+            docs.append(pdoc)
+            report.append({"panel": panel.index + 1, "skipped": "no lettering" if not spec.dialogue else
+                           "balloons edited by hand" if edited else "no picture"})  # fmt: skip
+            continue
+        v, w, h, asset_id = (await db.execute(
+            select(PanelVersion, Asset.width, Asset.height, Asset.id).join(Asset, Asset.id == PanelVersion.image_asset_id)
+            .where(PanelVersion.id == panel.current_version_id))).one()  # fmt: skip
+        placed, basis = letter_panel(spec=spec, rect=panel_rect(page, panel), page_size=doc.size, scores=v.qa_scores or {},
+                                     image_size=(w, h) if w and h else None, prompt_version=v.prompt_version, kind=v.kind,
+                                     font=styles().get(preset).font, version_id=str(v.id),
+                                     image=await repo.asset_bytes(db, asset_id))  # fmt: skip
+        balloons = tuple({"type": b.type, "text": b.text, "geometry": b.geometry(styles().get(preset).font),
+                          "order_index": b.index} for b in placed)  # fmt: skip
+        docs.append(render.PanelDoc(pdoc.rect, pdoc.image, balloons))
+        report.append({"panel": panel.index + 1, "faces": basis["faces"], "located": basis["located"],
+                       "box_problems": basis["box_problems"], "flags": [b.flags for b in placed]})  # fmt: skip
+    redone = render.PageDoc(doc.size, tuple(docs), doc.font, doc.sfx_font, doc.watermark)
+    (out / "pages" / f"page-{page.index + 1}-relettered-auto.png").write_bytes(render.render_page(redone, 2000))
+    return report
 
 
 def review_flags(result: dict[str, Any], bible: Any) -> list[dict[str, Any]]:
@@ -233,7 +274,27 @@ def review_flags(result: dict[str, Any], bible: Any) -> list[dict[str, Any]]:
     return [i.model_dump() for i in story_checks(script, beats, bible.continuity_rules)]
 
 
+async def list_comics() -> list[dict[str, Any]]:
+    """id, title, status and creation time of the comics in the LOCAL database (read-only). No emails
+    or account details are printed."""
+    from sqlalchemy import text
+
+    from storypanel.db.session import transaction
+
+    async with transaction() as db:
+        await db.execute(text("set transaction read only"))
+        rows = (await db.execute(text(
+            "select id, coalesce(title, '') as title, status, created_at from projects order by created_at desc limit 50"
+        ))).mappings().all()  # fmt: skip
+    return [dict(r) for r in rows]
+
+
 def main() -> int:
+    if len(sys.argv) == 2 and sys.argv[1] == "--list":
+        _local_only()
+        for r in asyncio.run(list_comics()):
+            print(f"{r['id']}  {str(r['created_at'])[:16]}  {r['status']:<20}  {r['title']}")
+        return 0
     if len(sys.argv) != 3:
         raise SystemExit(__doc__)
     pid, out = uuid.UUID(sys.argv[1]), Path(sys.argv[2])

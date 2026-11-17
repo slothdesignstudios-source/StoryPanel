@@ -1,5 +1,11 @@
 # Re-lettering the two real exported pages (no art regenerated, no provider calls)
 
+Every image is stamped at the top: **AUTOMATIC** (faces guessed from the script, as in the export) or
+**MANUAL** (face positions typed in by hand). MANUAL images show what the letterer does when faces are
+known; they are **not** output of the automatic pipeline. `*-reading-size.png` are 1000 px wide (normal
+reading size). `report.json` also measures, per balloon, how far its tail ends from the speaker's face
+and from the nearest other face.
+
 - `train-before-after.jpg`, `tulips-before-after.jpg`: left, your exported page as delivered; right, the
   same artwork re-lettered by the current code with the face positions in `annotations.json`.
 - `*-guessed.jpg`: the same art re-lettered with faces guessed from the script, as happened in the export;

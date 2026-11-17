@@ -42,6 +42,42 @@ def boxes(d: dict[str, list[float]] | None) -> dict[str, dict[str, float]] | Non
     return {k: dict(zip("xywh", v, strict=True)) for k, v in d.items()} if d else None
 
 
+LAST: dict[int, list[lettering.Placed]] = {}
+
+
+def stamp(png: bytes, label: str) -> bytes:
+    """Write how the page was produced across its top, so no image can be mistaken for another kind."""
+    from PIL import ImageDraw
+
+    im = Image.open(io.BytesIO(png)).convert("RGB")
+    band = max(24, im.width // 45)
+    out = Image.new("RGB", (im.width, im.height + band), (255, 236, 160))
+    out.paste(im, (0, band))
+    ImageDraw.Draw(out).text((10, band // 4), label, fill=(0, 0, 0))
+    buf = io.BytesIO()
+    out.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def attribution(spec: dict, t: object) -> list[dict]:
+    """Per balloon, measured against the HAND-ANNOTATED faces: where its tail ends relative to the
+    speaker's face and the nearest other face (page units), and its reading position."""
+    rows = []
+    for n, placed in LAST.items():
+        ann = spec["panels"][str(n + 1)]
+        rect = tuple(float(v) for v in t.rects[n])  # type: ignore[attr-defined]
+        faces = {k: lettering._abs(dict(zip("xywh", v, strict=True)), rect) for k, v in ann["heads"].items()}
+        for order, b in enumerate(placed, start=1):
+            if b.tail is None or b.speaker not in faces:
+                continue
+            to_speaker = lettering._dist_to(b.tail, faces[b.speaker])  # type: ignore[arg-type]
+            others = [lettering._dist_to(b.tail, f) for k, f in faces.items() if k != b.speaker]  # type: ignore[arg-type]
+            rows.append({"panel": n + 1, "balloon": order, "speaker": b.speaker, "text": b.text[:24],
+                         "tail_to_speaker_face": round(to_speaker, 1),
+                         "tail_to_nearest_other_face": round(min(others), 1) if others else None})  # fmt: skip
+    return rows
+
+
 def main() -> int:
     art_dir, out = Path(sys.argv[1]), Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
@@ -52,6 +88,7 @@ def main() -> int:
         t = layouts()[spec["template"]]
         art = Image.open(art_dir / f"{comic}.png").convert("RGB")
         for mode in ("guessed", "located"):
+            LAST.clear()
             panels, snap = [], {"size": list(t.page), "panels": []}
             for i, r in enumerate(t.rects):
                 rect = tuple(float(v) for v in r)
@@ -69,15 +106,20 @@ def main() -> int:
                         detail=lettering.art_detail(image, rect[2], rect[3]))  # fmt: skip
                     balloons = [{"type": b.type, "text": b.text, "geometry": b.geometry(), "order_index": b.index,
                                  "flags": b.flags} for b in placed]  # fmt: skip
+                    LAST[i] = placed
                 panels.append(render.PanelDoc(rect, image, tuple(balloons)))
                 snap["panels"].append({"balloons": balloons})
             doc = render.PageDoc(t.page, tuple(panels))
-            (out / f"{comic}-{mode}.png").write_bytes(render.render_page(doc, 2000))
+            label = {"guessed": "AUTOMATIC - faces guessed from the script (as exported)",
+                     "located": "MANUAL face positions typed in by hand (stand-in for the panel check)"}[mode]
+            (out / f"{comic}-{mode}.png").write_bytes(stamp(render.render_page(doc, 2000), label))
+            (out / f"{comic}-{mode}-reading-size.png").write_bytes(stamp(render.render_page(doc, 1000), label))
             pdf = render.build_pdf([doc], [render.render_page(doc, 2000, lettering=False)], f"{comic} {mode}")
             (out / f"{comic}-{mode}.pdf").write_bytes(pdf)
             rows = lettering_problems(0, snap)
-            report[f"{comic}-{mode}"] = {"flags": rows, "export_warnings": merge_print_quality(
-                None, 0, [], "local_resample", flagged=rows)["warnings"]}  # fmt: skip
+            report[f"{comic}-{mode}"] = {"provenance": label, "flags": rows, "export_warnings": merge_print_quality(
+                None, 0, [], "local_resample", flagged=rows)["warnings"],
+                "attribution": attribution(spec, t)}  # fmt: skip
     (out / "report.json").write_text(json.dumps(report, indent=1))
     print(json.dumps(report, indent=1))
     return 0

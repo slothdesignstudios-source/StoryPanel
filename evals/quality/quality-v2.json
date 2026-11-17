@@ -4,6 +4,21 @@
  "image_provider": "openai",
  "cases": [
   {
+   "id": "stage1-reveal-strip",
+   "covers": [
+    "reveal timing",
+    "two characters interacting",
+    "3-panel strip",
+    "automatic lettering"
+   ],
+   "prompt": "In a station caf\u00e9, Mira secretly slips a small wrapped gift under Teo's coffee cup while he talks about missing his train; he only finds it in the last panel, after she has gone. A 3 panel strip, two characters, a few short lines.",
+   "watch": [
+    "the gift is hidden or absent in panels 1 and 2 (a deliberate small hint is acceptable only if the script marks it unnoticed)",
+    "the gift is clearly visible in panel 3",
+    "every face is located automatically; no balloon covers a face; tails reach their speakers"
+   ]
+  },
+  {
    "id": "reveal-train-ticket",
    "covers": [
     "two characters interacting",
