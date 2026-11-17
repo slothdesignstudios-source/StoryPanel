@@ -467,6 +467,58 @@ def _words(text: str) -> set[str]:
     return _key_words(text)
 
 
+NEGATIONS = frozenset({"never", "not", "no", "without", "nobody", "nothing", "none", "cannot"})
+
+
+def _negated(text: str) -> bool:
+    words = {w.strip(".,;:!?\"'").lower() for w in text.split()}
+    return bool(words & NEGATIONS) or "n't" in text.lower()
+
+
+def mentions(rule: ContinuityRule, element: str) -> bool:
+    """Whether a rule is about an element, by wording: every key word of the element's name appears in
+    the rule. INCOMPLETE by design: a paraphrase ("his train ticket" for "the ticket stub") is missed,
+    and a negated rule ("Mira never carries the ticket stub") is treated as agreeing with an absent or
+    hidden element rather than conflicting with it. The panel check is the backstop."""
+    words = _words(element)
+    return bool(words) and words <= _words(rule.text) and not _negated(rule.text)
+
+
+@dataclass(frozen=True)
+class PanelRules:
+    """The rules a v4 panel is drawn and checked against, after exceptions and story timing.
+    must / prefer: required or requested here. not_enforced: excepted, no requirement either way.
+    contrary: excepted with the opposite holding here. yielded: must or prefer rules that would require
+    an element the approved timing keeps absent or hidden in this panel; the timing wins (the conflict
+    was a review item the user confirmed when approving the script), recorded with the element."""
+
+    must: list[ContinuityRule]
+    prefer: list[ContinuityRule]
+    not_enforced: list[ContinuityRule]
+    contrary: list[ContinuityRule]
+    yielded: list[tuple[ContinuityRule, str, str]]
+
+
+def effective_rules(rules: list[ContinuityRule], panel: PanelSpec) -> PanelRules:
+    must, prefer = rules_for_panel(rules, panel)
+    excepted = excepted_rules(rules, panel)
+    unseen = [e for e in panel.element_states if e.state in UNSEEN]
+    yielded: list[tuple[ContinuityRule, str, str]] = []
+
+    def keep(rs: list[ContinuityRule]) -> list[ContinuityRule]:
+        out = []
+        for r in rs:
+            hit = next((e for e in unseen if mentions(r, e.element)), None)
+            if hit is not None:
+                yielded.append((r, hit.element, hit.state))
+            else:
+                out.append(r)
+        return out
+
+    return PanelRules(keep(must), keep(prefer), [r for r in excepted if r.id not in panel.rule_contrary],
+                      [r for r in excepted if r.id in panel.rule_contrary], yielded)  # fmt: skip
+
+
 def reference_conflicts(panel: PanelSpec, location: LocationSpec,
                         previous: PanelSpec | None) -> tuple[list[str], list[str]]:  # fmt: skip
     """Which references would likely show something this panel keeps from the reader.
@@ -515,9 +567,9 @@ def _compile_panel_v4(
         + omitted
     )
     index = {(s.role, s.key): n + 1 for n, s in enumerate(slots)}
-    excepted = excepted_rules(rules or [], panel)
+    pr = effective_rules(rules or [], panel)
     states = [(e.element.strip().rstrip("."), e.state) for e in panel.element_states if e.element.strip()]
-    differs = any(st in UNSEEN for _, st in states) or any(r.applies_to == "location" for r in excepted)
+    differs = any(st in UNSEEN for _, st in states) or any(r.applies_to == "location" for r in pr.contrary)
     purposes = []
     for n, slot in enumerate(slots, start=1):
         if slot.role == "character":
@@ -548,13 +600,14 @@ def _compile_panel_v4(
     if not focus and panel.shot == "close_up" and panel.characters:
         focus = f"{cast[panel.characters[0].id].name}'s face"
     plan = lettering_plan(panel, panel_size)
-    must, prefer = rules_for_panel(rules or [], panel)
+    must, prefer = pr.must, pr.prefer
     prompt = render_prompt(
         "panel", "v4", style_token=style.token, references=purposes, purpose=panel.purpose.strip().rstrip("."),
         shot=SHOT_WORDS[panel.shot], angle=panel.angle.strip().rstrip("."), frame=frame_words(aspect),
         composition=composition, characters=characters, relative_scale=len(panel.characters) > 1,
         action=panel.action.strip().rstrip("."), must_rules=[_rule_text(r) for r in must],
-        prefer_rules=[_rule_text(r) for r in prefer], exceptions=[r.text.strip().rstrip(".") for r in excepted],
+        prefer_rules=[_rule_text(r) for r in prefer], not_required=[r.text.strip().rstrip(".") for r in pr.not_enforced],
+        contrary=[r.text.strip().rstrip(".") for r in pr.contrary],
         element_lines=[STATE_WORDS[st].format(e=(e[0].upper() + e[1:]) if STATE_WORDS[st].startswith("{e}") else e)
                        for e, st in states],
         location_description=location.description.strip().rstrip("."),
@@ -566,6 +619,9 @@ def _compile_panel_v4(
          "signature_features": cast[ch.id].visual.signature_features}
         for ch in panel.characters], "required_rules": [r.id for r in must],
         "element_states": [{"element": e, "state": st} for e, st in states],
-        "excepted_rules": [r.id for r in excepted], "references_omitted": omitted,
+        "rules_not_enforced": [r.id for r in pr.not_enforced], "rules_contrary": [r.id for r in pr.contrary],
+        "rules_yielded": [{"rule": r.id, "element": e, "state": st, "winner": "approved story timing"}
+                          for r, e, st in pr.yielded],
+        "references_omitted": omitted,
         "lettering_zone": list(plan.zone) if plan.zone else None}  # fmt: skip
     return CompiledPanel(prompt, "v4", prompt_sha256(prompt), aspect, tuple(slots), inputs)

@@ -8,7 +8,8 @@
 {% endif %}Action: {{ action }}.
 {% for r in must_rules %}Must be clearly visible: {{ r }}
 {% endfor %}{% for r in prefer_rules %}Where it fits naturally: {{ r }}
-{% endfor %}{% for r in exceptions %}Exception in this panel: "{{ r }}" does not hold here; follow the action above.
+{% endfor %}{% for r in not_required %}Not required in this panel: "{{ r }}" (show it only if the action calls for it).
+{% endfor %}{% for r in contrary %}Opposite in this panel: "{{ r }}" does not hold here.
 {% endfor %}{% for line in element_lines %}{{ line }}
 {% endfor %}Setting: {{ location_description }}{% if time_of_day %}, {{ time_of_day }}{% endif %}. {{ mood }} mood.
 {% if focus %}Focal point: {{ focus }}.

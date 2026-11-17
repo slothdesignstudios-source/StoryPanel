@@ -113,23 +113,85 @@ def test_foreshadowing_is_kept_not_banned() -> None:
     assert [r.role for r in c.references] == ["character", "location", "continuity"]
 
 
-def test_an_exception_keeps_its_meaning() -> None:
-    """Excepting "tulips in bloom" doesn't mean "no tulips": the rule is stated as not holding, and the
-    panel's action decides what is drawn."""
-    p = panel(
-        location_id="garden", rule_exceptions=["bloom"], action="Walter enters; the beds are still green"
+def test_not_required_and_opposite_are_different_instructions() -> None:
+    """An exception means "not required here", not "false here"; "the opposite holds" is explicit."""
+    green = "Walter enters; the beds are still green"
+    loose = compile_(
+        panel=panel(location_id="garden", rule_exceptions=["bloom"], action=green), rules=[BLOOM]
     )
-    c = compile_(panel=p, rules=[BLOOM])
     assert (
-        'Exception in this panel: "The tulips in the garden are in bloom" does not hold here; follow the action above.'
-        in c.prompt
+        'Not required in this panel: "The tulips in the garden are in bloom" (show it only if the action calls for it).'
+        in loose.prompt
     )
-    assert "Must be clearly visible: The tulips" not in c.prompt
-    assert "Not in this scene" not in c.prompt and "Don't draw" not in c.prompt  # not turned into "absent"
-    assert c.inputs["excepted_rules"] == ["bloom"]
-    assert "architecture and light only" in c.prompt  # the location picture shows the tulips in bloom
-    assert "Must be clearly visible: The tulips in the garden are in bloom." in compile_(panel=panel(location_id="garden"),
-                                                                                       rules=[BLOOM]).prompt  # fmt: skip
+    assert "does not hold" not in loose.prompt and "Don't draw" not in loose.prompt
+    assert "Must be clearly visible: The tulips" not in loose.prompt
+    assert loose.inputs["rules_not_enforced"] == ["bloom"] and loose.inputs["rules_contrary"] == []
+    assert (
+        "architecture, props, colours and light" in loose.prompt
+    )  # either way is fine: the reference is kept in full
+    opposite = compile_(
+        panel=panel(location_id="garden", rule_contrary=["bloom"], action=green), rules=[BLOOM]
+    )
+    assert (
+        opposite.inputs["rules_contrary"] == ["bloom"]
+        and "bloom" in panel(rule_contrary=["bloom"]).rule_exceptions
+    )
+    assert (
+        'Opposite in this panel: "The tulips in the garden are in bloom" does not hold here.'
+        in opposite.prompt
+    )
+    assert "Not required in this panel" not in opposite.prompt  # one instruction, not two
+    assert "architecture and light only" in opposite.prompt  # the garden picture shows them in bloom
+    assert "Must be clearly visible: The tulips in the garden are in bloom." in compile_(
+        panel=panel(location_id="garden"), rules=[BLOOM]).prompt  # fmt: skip
+
+
+def test_approved_timing_wins_over_a_conflicting_rule_with_one_instruction() -> None:
+    """Train rule 4 would demand the stub where the approved script keeps it hidden. The timing wins
+    (the user confirmed the review item), the prompt carries only the hidden instruction, and the
+    decision is recorded. The panel check is given the same rules (no "required" stub)."""
+    c = compile_(panel=panel(element_states=stub("hidden")), rules=[TICKET, SKETCHBOOK])
+    assert "Must be clearly visible: The ticket stub" not in c.prompt
+    assert "The ticket stub is here but hidden from the reader" in c.prompt
+    assert "Must be clearly visible: Mira carries a worn sketchbook" in c.prompt  # unrelated rules untouched
+    assert c.inputs["rules_yielded"] == [{"rule": "ticket", "element": "the ticket stub", "state": "hidden",
+                                          "winner": "approved story timing"}]  # fmt: skip
+    pr = art.effective_rules([TICKET, SKETCHBOOK], panel(element_states=stub("hidden")))
+    assert [r.id for r in pr.must] == ["sketchbook"]
+    # revealed: the rule is required as usual
+    assert "Must be clearly visible: The ticket stub" in compile_(panel=panel(element_states=stub("revealed")),
+                                                                  rules=[TICKET]).prompt  # fmt: skip
+
+
+def test_word_matching_is_incomplete_paraphrases_and_negations() -> None:
+    """Documented limits of the conflict detection (the panel check is the backstop)."""
+    paraphrase = ContinuityRule(
+        id="p", text="His train ticket lies on the café table", applies_to="location", target="cafe"
+    )
+    negated = ContinuityRule(
+        id="n", text="Mira never carries the ticket stub", applies_to="character", target="mira"
+    )
+    plural = ContinuityRule(
+        id="s", text="Ticket stubs litter the table", applies_to="location", target="cafe"
+    )
+    assert not art.mentions(paraphrase, "the ticket stub")  # MISSED: "train ticket" isn't "ticket stub"
+    assert not art.mentions(
+        negated, "the ticket stub"
+    )  # a negated rule agrees with a hidden stub: no conflict
+    assert art.mentions(plural, "the ticket stub")  # plural folded
+    issues = story_checks(train(), BEATS, [paraphrase, negated])
+    assert not [
+        i for i in issues if i.code == "rule_state_conflict"
+    ]  # the paraphrase conflict goes unreported
+
+
+def test_identity_references_survive_reference_filtering() -> None:
+    p = panel(location_id="garden", element_states=[{"element": "red tulips", "state": "hidden"}],
+              characters=[{"id": "mira", "position": "left", "pose": "p", "expression": "e"},
+                          {"id": "teo", "position": "right", "pose": "p", "expression": "e"}])  # fmt: skip
+    c = compile_(panel=p, previous=panel(element_states=[{"element": "red tulips", "state": "revealed"}]))
+    assert [(r.role, r.key) for r in c.references] == [("character", "mira"), ("character", "teo")]
+    assert len(c.inputs["references_omitted"]) == 2  # location and previous panel, each with its reason
 
 
 def test_a_location_reference_that_shows_a_hidden_element_is_left_out() -> None:
@@ -562,3 +624,33 @@ async def test_a_hidden_element_drawn_too_early_is_repaired_once(
     assert len(early) == 2  # only the two panels that hide it; the hint and the reveal pass
     assert all(any(n.startswith("Keep the gift box out of sight") for n in s["fix_notes"]) for s in early)
     assert sum(1 for a, _ in rows if a == 1) == 2  # one repair each, then they passed
+
+
+@pytest.mark.workflow
+async def test_reveal_repairs_share_the_existing_retry_limit(
+    client: Any, headers: dict[str, str], worker: Any
+) -> None:
+    """No second loop: a hidden element drawn on every attempt is repaired once (the same problem then
+    stops repairs) and never beyond the existing cap of first attempt + 2 retries; credits as usual."""
+    from sqlalchemy import func, select
+
+    from storypanel.config import get_settings
+    from storypanel.db.models import PanelVersion
+    from storypanel.db.session import transaction
+    from storypanel.providers import fake
+    from tests.conftest import run_to_completion
+
+    fake.control.script_elements = ["the gift box"]
+    fake.control.shown_early_attempts = 99  # every picture shows it, however often it's redrawn
+    p = await run_to_completion(
+        client, headers, "A robot and a girl share noodles in the rain, as a 4 panel strip"
+    )
+    panels = [pn for pg in p["pages"] for pn in pg["panels"]]
+    assert [x["status"] for x in panels] == ["needs_attention"] * 3 + [
+        "ok"
+    ]  # delivered, flagged for the user
+    async with transaction() as db:
+        per_panel = (await db.execute(select(func.count()).select_from(PanelVersion)
+                                      .group_by(PanelVersion.panel_id))).scalars().all()  # fmt: skip
+    assert sorted(per_panel) == [1, 2, 2, 2]
+    assert max(per_panel) <= 1 + get_settings().max_panel_qa_retries

@@ -86,7 +86,9 @@ ELEMENT_EXPECT = {
     "hidden": "in the scene but not visible to the reader",
     "unnoticed": "visible but small, not the focus",
     "revealed": "clearly visible",
+    "contrary": "this must NOT be true in the picture",  # an excepted rule whose opposite holds here
 }
+UNSEEN_STATES = ("absent", "hidden", "contrary")
 
 
 def assess_identity(report: IdentityVisualReport, expected: list[str]) -> tuple[str, list[str]]:
@@ -149,18 +151,12 @@ async def check_identity_visual(*, image: bytes, expected: list[str], cast: dict
                                "report": report.model_dump()}  # fmt: skip
 
 
-async def evaluate_panel(
-    *, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec], audience: AgeRating,
-    reference_images: dict[str, bytes], reference_embeddings: dict[str, list[list[float]]],
-    ctx: CallContext, identity_references: dict[str, list[bytes]] | None = None,
-    required: list[ContinuityRule] | None = None, elements: list[tuple[str, str]] | None = None,
-) -> QAOutcome:  # fmt: skip
-    s = get_settings()
-    required = required or []
-    safety = await check_safety(image, audience, ctx)
-    if not safety.allowed:
-        return QAOutcome("blocked", {"safety": safety.model_dump()})
-
+async def vision_report(*, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec],
+                        reference_images: dict[str, bytes], required: list[ContinuityRule],
+                        elements: list[tuple[str, str]], ctx: CallContext, operation: str) -> VisionQAReport:  # fmt: skip
+    """The panel check's vision call alone (one metered request): characters with face and body boxes,
+    required elements, story elements, defects. `evaluate_panel` builds its verdict on it;
+    scripts/face-check.py uses it to re-check existing panels without redrawing anything."""
     expected = [c for c in panel.characters if c.id in cast]
     images = [ImageInput(image, label="Panel to check:")]
     for ch in expected:
@@ -175,7 +171,6 @@ async def evaluate_panel(
     if required:
         spec_lines.append("Required elements (report each by rule id):")
         spec_lines += [f"- {r.id}: {r.text}" for r in required]
-    elements = [(e, st) for e, st in (elements or []) if e.strip()]
     if elements:
         spec_lines.append(
             "Story elements (report each by number; the expected state is context, report what you see):"
@@ -190,7 +185,7 @@ async def evaluate_panel(
         schema=VisionQAReport,
         images=tuple(images),
         ctx=CallContext(
-            "vision_qa",
+            operation,
             ctx.user_id,
             ctx.project_id,
             ctx.target_id,
@@ -210,6 +205,26 @@ async def evaluate_panel(
             },
         ),  # fmt: skip
     )
+
+    return report
+
+
+async def evaluate_panel(
+    *, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec], audience: AgeRating,
+    reference_images: dict[str, bytes], reference_embeddings: dict[str, list[list[float]]],
+    ctx: CallContext, identity_references: dict[str, list[bytes]] | None = None,
+    required: list[ContinuityRule] | None = None, elements: list[tuple[str, str]] | None = None,
+) -> QAOutcome:  # fmt: skip
+    s = get_settings()
+    required = required or []
+    safety = await check_safety(image, audience, ctx)
+    if not safety.allowed:
+        return QAOutcome("blocked", {"safety": safety.model_dump()})
+
+    expected = [c for c in panel.characters if c.id in cast]
+    elements = [(e, st) for e, st in (elements or []) if e.strip()]
+    report = await vision_report(image=image, panel=panel, cast=cast, reference_images=reference_images,
+                                 required=required, elements=elements, ctx=ctx, operation="vision_qa")  # fmt: skip
 
     observed = {o.id: o for o in report.characters}
     problems: list[str] = []
@@ -237,7 +252,7 @@ async def evaluate_panel(
         v = seen.get(n, "uncertain")
         if v == "uncertain":
             problems.append(f"element_uncertain:{n}")
-        elif st in ("absent", "hidden") and v == "yes":
+        elif st in UNSEEN_STATES and v == "yes":
             problems.append(f"element_too_early:{n}")
         elif st in ("unnoticed", "revealed") and v == "no":
             problems.append(f"element_missing:{n}")
@@ -310,7 +325,8 @@ async def evaluate_panel(
             notes.append({"absent": f"Remove {e} from this panel: it isn't in the scene yet.",
                           "hidden": f"Keep {e} out of sight in this panel (covered or out of frame): the reader mustn't see it yet.",
                           "unnoticed": f"Show {e} small, in the background or at the edge of the frame.",
-                          "revealed": f"Show {e} clearly: this panel reveals it."}[st])  # fmt: skip
+                          "revealed": f"Show {e} clearly: this panel reveals it.",
+                          "contrary": f"In this panel the opposite holds; change the picture so this isn't true: {e}"}[st])  # fmt: skip
     for p in problems:
         if p.startswith("identity_embedding:") and not notes:
             notes.append(f"Match {cast[p.split(':')[1]].name} to the reference image exactly.")

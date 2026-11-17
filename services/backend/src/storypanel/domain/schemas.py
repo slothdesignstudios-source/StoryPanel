@@ -10,7 +10,7 @@ import re
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Strict(BaseModel):
@@ -233,6 +233,16 @@ class PanelSpec(Strict):
     focus: str = ""
     # Added with prompts v4: the timing of story elements in this panel (empty in earlier scripts).
     element_states: list[ElementState] = Field(default_factory=list)
+    # Prompts v4: excepted rules whose OPPOSITE holds in this panel (a subset of rule_exceptions, so code
+    # that only knows exceptions still leaves them out). An exception alone means "not required here".
+    rule_contrary: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _contrary_is_excepted(self) -> PanelSpec:
+        missing = [r for r in self.rule_contrary if r not in self.rule_exceptions]
+        if missing:
+            self.rule_exceptions = [*self.rule_exceptions, *missing]
+        return self
 
 
 class PageSpec(Strict):

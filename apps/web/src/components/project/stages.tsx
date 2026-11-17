@@ -496,12 +496,21 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
           <p className="font-semibold">Continuity rules for this panel</p>
           {rules.map((r) => {
             const excepted = (panel.rule_exceptions ?? []).includes(r.id);
+            const contrary = (panel.rule_contrary ?? []).includes(r.id);
+            const mode = contrary ? "contrary" : excepted ? "not_required" : "required";
+            const setMode = (m: string) => {
+              const others = (xs: string[] | undefined) => (xs ?? []).filter((x) => x !== r.id);
+              onChange({ ...panel, rule_exceptions: m === "required" ? others(panel.rule_exceptions) : [...others(panel.rule_exceptions), r.id], rule_contrary: m === "contrary" ? [...others(panel.rule_contrary), r.id] : others(panel.rule_contrary) });
+            };
             return (
-              <label key={r.id} className="flex items-start gap-2">
-                <input type="checkbox" className="mt-1" checked={excepted} onChange={(e) => onChange({ ...panel, rule_exceptions: e.target.checked ? [...(panel.rule_exceptions ?? []), r.id] : (panel.rule_exceptions ?? []).filter((x) => x !== r.id) })} />
-                <span className={cn(excepted && "text-muted line-through")}>{r.text}</span>
-                <span className="text-xs text-muted">{excepted ? "(doesn't apply here: recorded)" : "(tick if it doesn't apply to this panel)"}</span>
-              </label>
+              <div key={r.id} className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,max-content)] items-start gap-2">
+                <span className={cn(mode !== "required" && "text-muted")}>{r.text}</span>
+                <Select aria-label={`In this panel: ${r.text}`} value={mode} onChange={(e) => setMode(e.target.value)}>
+                  <option value="required">Required here</option>
+                  <option value="not_required">Not required here</option>
+                  <option value="contrary">The opposite holds here</option>
+                </Select>
+              </div>
             );
           })}
         </div>

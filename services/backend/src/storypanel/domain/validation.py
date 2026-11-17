@@ -265,19 +265,23 @@ def rule_state_conflicts(flat: list[tuple[int, int, PanelSpec]], rules: list[Con
     """A must rule requires an element in a panel where the story keeps it absent or hidden (Train:
     "The ticket stub left on the table…" in the first café panel). Approved rules are never rewritten:
     each conflict is a review item until the user excepts the rule there or changes the timing."""
+    from storypanel.pipeline.art import mentions
+
     out = []
     for pi, ni, p in flat:
         for e in p.element_states:
-            words = _key_words(e.element)
-            if e.state not in ("absent", "hidden") or not words:
+            if e.state not in ("absent", "hidden"):
                 continue
             for r in rules:
-                if r.strength == "must" and r.visual and _rule_applies(r, p) and words <= _key_words(r.text):
+                if r.visual and _rule_applies(r, p) and mentions(r, e.element):
                     out.append(ScriptIssue(code="rule_state_conflict", path=f"pages[{pi}].panels[{ni}].rule:{r.id}",
                                            severity="review",
-                                           message=f"{where(pi, ni)}: the continuity rule “{r.text}” requires "
-                                                   f"{e.element}, but the story keeps it {e.state} here. Mark the rule as "
-                                                   "not applying to this panel, or change the timing."))  # fmt: skip
+                                           message=f"{where(pi, ni)}: the continuity rule “{r.text}” would require "
+                                                   f"{e.element}, but the story keeps it {e.state} here. If you approve, the "
+                                                   "story timing wins in this panel: the rule isn't required there and the "
+                                                   "picture is told the element is "
+                                                   f"{'not in the scene' if e.state == 'absent' else 'hidden from the reader'}. "
+                                                   "To let the rule win instead, change the element's state."))  # fmt: skip
     return out
 
 

@@ -2176,6 +2176,13 @@
       "title": "Purpose",
       "type": "string"
      },
+     "rule_contrary": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Rule Contrary",
+      "type": "array"
+     },
      "rule_exceptions": {
       "items": {
        "type": "string"

@@ -1362,6 +1362,8 @@ export interface components {
              * @default
              */
             purpose: string;
+            /** Rule Contrary */
+            rule_contrary?: string[];
             /** Rule Exceptions */
             rule_exceptions?: string[];
             /**
