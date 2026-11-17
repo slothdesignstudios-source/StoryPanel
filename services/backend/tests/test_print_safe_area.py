@@ -219,7 +219,9 @@ def test_an_ordinary_strip_letters_without_any_overlap() -> None:
                       {"type": "speech", "speaker": "a", "text": "That sandwich is mine, you feathered thief!"},
                       {"type": "speech", "speaker": "b", "text": "Finders keepers."},
                       {"type": "sfx", "text": "SQUAWK"}],
-            characters=[{"id": "a", "position": "left"}, {"id": "b", "position": "right"}])  # fmt: skip
+            characters=[{"id": "a", "position": "left"}, {"id": "b", "position": "right"}],
+            head_boxes={"a": {"x": 0.13, "y": 0.36, "w": 0.18, "h": 0.2},  # located by the panel check
+                        "b": {"x": 0.69, "y": 0.36, "w": 0.18, "h": 0.2}})  # fmt: skip
         assert not [f for p in ps for f in p.flags], [(p.type, p.flags) for p in ps]
         for a in range(len(ps)):
             for b in range(a + 1, len(ps)):

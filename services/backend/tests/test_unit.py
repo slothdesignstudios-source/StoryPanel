@@ -191,9 +191,18 @@ RECT = (40.0, 40.0, 448.0, 416.0)
 CHARS = [{"id": "kiro", "position": "left"}, {"id": "mei", "position": "right"}]
 
 
-def place(dialogue: list[dict[str, object]], rect: tuple[float, ...] = RECT) -> list[lettering.Placed]:
+# Faces where the panel check would report them (at the usual heights for these positions). Without
+# them, faces are only guessed and every nearby balloon is reported as uncertain (tested below).
+HEADS = {
+    "kiro": {"x": 0.13, "y": 0.36, "w": 0.18, "h": 0.2},
+    "mei": {"x": 0.69, "y": 0.36, "w": 0.18, "h": 0.2},
+}
+
+
+def place(dialogue: list[dict[str, object]], rect: tuple[float, ...] = RECT,
+          heads: dict[str, dict[str, float]] | None = HEADS) -> list[lettering.Placed]:  # fmt: skip
     return lettering.layout_panel(panel_rect=rect, page_size=(1000, 1500), dialogue=dialogue,  # type: ignore[arg-type]
-                                  characters=CHARS)  # fmt: skip
+                                  characters=CHARS, head_boxes=heads)  # fmt: skip
 
 
 def test_lettering_reading_order_faces_and_determinism() -> None:
@@ -204,6 +213,10 @@ def test_lettering_reading_order_faces_and_determinism() -> None:
     assert [p.geometry() for p in a] == [p.geometry() for p in b]
     keys = [lettering.reading_key(p.rect, RECT) for p in a]
     assert keys == sorted(keys) and all(not p.flags for p in a)
+    # the same panel with faces only guessed: same placement, but reported as uncertain, never as clear
+    guessed = place(dialogue, heads=None)
+    assert [p.geometry() for p in guessed] == [p.geometry() for p in a]
+    assert all("tail_target_estimated" in p.flags for p in guessed)
     for p in a:  # no balloon overlaps another or covers a default head region
         assert all(lettering.overlap(p.rect, q.rect) == 0 for q in a if q is not p)
         assert p.tail is not None and RECT[0] <= p.x and p.x + p.w <= RECT[0] + RECT[2]
