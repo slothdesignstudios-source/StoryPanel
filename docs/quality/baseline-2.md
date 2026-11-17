@@ -1,5 +1,10 @@
 # Comic quality baseline 2 (2026-11-17): two real comics made with prompts v3
 
+> **Verification of these findings** (what was reproduced on the real artwork, what was confirmed in code,
+> and what is still a hypothesis) is in [`v4.md`](v4.md), section 1. In particular, the face overlap,
+> tail and reading-order problems are now **confirmed**: the letterer placed those balloons around
+> *guessed* face positions.
+
 ## Evidence
 
 | Artifact | Real or simulated | Available here |
