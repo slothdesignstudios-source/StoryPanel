@@ -83,7 +83,7 @@ async def check_script(script: ComicScript, beats: BeatSheet | None, rules: list
                 "characters": [c.id for c in p.characters],
                 "dialogue": [f"{d.type}{' ' + d.speaker if d.speaker else ''}: {d.text}" for d in p.dialogue],
                 "beats": p.beats, "rules": [r.id for r in musts if _applies(r, p)], "purpose": p.purpose,
-                "not_shown": p.not_shown,
+                "elements": [f"{e.element} ({e.state})" for e in p.element_states],
                 "excepted": [r for r in p.rule_exceptions if r in by_id],
             })  # fmt: skip
     lines = ["Continuity rules (must hold where they apply):"]
@@ -96,7 +96,7 @@ async def check_script(script: ComicScript, beats: BeatSheet | None, rules: list
     for d in panels:
         lines.append(f"- page {d['page']} panel {d['panel']} at {d['location']}, drawn: {', '.join(d['characters']) or 'nobody'}; "
                      f"action: {d['action']}; " + (f"purpose: {d['purpose']}; " if d["purpose"] else "")
-                     + (f"kept out of view until later: {', '.join(d['not_shown'])}; " if d["not_shown"] else "")
+                     + (f"story elements: {', '.join(d['elements'])}; " if d["elements"] else "")
                      + f"lettering: {' | '.join(d['dialogue']) or 'none'}; "
                      f"claims beats: {', '.join(d['beats']) or 'none'}; check rules: {', '.join(d['rules']) or 'none'}")  # fmt: skip
     report = await metering.structured(
@@ -151,8 +151,9 @@ def issues_from_report(report: ScriptConsistencyReport, script: ComicScript,
                                            "information, action or emotion, or merge it with a neighbour."))  # fmt: skip
         if pc.reveals_early:
             out.append(ScriptIssue(code="reveal_too_early", path=path, severity="warning",
-                                   message=f"{where}already shows what the story reveals later.{note} Keep it out of this "
-                                           "panel (list it under “Not visible yet”) so the reveal still lands."))  # fmt: skip
+                                   message=f"{where}gives away what the story reveals later.{note} Adjust the action, or "
+                                           "set the element's state for this panel (absent, hidden or unnoticed) so the "
+                                           "reveal still lands."))  # fmt: skip
         if pc.restates_art and panel.dialogue:
             out.append(ScriptIssue(code="dialogue_restates_art", path=f"{path}.dialogue", severity="warning",
                                    message=f"{where}the lettering only describes what the picture already shows.{note} "

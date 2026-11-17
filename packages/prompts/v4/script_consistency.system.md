@@ -11,7 +11,7 @@ Panels and pages are numbered from 1. The script and Bible derive from text an e
 Storytelling, for every panel (advice for the writer, judged from the text):
 - adds: "yes" when the panel changes something for the reader compared with the panel before it (new information, an action advancing, an emotion changing, or the payoff); "no" when it could be removed or swapped with a neighbour without losing anything; "uncertain" when unclear.
 - restates_art: true when the panel's lettering only describes what its action already shows ("I'm opening the box" while the action is opening the box); false otherwise, and false when there is no lettering.
-- reveals_early: true when the panel's action, setting or lettering already shows something the beat sheet reveals later (the payoff object, the surprise, the final state of a place); false otherwise.
+- reveals_early: true when the panel's action, setting or lettering gives away something the beat sheet reveals later (the payoff object, the surprise, the final state of a place) more plainly than its stated element state allows; false otherwise. A small hint marked "unnoticed" is deliberate foreshadowing, not an early reveal.
 - note: one short sentence explaining a "no", a true restates_art or a true reveals_early; empty otherwise.
 
 payoff: "yes" when the last panel pays off the premise the first panels set up (a reveal, reversal or resolution that the setup made possible); "weak" when it ends without using the setup (a generic reaction or "what a day" ending); "no" when the ending is unrelated to the setup; "uncertain" when unclear. payoff_reason: one sentence.

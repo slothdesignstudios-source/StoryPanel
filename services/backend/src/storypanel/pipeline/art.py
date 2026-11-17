@@ -149,6 +149,7 @@ def compile_panel(
     location_refs: dict[str, str], continuity: tuple[str, str] | None, max_references: int,
     fix_notes: tuple[str, ...] = (), rules: list[ContinuityRule] | None = None,
     panel_size: tuple[float, float] | None = None, prompt_version: str = PROMPT_VERSION,
+    previous: PanelSpec | None = None,
 ) -> CompiledPanel:  # fmt: skip
     """The panel prompt in the given prompt version. v2 is kept byte-identical so the prompts of
     existing comics can be rebuilt and checked against their recorded hashes."""
@@ -161,7 +162,7 @@ def compile_panel(
         return _compile_panel_v4(panel=panel, aspect=aspect, style_preset=style_preset, cast=cast, locations=locations,
                                  character_refs=character_refs, location_refs=location_refs, continuity=continuity,
                                  max_references=max_references, fix_notes=fix_notes, rules=rules,
-                                 panel_size=panel_size or (600.0, 600.0))  # fmt: skip
+                                 panel_size=panel_size or (600.0, 600.0), previous=previous)  # fmt: skip
     if prompt_version != "v3":
         raise AppError(
             ErrorCode.INVALID_STATE, f"Panel prompts {prompt_version} can't be compiled.", retryable=False
@@ -299,7 +300,7 @@ def lettering_plan(panel: PanelSpec, panel_size: tuple[float, float]) -> Letteri
 
 def _reference_slots(panel: PanelSpec, cast: dict[str, CharacterSpec], character_refs: dict[str, dict[str, str]],
                      location_refs: dict[str, str], continuity: tuple[str, str] | None,
-                     max_references: int, continuity_needs_no_location: bool = False) -> tuple[list[RefSlot], list[str]]:  # fmt: skip
+                     max_references: int) -> tuple[list[RefSlot], list[str]]:  # fmt: skip
     """Characters first (every drawn character needs one: never dropped silently), then the location,
     then the previous panel. Returns the slots and what was left out, with the reason."""
     view = view_for(panel)
@@ -321,9 +322,7 @@ def _reference_slots(panel: PanelSpec, cast: dict[str, CharacterSpec], character
             slots.append(RefSlot("location", panel.location_id, None, location_refs[panel.location_id]))
         else:
             omitted.append("location: no reference slot left after the characters")
-    if continuity and continuity_needs_no_location and panel.location_id in location_refs:
-        omitted.append("previous panel: not needed, the location reference anchors the setting")
-    elif continuity:
+    if continuity:
         if len(slots) < max_references:
             slots.append(RefSlot("continuity", continuity[0], None, continuity[1]))
         else:
@@ -440,7 +439,7 @@ def compile_repair_prompt(spec: CharacterSpec, style_preset: str, fix_notes: tup
                          canonical_description=spec.canonical_description(), fix_notes=list(fix_notes))  # fmt: skip
 
 
-# ------------------------------------------------------------------ v4: reveals stay hidden
+# ------------------------------------------------------------------ v4: reveal timing
 def excepted_rules(rules: list[ContinuityRule], panel: PanelSpec) -> list[ContinuityRule]:
     """Visual rules that would apply to this panel but that the user marked as not applying here."""
     present = {c.id for c in panel.characters}
@@ -450,28 +449,75 @@ def excepted_rules(rules: list[ContinuityRule], panel: PanelSpec) -> list[Contin
         or (r.applies_to == "location" and r.target == panel.location_id))]  # fmt: skip
 
 
+# What each state asks of the picture. "hidden" and "absent" differ: a hidden element is in the scene
+# (the story may need its bag, box or pocket drawn) but the reader can't see it.
+STATE_WORDS = {
+    "absent": "Not in this scene yet: {e}. Don't draw it.",
+    "hidden": "{e} is here but hidden from the reader: keep it fully covered or out of frame.",
+    "unnoticed": "{e} is visible but nobody has noticed it yet: show it small and secondary, in the background or "
+    "at the edge of the frame, not the focal point; no character looks at it.",
+    "revealed": "Show clearly: {e}.",
+}
+UNSEEN = ("absent", "hidden")
+
+
+def _words(text: str) -> set[str]:
+    from storypanel.domain.validation import _key_words
+
+    return _key_words(text)
+
+
+def reference_conflicts(panel: PanelSpec, location: LocationSpec,
+                        previous: PanelSpec | None) -> tuple[list[str], list[str]]:  # fmt: skip
+    """Which references would likely show something this panel keeps from the reader.
+    Returns (reasons to leave out the location reference, reasons to leave out the previous panel).
+    The location reference is drawn from the location's description, so an element named there is
+    probably in it; the previous panel shows its own revealed or unnoticed elements. A heuristic on
+    wording: it can't see into the images, so a conflicting reference may still slip through."""
+    hidden = [e for e in panel.element_states if e.state in UNSEEN]
+    loc_words = _words(location.description)
+    loc = [f"the location reference likely shows {e.element}, which is {e.state} in this panel"
+           for e in hidden if _words(e.element) and _words(e.element) <= loc_words]  # fmt: skip
+    prev: list[str] = []
+    if previous is not None:
+        shown = {
+            e.element.lower().strip() for e in previous.element_states if e.state in ("unnoticed", "revealed")
+        }
+        prev = [f"the previous panel shows {e.element}, which is {e.state} in this panel"
+                for e in hidden if e.element.lower().strip() in shown]  # fmt: skip
+    return loc, prev
+
+
 def _compile_panel_v4(
     *, panel: PanelSpec, aspect: str, style_preset: str, cast: dict[str, CharacterSpec],
     locations: dict[str, LocationSpec], character_refs: dict[str, dict[str, str]],
     location_refs: dict[str, str], continuity: tuple[str, str] | None, max_references: int,
     fix_notes: tuple[str, ...], rules: list[ContinuityRule] | None, panel_size: tuple[float, float],
+    previous: PanelSpec | None = None,
 ) -> CompiledPanel:  # fmt: skip
-    """v3's visual plan, plus what real comics showed was missing:
-    - things the story reveals later are named as not in this panel, and a rule the user excepted
-      for this panel is stated as not holding here (it used to be silently left out, so the
-      location reference, which shows the place in every state, won);
-    - when a panel differs from its location's usual state, the location reference is limited to
-      architecture and light;
-    - the previous panel is only sent when no location reference anchors the setting, so it can't
-      set the composition of every panel in a place."""
+    """v3's visual plan, plus reveal timing, from what two real comics showed:
+    - each story element's state in this panel is stated (absent, hidden from the reader, visible
+      but unnoticed, revealed); deliberate foreshadowing ("unnoticed") is kept, not banned;
+    - a rule the user excepted for this panel is stated as not holding here, without implying the
+      opposite (it used to be silently left out);
+    - a reference that would likely show something this panel keeps from the reader is left out
+      (recorded) and otherwise, when the panel's state differs, limited to what it can safely give.
+    Wording can ask but not guarantee: the panel check verifies what is actually drawn."""
     style = styles().get(style_preset)
-    slots, omitted = _reference_slots(panel, cast, character_refs, location_refs, continuity, max_references,
-                                      continuity_needs_no_location=True)  # fmt: skip
-    index = {(s.role, s.key): n + 1 for n, s in enumerate(slots)}
     location = locations[panel.location_id]
+    loc_conflict, prev_conflict = reference_conflicts(panel, location, previous)
+    refs = {k: v for k, v in location_refs.items() if not (loc_conflict and k == panel.location_id)}
+    slots, omitted = _reference_slots(panel, cast, character_refs, refs, None if prev_conflict else continuity,
+                                      max_references)  # fmt: skip
+    omitted = (
+        [f"location: left out, {r}" for r in loc_conflict]
+        + [f"previous panel: left out, {r}" for r in prev_conflict if continuity]
+        + omitted
+    )
+    index = {(s.role, s.key): n + 1 for n, s in enumerate(slots)}
     excepted = excepted_rules(rules or [], panel)
-    not_shown = [x.strip().rstrip(".") for x in panel.not_shown if x.strip()]
-    differs = bool(not_shown) or any(r.applies_to == "location" for r in excepted)
+    states = [(e.element.strip().rstrip("."), e.state) for e in panel.element_states if e.element.strip()]
+    differs = any(st in UNSEEN for _, st in states) or any(r.applies_to == "location" for r in excepted)
     purposes = []
     for n, slot in enumerate(slots, start=1):
         if slot.role == "character":
@@ -480,14 +526,15 @@ def _compile_panel_v4(
                                                 "signature features; not the pose or the background"})  # fmt: skip
         elif slot.role == "location":
             purposes.append({"n": n, "purpose": (
-                f"the location, {location.name}: architecture and light only; plants, objects and their state as "
-                "described for this panel, not as in this image") if differs else (
+                f"the location, {location.name}: architecture and light only; objects and their state as described "
+                "for this panel, not as in this image") if differs else (
                 f"the location, {location.name}: architecture, props, colours and light; not the camera angle or "
                 "the composition")})  # fmt: skip
         else:
             purposes.append({"n": n, "purpose": "the previous panel, only to keep lighting, time of day and the state of "
                                                 "objects consistent; choose a new camera position and composition for "
-                                                "this panel"})  # fmt: skip
+                                                "this panel" + ("; objects as described for this panel, not as in this "
+                                                                "image" if differs else "")})  # fmt: skip
     characters = [{
         "position_phrase": POSITION_PHRASES[ch.position], "name": cast[ch.id].name,
         "canonical_description": cast[ch.id].canonical_description(), "ref": index.get(("character", ch.id)),
@@ -508,14 +555,17 @@ def _compile_panel_v4(
         composition=composition, characters=characters, relative_scale=len(panel.characters) > 1,
         action=panel.action.strip().rstrip("."), must_rules=[_rule_text(r) for r in must],
         prefer_rules=[_rule_text(r) for r in prefer], exceptions=[r.text.strip().rstrip(".") for r in excepted],
-        not_shown=not_shown, location_description=location.description.strip().rstrip("."),
+        element_lines=[STATE_WORDS[st].format(e=(e[0].upper() + e[1:]) if STATE_WORDS[st].startswith("{e}") else e)
+                       for e, st in states],
+        location_description=location.description.strip().rstrip("."),
         time_of_day=panel.time_of_day.strip().rstrip("."), mood=panel.mood.strip().rstrip(".").capitalize(),
         focus=focus, fix_notes=list(fix_notes), lettering=plan.phrase,
     )  # fmt: skip
     inputs = {"kind": "panel", "characters": [
         {"id": ch.id, "position": ch.position, "palette": cast[ch.id].visual.palette,
          "signature_features": cast[ch.id].visual.signature_features}
-        for ch in panel.characters], "required_rules": [r.id for r in must], "not_shown": not_shown,
+        for ch in panel.characters], "required_rules": [r.id for r in must],
+        "element_states": [{"element": e, "state": st} for e, st in states],
         "excepted_rules": [r.id for r in excepted], "references_omitted": omitted,
         "lettering_zone": list(plan.zone) if plan.zone else None}  # fmt: skip
     return CompiledPanel(prompt, "v4", prompt_sha256(prompt), aspect, tuple(slots), inputs)

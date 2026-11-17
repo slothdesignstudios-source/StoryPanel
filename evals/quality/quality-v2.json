@@ -13,9 +13,9 @@
    ],
    "prompt": "Two strangers, a girl who sketches in a train station caf\u00e9 and a boy who always misses his train, keep ending up at the same table. Each day she secretly adds him to her sketchbook. On the last page he finally catches his train, but leaves his ticket stub on her table with a small drawing of her on the back. 1 page, warm and gentle, few words.",
    "watch": [
-    "the ticket stub appears only in the reveal panel",
-    "the first speaker in a panel stands on the left",
-    "no balloon covers a face",
+    "the ticket stub is hidden or absent until the reveal panel (a small deliberate hint is fine)",
+    "balloons read in order whichever side the first speaker stands on",
+    "no balloon covers a face; tails point at their speakers",
     "Mira's pencil and Teo's scarf stay the same"
    ],
    "real_baseline": "docs/evidence/quality-2026-11-17/train-page.png (v3)"
@@ -30,7 +30,7 @@
    "prompt": "An old man returns in spring to the garden his late wife planted and finds her favourite red tulips blooming. Quiet and gentle, 1 page, very few words.",
    "watch": [
     "the tulips are not in bloom before the discovery panel",
-    "the gate is framed differently in consecutive panels",
+    "consecutive panels in the garden aren't near-copies",
     "the cap stays the same"
    ],
    "real_baseline": "docs/evidence/quality-2026-11-17/tulips-page.png (v3)"

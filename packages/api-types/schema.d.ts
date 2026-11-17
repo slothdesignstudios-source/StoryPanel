@@ -1010,6 +1010,25 @@ export interface components {
             /** Instruction */
             instruction: string;
         };
+        /**
+         * ElementState
+         * @description Where a story element (a gift, a note, flowers about to bloom) stands in one panel. Separate from
+         *     continuity rules, which are facts that hold in every panel they apply to.
+         *
+         *     absent:    not physically in the scene yet;
+         *     hidden:    in the scene but hidden from the reader (in a bag, under a cup, out of frame);
+         *     unnoticed: visible to the reader but not yet noticed by the characters (deliberate foreshadowing);
+         *     revealed:  revealed to both the reader and the characters.
+         */
+        ElementState: {
+            /** Element */
+            element: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "absent" | "hidden" | "unnoticed" | "revealed";
+        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -1321,6 +1340,8 @@ export interface components {
             characters: components["schemas"]["PanelCharacter"][];
             /** Dialogue */
             dialogue?: components["schemas"]["DialogueItem"][];
+            /** Element States */
+            element_states?: components["schemas"]["ElementState"][];
             /**
              * Emphasis
              * @default normal
@@ -1336,8 +1357,6 @@ export interface components {
             location_id: string;
             /** Mood */
             mood: string;
-            /** Not Shown */
-            not_shown?: string[];
             /**
              * Purpose
              * @default

@@ -1180,6 +1180,32 @@
     "title": "EditPanel",
     "type": "object"
    },
+   "ElementState": {
+    "additionalProperties": false,
+    "description": "Where a story element (a gift, a note, flowers about to bloom) stands in one panel. Separate from\ncontinuity rules, which are facts that hold in every panel they apply to.\n\nabsent:    not physically in the scene yet;\nhidden:    in the scene but hidden from the reader (in a bag, under a cup, out of frame);\nunnoticed: visible to the reader but not yet noticed by the characters (deliberate foreshadowing);\nrevealed:  revealed to both the reader and the characters.",
+    "properties": {
+     "element": {
+      "title": "Element",
+      "type": "string"
+     },
+     "state": {
+      "enum": [
+       "absent",
+       "hidden",
+       "unnoticed",
+       "revealed"
+      ],
+      "title": "State",
+      "type": "string"
+     }
+    },
+    "required": [
+     "element",
+     "state"
+    ],
+    "title": "ElementState",
+    "type": "object"
+   },
    "ErrorBody": {
     "properties": {
      "code": {
@@ -2116,6 +2142,13 @@
       "title": "Dialogue",
       "type": "array"
      },
+     "element_states": {
+      "items": {
+       "$ref": "#/components/schemas/ElementState"
+      },
+      "title": "Element States",
+      "type": "array"
+     },
      "emphasis": {
       "default": "normal",
       "enum": [
@@ -2137,13 +2170,6 @@
      "mood": {
       "title": "Mood",
       "type": "string"
-     },
-     "not_shown": {
-      "items": {
-       "type": "string"
-      },
-      "title": "Not Shown",
-      "type": "array"
      },
      "purpose": {
       "default": "",

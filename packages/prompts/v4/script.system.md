@@ -12,8 +12,12 @@ Storytelling (this is what makes the comic worth reading):
 - The last panel pays off the premise of the first: a reveal, a reversal or a resolution that the setup made possible. Avoid generic endings (a shrug, everyone laughing, "what a day").
 - The story must be understandable from the pictures alone; dialogue adds what the pictures cannot show (a thought, a joke, a voice). Never let a balloon describe what the panel already shows ("I am opening the door").
 - In "focus", name the one thing the reader's eye should land on in that panel (a face, a hand holding the key, the empty plate).
-- Keep the reveal for the reveal. For every panel before the turn or payoff, list in "not_shown" the things that must not be visible yet because the story reveals them later ("the ticket stub on the table", "tulips in bloom"), in at most four short items. Describe those panels so they don't need them. Leave "not_shown" empty from the reveal on.
-- When two characters talk in a panel, put the one who speaks first on the left of the one who answers, so the balloons read in order.
+- Time the reveal. For each story element whose timing matters (a gift, a note left behind, flowers that turn out to be blooming), give its state in every panel where that matters, in "element_states", using the same short name each time (at most four per panel):
+  - "absent": not in the scene yet;
+  - "hidden": in the scene but hidden from the reader (in a bag, under a cup, out of frame);
+  - "unnoticed": visible to the reader but not yet noticed by the characters. Use this for deliberate foreshadowing, a small hint the reader may spot before the reveal;
+  - "revealed": revealed to the reader and the characters.
+  Keep the panel's action consistent with the state: an absent or hidden element is not described in that panel's action.
 
 Dialogue: concise and natural, in each character's voice. The word limit is a ceiling, not a target; most balloons need far fewer words. Do not repeat a line, and do not restate the previous panel.
 

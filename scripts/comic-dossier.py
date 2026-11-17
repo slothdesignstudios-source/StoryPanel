@@ -110,6 +110,7 @@ async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
     from storypanel.catalog import layouts, styles
     from storypanel.db.models import (
         Asset,
+        Balloon,
         Character,
         CharacterRef,
         Export,
@@ -185,6 +186,10 @@ async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
                         "model": v.model, "prompt_version": v.prompt_version, "prompt_sha256": v.prompt_sha256,
                         "references": v.references, "qa_status": v.qa_status, "problems": scores.get("problems"),
                         "fix_notes": scores.get("fix_notes"), "qa_aspects": scores.get("aspects"),
+                        # where the check located things: lettering is placed from these
+                        "head_boxes": scores.get("head_boxes"), "body_boxes": scores.get("body_boxes"),
+                        "action_box": scores.get("action_box"), "prop_boxes": scores.get("prop_boxes"),
+                        "faces_unlocated": scores.get("faces_unlocated"),
                         "repeated_after_repair": bool(scores.get("repeated_after_repair")),
                         "identity_rating_avg": scores.get("identity_rating_avg"),
                         "cost_usd": str(v.cost_usd), "latency_ms": v.latency_ms, "current": v.id == panel.current_version_id,
@@ -192,8 +197,12 @@ async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
                         "rebuilt_prompt": rebuild_prompt(panel.spec, v, prev_notes, ctx),
                     })  # fmt: skip
                     prev_notes = list(scores.get("fix_notes") or [])
+                balloons = list((await db.execute(select(Balloon).where(Balloon.panel_id == panel.id)
+                                                  .order_by(Balloon.order_index))).scalars())  # fmt: skip
                 pg["panels"].append({"index": panel.index, "status": panel.status, "spec": panel.spec,
-                                     "aspect": ctx["aspect"], "versions": pv})  # fmt: skip
+                                     "aspect": ctx["aspect"], "versions": pv,
+                                     "balloons": [{"type": b.type, "speaker": b.speaker_id, "text": b.text,
+                                                   "geometry": b.geometry, "flags": b.flags} for b in balloons]})  # fmt: skip
             doc = await page_doc(db, page, panels, watermark=False, preset=preset)
             (out / "pages" / f"page-{page.index + 1}.png").write_bytes(render.render_page(doc, 2000))
             result["pages"].append(pg)
@@ -206,7 +215,22 @@ async def dossier(pid: uuid.UUID, out: Path) -> dict[str, Any]:
                 (out / "exports" / f"comic.{fmt}").write_bytes(await storage.get_bytes(key))
                 result.setdefault("exports", {})[fmt] = {"print_quality": ex.print_quality}
     contact_sheet(tiles, out / "contact-sheet.png")
+    result["review_flags"] = review_flags(result, bible)
     return result
+
+
+def review_flags(result: dict[str, Any], bible: Any) -> list[dict[str, Any]]:
+    """Conflicts in this (possibly already approved) comic, found with today's checks and only
+    reported: approved rules and scripts are never changed here."""
+    from storypanel.domain.schemas import BeatSheet, ComicScript
+    from storypanel.domain.validation import story_checks
+
+    if not result["scripts"] or bible is None:
+        return []
+    last = result["scripts"][-1]
+    script = ComicScript.model_validate(last["content"])
+    beats = BeatSheet.model_validate(last["beats"]) if last.get("beats") else None
+    return [i.model_dump() for i in story_checks(script, beats, bible.continuity_rules)]
 
 
 def main() -> int:

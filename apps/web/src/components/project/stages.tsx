@@ -249,11 +249,24 @@ function ErrorWithDetails({ error, fresh = false }: { error: unknown; fresh?: bo
   );
 }
 
+/** Which check raised a layout concern and how sure it is (mirrors services/projects.layout_notes). */
+function layoutNotes(check: { whole_figures?: string; layout_unverified?: boolean; layout_cut_off?: boolean; layout?: Record<string, { method?: string }> }): string[] {
+  const notes: string[] = [];
+  if (check.whole_figures === "no") notes.push("The review saw a turnaround view cut off or missing.");
+  else if (check.whole_figures === "uncertain") notes.push("The review couldn't tell whether all four turnaround views are complete.");
+  if (check.layout_cut_off) notes.push("A turnaround figure touches the image edge and is probably cut off (measured).");
+  const layout = check.layout ?? {};
+  if (layout.turnaround?.method === "unverified") notes.push("The turnaround views couldn't be separated automatically, so they weren't checked. Look at them yourself.");
+  if (layout.expressions?.method === "unverified") notes.push("The expression close-ups couldn't be separated automatically, so they weren't checked. Look at them yourself.");
+  if (check.layout_unverified && Object.keys(layout).length === 0) notes.push("A sheet's layout couldn't be checked automatically. Look at all views yourself.");
+  return notes;
+}
+
 type SheetItem = { item: string; note?: string; visible?: string; depicted_correctly?: string };
 
 /** The reference-sheet review: flags for the user to look at. Nothing is redrawn automatically. */
 function SheetReview({ c, onFix }: { c: Character; onFix: (text: string) => void }) {
-  const check = c.sheet_check as { status?: string; problems?: SheetItem[]; uncertain?: SheetItem[]; whole_figures?: string; layout_unverified?: boolean } | null;
+  const check = c.sheet_check as { status?: string; problems?: SheetItem[]; uncertain?: SheetItem[]; whole_figures?: string; layout_unverified?: boolean; layout_cut_off?: boolean; layout?: Record<string, { method?: string }> } | null;
   if (!check) return null;
   if (check.status === "pending") return <p className="text-sm text-muted" role="status">Reviewing the sheet against the design…</p>;
   if (check.status === "ok" && c.sheet_rules_current === false) return <Notice tone="warn" title="Reviewed against older rules">The continuity rules for {c.name} changed after this sheet was reviewed, so the new rules weren&apos;t checked against it. Look it over yourself; you&apos;ll be asked to confirm when you approve the cast.</Notice>;
@@ -265,13 +278,14 @@ function SheetReview({ c, onFix }: { c: Character; onFix: (text: string) => void
   return (
     <Notice tone="warn" title="Please check this sheet">
       <ul className="list-inside list-disc space-y-1">
-        {problems.map((p) => <li key={p.item}><b>{p.item}</b>: {p.note || "not drawn as described"} <button type="button" className="ml-1 underline" onClick={() => onFix(`Fix: ${p.item}${p.note ? ` (now ${p.note})` : ""}`)}>Use as revision</button></li>)}
+        {problems.map((p) => <li key={p.item}><b>{p.item}</b>: {p.note || "not drawn as described"} <button type="button" className="ml-1 underline" onClick={() => onFix(`Fix: ${p.item}${p.note ? ` (now ${p.note})` : ""}`)}>Put this fix in the revision box</button></li>)}
         {unsure.map((p) => <li key={p.item}><b>{p.item}</b>: couldn&apos;t tell from the sheet</li>)}
-        {(check.whole_figures === "no" || check.layout_unverified) && <li>A turnaround view may be cut off or missing.</li>}
+        {layoutNotes(check).map((n) => <li key={n}>{n}</li>)}
       </ul>
       {aside}
       {c.sheet_rules_current === false && <p className="mt-1 text-xs font-semibold">This review was made before the continuity rules changed.</p>}
-      <p className="mt-1 text-xs">This review is a model&apos;s judgment and can be wrong. Revising redraws the sheet and costs 1 credit if it succeeds.</p>
+      <p className="mt-1 text-xs font-semibold">Every panel is drawn from this sheet, so a defect you approve here usually repeats in later panels.</p>
+      <p className="mt-1 text-xs">Item checks are a model&apos;s judgment and can be wrong; items marked measured come from the image itself. Revising redraws the whole sheet and costs 1 credit, charged only if a new sheet is delivered.</p>
     </Notice>
   );
 }
@@ -428,7 +442,23 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
         <Field label="What this panel adds" hint="New information, action, emotion or the payoff. Guides the drawing.">{(ids) => <Input {...ids} maxLength={200} value={panel.purpose ?? ""} onChange={(e) => onChange({ ...panel, purpose: e.target.value })} />}</Field>
         <Field label="Focal point" hint="The one thing the eye should land on.">{(ids) => <Input {...ids} maxLength={120} value={panel.focus ?? ""} onChange={(e) => onChange({ ...panel, focus: e.target.value })} />}</Field>
       </div>
-      <Field label="Not visible yet" hint="Things the story reveals later, kept out of this picture. One per line, up to 4.">{(ids) => <Textarea {...ids} className="min-h-12" value={(panel.not_shown ?? []).join("\n")} onChange={(e) => onChange({ ...panel, not_shown: e.target.value.split("\n").slice(0, 4).map((x) => x.slice(0, 120)) })} />}</Field>
+      <div className="space-y-2">
+        <p className="text-sm font-semibold">Story elements and their timing ({(panel.element_states ?? []).length} of 4)</p>
+        <p className="text-xs text-muted">For things the story reveals later. Hidden from the reader is still in the scene; unnoticed is a deliberate hint the reader may spot.</p>
+        {(panel.element_states ?? []).map((e, i) => (
+          <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(10rem,max-content)_auto] items-start gap-2">
+            <Input aria-label={`Story element ${i + 1}`} maxLength={80} value={e.element} onChange={(ev) => onChange({ ...panel, element_states: (panel.element_states ?? []).map((x, n) => (n === i ? { ...x, element: ev.target.value } : x)) })} />
+            <Select aria-label={`Story element ${i + 1} state`} value={e.state} onChange={(ev) => onChange({ ...panel, element_states: (panel.element_states ?? []).map((x, n) => (n === i ? { ...x, state: ev.target.value as typeof e.state } : x)) })}>
+              <option value="absent">Not in the scene yet</option>
+              <option value="hidden">Hidden from the reader</option>
+              <option value="unnoticed">Visible, unnoticed (a hint)</option>
+              <option value="revealed">Revealed</option>
+            </Select>
+            <Button variant="ghost" size="icon" aria-label={`Remove story element ${i + 1}`} onClick={() => onChange({ ...panel, element_states: (panel.element_states ?? []).filter((_, n) => n !== i) })}><Trash2 className="h-4 w-4" aria-hidden /></Button>
+          </div>
+        ))}
+        {(panel.element_states ?? []).length < 4 && <Button variant="ghost" size="sm" onClick={() => onChange({ ...panel, element_states: [...(panel.element_states ?? []), { element: "", state: "hidden" }] })}><Plus className="h-4 w-4" aria-hidden /> Add story element</Button>}
+      </div>
       <div className="space-y-2">
         <p className="text-sm font-semibold">Lettering ({dialogue.length} of {maxBalloons})</p>
         {dialogue.map((d, i) => {

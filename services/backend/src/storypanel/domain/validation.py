@@ -20,7 +20,7 @@ FIELD_LIMITS = {"action": 500, "angle": 120, "mood": 120, "time_of_day": 120, "p
 CHARACTER_FIELD_LIMITS = {"pose": 120, "expression": 120}
 MAX_BALLOON_CHARS = 300
 MAX_WORD_CHARS = 24
-MAX_NOT_SHOWN = 4  # a longer unbroken word cannot be wrapped inside a balloon
+MAX_ELEMENTS = 4  # a longer unbroken word cannot be wrapped inside a balloon
 
 
 @dataclass(frozen=True)
@@ -94,9 +94,11 @@ def validate_script(
                     if len(getattr(ch, name)) > limit:
                         err("text_too_long", f"{path}.characters[{ci}].{name}",
                             f"Use at most {limit} characters here.")  # fmt: skip
-            if len(panel.not_shown) > MAX_NOT_SHOWN or any(len(x) > 120 for x in panel.not_shown):
-                err("text_too_long", f"{path}.not_shown",
-                    f"List at most {MAX_NOT_SHOWN} things, each under 120 characters.")  # fmt: skip
+            if len(panel.element_states) > MAX_ELEMENTS or any(
+                len(e.element) > 80 for e in panel.element_states
+            ):
+                err("text_too_long", f"{path}.element_states",
+                    f"Track at most {MAX_ELEMENTS} story elements per panel, each named in under 80 characters.")  # fmt: skip
             if panel.location_id not in location_ids:
                 err("unknown_location", f"{path}.location_id",
                     f"Location '{panel.location_id}' is not defined in the Story Bible.")  # fmt: skip
@@ -220,27 +222,21 @@ def story_checks(
             out.append(ScriptIssue(code="payoff_not_last", path=f"pages[{pi}].panels[{ni}].beats", severity="warning",
                                    message=f"The last panel doesn't show the final beat (“{beats.beats[-1].name}”), so the "
                                            "ending may not pay off the setup."))  # fmt: skip
-    order = {"left": 0, "center": 1, "right": 2}
-    for pi, ni, p in flat:  # the first speaker should stand left of whoever answers
-        pos = {c.id: order[c.position] for c in p.characters}
-        speakers = [d.speaker for d in p.dialogue if d.type in ("speech", "thought") and d.speaker is not None
-                    and d.speaker in pos]  # fmt: skip
-        opener = speakers[0] if speakers else None
-        later = [s for s in speakers[1:] if s != opener]
-        if opener and later and pos[opener] > pos[later[0]]:
-            out.append(ScriptIssue(code="speaker_order", path=f"pages[{pi}].panels[{ni}].characters", severity="warning",
-                                   message=f"{where(pi, ni)}: the first speaker stands to the right of the one who answers, "
-                                           "so the balloons may be read in the wrong order. Swap their positions."))  # fmt: skip
-    for pi, ni, p in flat:  # a thing kept for later is described in the panel itself
-        said_here = set(_words(p.action))
-        for item in p.not_shown:
-            item_words = {w for w in _words(item) if len(w) > 3}
-            if item_words and item_words <= said_here:
-                out.append(ScriptIssue(code="not_shown_conflict", path=f"pages[{pi}].panels[{ni}].not_shown",
+    unseen = ("absent", "hidden")
+    for pi, ni, p in flat:  # an element kept from the reader that the panel's own action describes
+        said_here = _key_words(p.action)
+        for e in p.element_states:
+            words = _key_words(e.element)
+            if e.state in unseen and words and words <= said_here:
+                out.append(ScriptIssue(code="element_state_conflict", path=f"pages[{pi}].panels[{ni}].element_states",
                                        severity="warning",
-                                       message=f"{where(pi, ni)} says “{item}” must not be visible yet, but its action "
-                                               "describes it. Change one of them."))  # fmt: skip
-    out += reveal_rules(flat, beats, rules or [], where)
+                                       message=f"{where(pi, ni)}: “{e.element}” is marked {e.state}, but the action "
+                                               "describes it. Change the action or the state."))  # fmt: skip
+    out += rule_state_conflicts(flat, rules or [], where)
+    if not any(
+        p.element_states for _, _, p in flat
+    ):  # no timing given: fall back to the beat-sheet heuristic
+        out += reveal_rules(flat, beats, rules or [], where)
     if any(p.purpose.strip() for _, _, p in flat):
         for pi, ni, p in flat:
             if not p.purpose.strip():
@@ -258,6 +254,33 @@ def _key_words(text: str) -> set[str]:
     return {w.rstrip("s") for w in _words(text) if len(w) > 3 and w not in STOP}
 
 
+def _rule_applies(r: ContinuityRule, p: PanelSpec) -> bool:
+    return r.id not in p.rule_exceptions and (
+        r.applies_to == "every_panel" or (r.applies_to == "location" and r.target == p.location_id)
+        or (r.applies_to == "character" and r.target in {c.id for c in p.characters}))  # fmt: skip
+
+
+def rule_state_conflicts(flat: list[tuple[int, int, PanelSpec]], rules: list[ContinuityRule],
+                         where: Callable[[int, int], str]) -> list[ScriptIssue]:  # fmt: skip
+    """A must rule requires an element in a panel where the story keeps it absent or hidden (Train:
+    "The ticket stub left on the table…" in the first café panel). Approved rules are never rewritten:
+    each conflict is a review item until the user excepts the rule there or changes the timing."""
+    out = []
+    for pi, ni, p in flat:
+        for e in p.element_states:
+            words = _key_words(e.element)
+            if e.state not in ("absent", "hidden") or not words:
+                continue
+            for r in rules:
+                if r.strength == "must" and r.visual and _rule_applies(r, p) and words <= _key_words(r.text):
+                    out.append(ScriptIssue(code="rule_state_conflict", path=f"pages[{pi}].panels[{ni}].rule:{r.id}",
+                                           severity="review",
+                                           message=f"{where(pi, ni)}: the continuity rule “{r.text}” requires "
+                                                   f"{e.element}, but the story keeps it {e.state} here. Mark the rule as "
+                                                   "not applying to this panel, or change the timing."))  # fmt: skip
+    return out
+
+
 def reveal_rules(flat: list[tuple[int, int, PanelSpec]], beats: BeatSheet | None, rules: list[ContinuityRule],
                  where: Callable[[int, int], str]) -> list[ScriptIssue]:  # fmt: skip
     """A must rule about what the ending reveals puts the ending into every earlier panel it applies
@@ -272,9 +295,7 @@ def reveal_rules(flat: list[tuple[int, int, PanelSpec]], beats: BeatSheet | None
         words = _key_words(r.text)
         if r.strength != "must" or not r.visual or len((words & end) - start) < 2:
             continue
-        early = [(pi, ni) for pi, ni, p in flat[:-1] if r.id not in p.rule_exceptions and (
-            r.applies_to == "every_panel" or (r.applies_to == "location" and r.target == p.location_id)
-            or (r.applies_to == "character" and r.target in {c.id for c in p.characters}))]  # fmt: skip
+        early = [(pi, ni) for pi, ni, p in flat[:-1] if _rule_applies(r, p)]
         if early:
             out.append(ScriptIssue(code="reveal_rule", path=f"rule:{r.id}", severity="warning",
                                    message=f"The continuity rule “{r.text}” is about what the ending reveals, but it applies "

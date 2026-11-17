@@ -237,6 +237,7 @@ REVIEW_KINDS = {
     "rule_conflict": "Continuity rules conflict",
     "consistency_incomplete": "Panel wasn't checked against the Story Bible",
     "consistency_unavailable": "Script wasn't checked against the Story Bible",
+    "rule_state_conflict": "A continuity rule conflicts with the story's timing",
 }
 _ISSUE_PATH = re.compile(r"^pages\[(\d+)\]\.panels\[(\d+)\](?:\.rule:([a-z0-9_]+)|\.beat:(.+))?$")
 
@@ -271,6 +272,26 @@ def _clause(text: str) -> str:
     return text.strip().rstrip(".;:").rstrip()
 
 
+def layout_notes(check: dict[str, Any]) -> list[str]:
+    """Which check raised a layout concern, and whether it was measured, judged or not checked."""
+    notes = []
+    if check.get("whole_figures") == "no":
+        notes.append("the review saw a turnaround view cut off or missing")
+    elif check.get("whole_figures") == "uncertain":
+        notes.append("the review couldn't tell whether all four turnaround views are complete")
+    layout = check.get("layout") or {}
+    if check.get("layout_cut_off"):
+        notes.append("a turnaround figure touches the image edge and is probably cut off (measured)")
+    for sheet, label in (("turnaround", "turnaround views"), ("expressions", "expression close-ups")):
+        if (layout.get(sheet) or {}).get("method") == "unverified":
+            notes.append(
+                f"the {label} couldn't be separated automatically, so they weren't checked; look at them yourself"
+            )
+    if check.get("layout_unverified") and not layout:  # older results recorded only that something failed
+        notes.append("a sheet's layout couldn't be checked automatically; look at all views yourself")
+    return notes
+
+
 def sheet_review(c: Character, cast_version: int = 0,
                  rules: list[ContinuityRule] | None = None) -> api.ReviewItem | None:  # fmt: skip
     """What approving the cast acknowledges for this character's current sheet, if anything."""
@@ -296,8 +317,7 @@ def sheet_review(c: Character, cast_version: int = 0,
             for p in check.get("problems", [])
         ][:3]
         bits += [f"{_clause(u['item'])}: uncertain" for u in check.get("uncertain", [])][:2]
-        if check.get("whole_figures") == "no" or check.get("layout_unverified"):
-            bits.append("a turnaround view may be cut off")
+        bits += layout_notes(check)
         msg = f"{c.name}'s reference sheet was flagged: " + "; ".join(bits or ["see the sheet review"]) + "."
         if stale:
             msg += " The review was also made before the continuity rules changed."
@@ -446,7 +466,8 @@ async def patch_script(db: AsyncSession, project: Project, body: api.PatchScript
     current = await repo.script_row(db, project.id, project.script_version)
     assert bible is not None and current is not None
     # every field that reaches an image prompt or the lettering is checked
-    text = " ".join(f"{p.action} {p.purpose} {p.focus} " + " ".join(p.not_shown) + " " + " ".join(d.text for d in p.dialogue)
+    text = " ".join(f"{p.action} {p.purpose} {p.focus} " + " ".join(e.element for e in p.element_states) + " "
+                    + " ".join(d.text for d in p.dialogue)
                     for page in body.script.pages for p in page.panels)  # fmt: skip
     verdict = moderation.rule_check(text)
     if verdict is not None:

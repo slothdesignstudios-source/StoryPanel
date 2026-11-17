@@ -9,7 +9,7 @@
 {% for r in must_rules %}Must be clearly visible: {{ r }}
 {% endfor %}{% for r in prefer_rules %}Where it fits naturally: {{ r }}
 {% endfor %}{% for r in exceptions %}Exception in this panel: "{{ r }}" does not hold here; follow the action above.
-{% endfor %}{% for item in not_shown %}Not in this panel (the story reveals it later): {{ item }}.
+{% endfor %}{% for line in element_lines %}{{ line }}
 {% endfor %}Setting: {{ location_description }}{% if time_of_day %}, {{ time_of_day }}{% endif %}. {{ mood }} mood.
 {% if focus %}Focal point: {{ focus }}.
 {% endif %}{% if fix_notes %}Corrections from the review of the previous attempt (keep everything else that already matches this description):

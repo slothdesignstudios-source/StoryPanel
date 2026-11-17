@@ -136,6 +136,7 @@ async def stage_generate_panel(
         aspect = art.panel_aspect(template, panel.index)
         preset = project.style_preset or styles().default
         continuity = None
+        previous_spec: PanelSpec | None = None
         if panel.index > 0 and kind != "edit":
             prev = (await db.execute(select(Panel).where(Panel.page_id == page.id,
                                                          Panel.index == panel.index - 1))).scalar_one_or_none()  # fmt: skip
@@ -143,6 +144,7 @@ async def stage_generate_panel(
                 asset_id = (await db.execute(select(PanelVersion.image_asset_id).where(
                     PanelVersion.id == prev.current_version_id))).scalar_one()  # fmt: skip
                 continuity = (str(prev.id), str(asset_id))
+                previous_spec = PanelSpec.model_validate(prev.spec)
         current_image: bytes | None = None
         if kind == "edit":
             if not panel.current_version_id:
@@ -234,6 +236,7 @@ async def stage_generate_panel(
             character_refs=char_refs, location_refs=loc_refs, continuity=continuity,
             max_references=s.image_max_references, fix_notes=tuple(fix_notes or ()), rules=rules,
             panel_size=(float(template.rects[panel.index][2]), float(template.rects[panel.index][3])),
+            previous=previous_spec,
         )  # fmt: skip
         async with transaction() as db:
             refs = [ImageInput(await repo.asset_bytes(db, uuid.UUID(slot.asset_id)))
@@ -298,7 +301,8 @@ async def stage_qa_panel(version_id: uuid.UUID, attempt: int) -> dict[str, Any]:
     outcome = await qa.evaluate_panel(image=image, panel=spec, cast=cast, audience=c["audience"], required=required,
                                       reference_images=ref_images,
                                       reference_embeddings=ref_vectors, identity_references=identity_refs,
-                                      absent=list(spec.not_shown) if version.prompt_version not in ("v1", "v2", "v3") else [],
+                                      elements=[(e.element, e.state) for e in spec.element_states]
+                                      if version.prompt_version not in ("v1", "v2", "v3") else [],
                                       ctx=ctx)  # fmt: skip
     async with transaction() as db:
         version = (await db.execute(select(PanelVersion).where(PanelVersion.id == version_id)
@@ -686,13 +690,20 @@ def lettering_sizes(page_index: int, page: dict[str, Any]) -> list[dict[str, Any
 
 
 # Lettering problems worth a warning on the export, with what each needs from the user.
+# Confirmed: measured against positions the check reported. Uncertain: a face position was only
+# guessed from the script, so a problem can't be ruled out; the user should look.
 EXPORT_FLAG_TEXT = {
     "covers_face": "a balloon covers a face",
     "covers_prop": "a balloon covers an important object",
     "overflow": "text doesn't fit at a readable size",
     "reading_order": "balloons may read out of order",
     "overlaps_lettering": "lettering overlaps other lettering",
+    "tail_ambiguous": "a tail points nearer another character than its speaker",
+    "sfx_covers_character": "a sound effect covers a character",
+    "face_position_estimated": "possibly: a balloon may cover a face (faces weren't located automatically; please check)",
+    "tail_target_estimated": "possibly: a tail may not point at its speaker (faces weren't located automatically)",
 }
+UNCERTAIN_FLAGS = frozenset({"face_position_estimated", "tail_target_estimated"})
 
 
 def lettering_problems(page_index: int, page: dict[str, Any]) -> list[dict[str, Any]]:
@@ -740,9 +751,13 @@ def merge_print_quality(current: dict[str, Any] | None, page_index: int, panels:
     )
     frows.sort(key=lambda r: (r["page"], r["panel"]))
     for r in frows:
-        what = "; ".join(EXPORT_FLAG_TEXT[f] for f in r["flags"])
-        warnings.append(f"Page {r['page']}, panel {r['panel']}: {what}. In the editor, move or shorten the balloon, "
-                        "or redraw the panel.")  # fmt: skip
+        sure = [EXPORT_FLAG_TEXT[f] for f in r["flags"] if f not in UNCERTAIN_FLAGS]
+        maybe = [EXPORT_FLAG_TEXT[f] for f in r["flags"] if f in UNCERTAIN_FLAGS]
+        if sure:
+            warnings.append(f"Page {r['page']}, panel {r['panel']}: {'; '.join(sure)}. In the editor: move the balloon, "
+                            "shorten the text, or redraw the panel to leave room.")  # fmt: skip
+        if maybe:
+            warnings.append(f"Page {r['page']}, panel {r['panel']}: {'; '.join(maybe)}.")
     return {"lettering": lrows, "lettering_flags": frows, "min_letter_pt": min((r["pt"] for r in lrows), default=None),
             "min_letter_px": min((r["px"] for r in lrows), default=None), "method": method, "print_width_in": PRINT_WIDTH_IN,
             "note": "Panels are resampled locally (Lanczos); this does not add detail." if method == "local_resample"

@@ -524,13 +524,6 @@ async def stage_script_unchecked(project_id: uuid.UUID, version: int) -> None:
         await events.notify_after_commit(db)
 
 
-def layout_flags_sheet(layout: dict[str, Any]) -> bool:
-    """Only the turnaround's views are identity references in panels. An expression sheet whose
-    close-ups fill their cells edge to edge can't be split automatically; that is not a defect of the
-    character, so it doesn't flag the sheet (it used to be reported as a cut-off turnaround view)."""
-    return (layout.get("turnaround") or {}).get("method") == "unverified"
-
-
 async def stage_check_sheet(project_id: uuid.UUID, slug: str) -> dict[str, Any]:
     """Review the current reference sheet of one character; flags are shown, nothing is redrawn."""
     async with transaction() as db:
@@ -563,9 +556,15 @@ async def stage_check_sheet(project_id: uuid.UUID, slug: str) -> dict[str, Any]:
         if char.sheet_version != version:
             return {"outcome": "skipped"}  # a newer sheet replaced it meanwhile
         layout = (char.sheet_check or {}).get("layout") or {}
-        if layout_flags_sheet(layout):
+        if any(r.get("method") == "unverified" for r in layout.values()):
             result["status"] = "flagged"
             result["layout_unverified"] = True
+        if any(
+            str(x).startswith("figure_touches_edge")
+            for x in (layout.get("turnaround") or {}).get("problems", [])
+        ):
+            result["status"] = "flagged"  # measured: a full-body view runs off the image edge
+            result["layout_cut_off"] = True
         char.sheet_check = {"sheet_version": version, "layout": layout,
                             "checked_at": datetime.now(UTC).isoformat(), **result}  # fmt: skip
         await events.emit(db, project_id, "character.checked", {"slug": slug, "status": result["status"]})

@@ -200,6 +200,19 @@ class PanelCharacter(Strict):
     expression: str
 
 
+class ElementState(Strict):
+    """Where a story element (a gift, a note, flowers about to bloom) stands in one panel. Separate from
+    continuity rules, which are facts that hold in every panel they apply to.
+
+    absent:    not physically in the scene yet;
+    hidden:    in the scene but hidden from the reader (in a bag, under a cup, out of frame);
+    unnoticed: visible to the reader but not yet noticed by the characters (deliberate foreshadowing);
+    revealed:  revealed to both the reader and the characters."""
+
+    element: str  # the same short wording in every panel, e.g. "the ticket stub"
+    state: Literal["absent", "hidden", "unnoticed", "revealed"]
+
+
 class PanelSpec(Strict):
     shot: Literal["wide", "medium", "close_up"]
     angle: str
@@ -218,8 +231,8 @@ class PanelSpec(Strict):
     # the one thing the eye should land on. Both feed the panel's visual plan.
     purpose: str = ""
     focus: str = ""
-    # Added with prompts v4: things the story reveals later that must not be visible in this panel yet.
-    not_shown: list[str] = Field(default_factory=list)
+    # Added with prompts v4: the timing of story elements in this panel (empty in earlier scripts).
+    element_states: list[ElementState] = Field(default_factory=list)
 
 
 class PageSpec(Strict):
@@ -329,9 +342,9 @@ class RequiredElement(Strict):
     box: Box | None = None  # where it is drawn (prompts v3), so lettering can keep it clear
 
 
-class AbsentElement(Strict):
+class ElementObservation(Strict):
     number: int  # 1-based, as listed in the request
-    visible: Literal["yes", "no", "uncertain"]
+    visible: Literal["yes", "no", "uncertain"]  # can the reader see it in the picture?
 
 
 class VisionQAReport(Strict):
@@ -344,8 +357,8 @@ class VisionQAReport(Strict):
     fix_notes: list[str]
     # one entry per required visual continuity rule listed in the request
     required_elements: list[RequiredElement] = Field(default_factory=list)
-    # prompts v4: one entry per thing that must not be visible yet, by its number in the request
-    absent_elements: list[AbsentElement] = Field(default_factory=list)
+    # prompts v4: one entry per story element listed in the request, by its number
+    element_checks: list[ElementObservation] = Field(default_factory=list)
 
 
 # Gemini visual identity QA: a categorical judgment from comparing the panel with the approved

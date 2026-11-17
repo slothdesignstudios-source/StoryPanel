@@ -84,9 +84,70 @@ def _crop(img: Image.Image, box: tuple[float, float, float, float]) -> bytes:
     return out.getvalue()
 
 
+EDGE_BAND = 0.015  # share of the image height checked at the top and bottom edges
+EDGE_INK = 0.04  # ink share in that band (within one figure's column) that means the figure runs off the edge
+GUTTER_STD = 10.0  # a crop line through a gutter or a plain background varies this little in brightness
+
+
+def _edge_problems(mask: Image.Image, cols: int) -> list[str]:
+    """A full-body view touching the top or bottom edge of the image is cut off there. The grid and
+    crop-line tests can't see this (a figure can sit perfectly inside its cell and still lose its feet)."""
+    mw, mh = mask.size
+    band = max(1, int(mh * EDGE_BAND))
+    out = []
+    for c in range(cols):
+        x0, x1 = int(c * mw / cols), int((c + 1) * mw / cols)
+        if max(_share(mask, (x0, 0, x1, band)), _share(mask, (x0, mh - band, x1, mh))) > EDGE_INK:
+            out.append(f"figure_touches_edge:{c}")
+    return out
+
+
+def _gutter_grid(img: Image.Image, cols: int, rows: int) -> bool:
+    """Close-ups that fill their cells edge to edge leave no common background, so the border-based
+    ink test sees every cell as empty. They are still a clean grid when every crop line runs through
+    a uniform gutter and every cell has content against its own edges."""
+    from PIL import ImageStat
+
+    gray = img.convert("L")
+    gray.thumbnail((WORK * 3, WORK * 3))
+    w, h = gray.size
+
+    def clean_line(vertical: bool, at: float) -> bool:
+        # the most uniform single-pixel line within 2% of where the cells meet
+        size, length = (w, h) if vertical else (h, w)
+        reach = max(1, int(size * 0.02))
+        for off in range(-reach, reach + 1):
+            k = int(at * size) + off
+            if not 0 <= k < size:
+                continue
+            line = gray.crop((k, 0, k + 1, length) if vertical else (0, k, length, k + 1))
+            if ImageStat.Stat(line).stddev[0] <= GUTTER_STD:
+                return True
+        return False
+
+    if not all(clean_line(True, c / cols) for c in range(1, cols)) or not all(
+        clean_line(False, r / rows) for r in range(1, rows)
+    ):
+        return False
+    for r in range(rows):
+        for c in range(cols):
+            cell = img.crop((int(c * img.width / cols), int(r * img.height / rows),
+                             int((c + 1) * img.width / cols), int((r + 1) * img.height / rows)))  # fmt: skip
+            if _share(_ink(cell), (0, 0, *_ink(cell).size)) < MIN_CELL_INK:
+                return False
+    return True
+
+
 def analyse(data: bytes, cols: int, rows: int) -> SheetLayout:
     with Image.open(io.BytesIO(data)) as raw:
         img = raw.convert("RGB")
+    result = _analyse(img, cols, rows)
+    if rows == 1 and result.method != "unverified":  # full-body turnaround: also check the image edges
+        result.problems += _edge_problems(_clear_bands(_ink(img)), cols)
+    return result
+
+
+def _analyse(img: Image.Image, cols: int, rows: int) -> SheetLayout:
     mask = _clear_bands(_ink(img))
     mw, mh = mask.size
     problems: list[str] = []
@@ -126,4 +187,9 @@ def analyse(data: bytes, cols: int, rows: int) -> SheetLayout:
         boxes = [(max(0.0, x0 / mw - pad), max(0.0, y0 / mh - pad), min(1.0, x1 / mw + pad), min(1.0, y1 / mh + pad))
                  for (y0, y1) in ys for (x0, x1) in xs]  # fmt: skip
         return SheetLayout("segmented", [_crop(img, b) for b in boxes], problems)
+    if _gutter_grid(img, cols, rows):
+        boxes = [
+            (c / cols, r / rows, (c + 1) / cols, (r + 1) / rows) for r in range(rows) for c in range(cols)
+        ]
+        return SheetLayout("grid", [_crop(img, b) for b in boxes], ["separated_by_gutters"])
     return SheetLayout("unverified", [], problems + ["figures_not_separable"])
