@@ -29,7 +29,11 @@ const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {
-    return [{
+    // Account and project pages are never indexed, even if robots.txt is ignored (src/lib/site.ts).
+    const noindex = ["/dashboard", "/new", "/projects", "/billing", "/settings", "/sign-in"].flatMap((p) => [p, `${p}/:path*`]).map((source) => ({
+      source, headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+    }));
+    return [...noindex, {
       source: "/:path*",
       headers: [
         { key: "Content-Security-Policy", value: csp },

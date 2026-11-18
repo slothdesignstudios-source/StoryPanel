@@ -7,12 +7,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { Badge, Button, Card, Dialog, DialogContent, DialogTrigger, Field, Notice, Select, Spinner, Textarea, cn } from "@/components/ui";
+import { Badge, Button, Card, Dialog, DialogContent, DialogTrigger, Disclosure, Field, Input, Notice, Select, Spinner, Textarea, cn } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
 import { wordCount } from "@/lib/text";
 import { QA_STATE_LABEL, type Balloon, type ExportOut, type Geometry, type Page, type Panel, type Project } from "@/lib/types";
 import { onIdentityReset, pk } from "@/lib/session";
-import { LETTERING_SUPPORTED_SUMMARY, unsupportedLetteringChars, unsupportedLetteringMessage } from "@/lib/lettering-charset";
+import { unsupportedLetteringChars, unsupportedLetteringMessage } from "@/lib/lettering-charset";
 import { ContinuityRules } from "./continuity";
 
 const PageCanvas = dynamic(() => import("./page-canvas"), { ssr: false, loading: () => <div className="halftone aspect-[2/3] w-full" /> });
@@ -53,7 +53,7 @@ function Exports({ project }: { project: Project }) {
   });
   const retry = useMutation({ mutationFn: async (id: string) => (await api.POST("/v1/exports/{export_id}/retry", { params: { path: { export_id: id } } })).data, onSuccess: refresh, onError: (e) => toast.error(describeError(e)) });
   const row = (e: ExportOut) => (
-    <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border-2 border-line px-3 py-2 text-sm">
+    <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2 text-sm">
       <span className="font-semibold uppercase">{e.format}</span>
       <span className="text-muted">{new Date(e.created_at).toLocaleTimeString()}</span>
       {e.status === "ready" && e.edit_version < project.edit_version && <Badge tone="warn">Before your latest edits</Badge>}
@@ -69,8 +69,8 @@ function Exports({ project }: { project: Project }) {
       <DialogContent title="Export your comic" description="Exports capture the comic exactly as it is now. Later edits don't change a file that's already rendering.">
         <div className="grid gap-3 sm:grid-cols-3">
           {([["pdf", "PDF", "Print and share"], ["png", "PNG pages", "Post page by page"], ["cbz", "CBZ", "Comic reader apps"]] as const).map(([f, name, hint]) => (
-            <button key={f} type="button" disabled={start.isPending} onClick={() => start.mutate(f)} className="rounded-md border-2 border-ink bg-card p-3 text-left shadow-panel-sm hover:bg-sun/40 disabled:opacity-50">
-              <span className="block font-bold">{name}</span><span className="text-xs text-muted">{hint}</span>
+            <button key={f} type="button" disabled={start.isPending} onClick={() => start.mutate(f)} className="rounded-lg border border-line bg-card p-3 text-left shadow-raised hover:border-accent hover:bg-accent-soft disabled:opacity-50">
+              <span className="block font-semibold">{name}</span><span className="text-xs text-muted">{hint}</span>
             </button>
           ))}
         </div>
@@ -93,12 +93,12 @@ function Versions({ panel, onDone }: { panel: Panel; onDone: () => void }) {
   return (
     <ul className="grid gap-4 sm:grid-cols-2">
       {q.data.map((v, i) => (
-        <li key={v.id} className={cn("overflow-hidden rounded-md border-2", v.is_current ? "border-teal" : "border-line")}>
+        <li key={v.id} className={cn("overflow-hidden rounded-md border", v.is_current ? "border-accent" : "border-line")}>
           {/* eslint-disable-next-line @next/next/no-img-element -- signed asset URL */}
           <img src={v.image_url ?? ""} alt={`Version ${q.data.length - i}${v.is_current ? ", current" : ""}`} className="aspect-[4/3] w-full bg-paper object-contain" />
           <div className="space-y-2 p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-bold">Version {q.data.length - i}</span>
+              <span className="font-semibold">Version {q.data.length - i}</span>
               {v.is_current && <Badge tone="working">Current</Badge>}
               <Badge tone={v.qa_state === "passed" ? "ok" : "warn"}>{v.qa_state === "passed" ? "Passed checks" : QA_STATE_LABEL[v.qa_state] ?? "Needs attention"}</Badge>
             </div>
@@ -162,7 +162,7 @@ function PanelTools({ project, page, panel }: { project: Project; page: Page; pa
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-lg font-bold">Panel {panel.index + 1}</h3>
+        <h3 className="text-lg font-semibold">Panel {panel.index + 1}</h3>
         {panel.busy ? <Badge tone="working">Redrawing</Badge> : panel.status === "needs_attention" ? <Badge tone="warn">{(QA_STATE_LABEL[panel.qa_state ?? ""] ?? "needs attention").replace(/^./, (c) => c.toUpperCase())}</Badge> : panel.status === "blocked" ? <Badge tone="danger">Blocked by safety check</Badge> : panel.status === "failed" ? <Badge tone="danger">Couldn&apos;t draw</Badge> : <Badge tone="ok">Looks good</Badge>}
       </div>
       <p className="text-sm text-muted">{String(panel.spec.action ?? "")}</p>
@@ -185,15 +185,17 @@ function PanelTools({ project, page, panel }: { project: Project; page: Page; pa
         </Field>
         <Button type="submit" busy={edit.isPending} disabled={!hasImage || panel.busy || instruction.trim().length < 3}><Wand2 className="h-4 w-4" aria-hidden />Apply fix</Button>
       </form>
-      <div className="flex flex-wrap items-center gap-2 border-t-2 border-line pt-4">
-        <span className="text-sm font-semibold">Reading order</span>
-        <Button size="sm" disabled={idx <= 0 || reorder.isPending} onClick={() => reorder.mutate(idx - 1)}>Move earlier</Button>
-        <Button size="sm" disabled={idx >= order.length - 1 || reorder.isPending} onClick={() => reorder.mutate(idx + 1)}>Move later</Button>
-      </div>
-      <form className="flex items-end gap-2 border-t-2 border-line pt-4" onSubmit={(e) => { e.preventDefault(); if (addText.trim()) add.mutate(); }}>
-        <div className="flex-1"><Field label="Add a caption">{(ids) => <input {...ids} className="h-11 w-full rounded-md border-2 border-ink/80 bg-card px-3 text-sm" value={addText} maxLength={200} onChange={(e) => setAddText(e.target.value)} disabled={panel.balloons.length >= 3} />}</Field></div>
-        <Button type="submit" busy={add.isPending} disabled={!addText.trim() || panel.balloons.length >= 3}><Plus className="h-4 w-4" aria-hidden />Add</Button>
-      </form>
+      <Disclosure label="More panel tools" summary="reading order, add a caption">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold">Reading order</span>
+          <Button size="sm" disabled={idx <= 0 || reorder.isPending} onClick={() => reorder.mutate(idx - 1)}>Move earlier</Button>
+          <Button size="sm" disabled={idx >= order.length - 1 || reorder.isPending} onClick={() => reorder.mutate(idx + 1)}>Move later</Button>
+        </div>
+        <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (addText.trim()) add.mutate(); }}>
+          <div className="flex-1"><Field label="Add a caption" hint={panel.balloons.length >= 3 ? "This panel already has 3 balloons." : undefined}>{(ids) => <Input {...ids} value={addText} maxLength={200} onChange={(e) => setAddText(e.target.value)} disabled={panel.balloons.length >= 3} />}</Field></div>
+          <Button type="submit" busy={add.isPending} disabled={!addText.trim() || panel.balloons.length >= 3}><Plus className="h-4 w-4" aria-hidden />Add</Button>
+        </form>
+      </Disclosure>
     </div>
   );
 }
@@ -205,9 +207,9 @@ function BalloonTools({ balloon, geometry, pageSize, onGeometry, onText, onDelet
   const unsupported = unsupportedLetteringChars(textValue);
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2"><h3 className="text-lg font-bold capitalize">{balloon.type === "sfx" ? "Sound effect" : balloon.type}</h3>{FLAG_LABELS.filter(([f]) => balloon.flags.includes(f)).map(([f, label]) => <Badge key={f} tone="warn">{label}</Badge>)}</div>
+      <div className="flex items-center gap-2"><h3 className="text-lg font-semibold capitalize">{balloon.type === "sfx" ? "Sound effect" : balloon.type}</h3>{FLAG_LABELS.filter(([f]) => balloon.flags.includes(f)).map(([f, label]) => <Badge key={f} tone="warn">{label}</Badge>)}</div>
       {balloon.flags.includes("overflow") && <p role="note" className="text-sm text-warn">This text is already at the smallest readable size and still doesn&apos;t fit, so it spills out of the balloon. Shorten the text, make the balloon larger, or move it where there&apos;s more room.</p>}
-      <Field label="Text" hint={`${words} of 25 words. ${LETTERING_SUPPORTED_SUMMARY}`} error={words > 25 ? "Balloons hold at most 25 words. Shorten this line." : unsupported.length ? unsupportedLetteringMessage(unsupported) : null}>
+      <Field label="Text" hint={`${words} of 25 words.`} error={words > 25 ? "Balloons hold at most 25 words. Shorten this line." : unsupported.length ? unsupportedLetteringMessage(unsupported) : null}>
         {(ids) => <Textarea {...ids} className="min-h-20 font-comic text-base" maxLength={300} value={textValue} onChange={(e) => onText(e.target.value)} />}
       </Field>
       {/* Keyboard and screen-reader path for everything the canvas does with a pointer. */}
@@ -353,10 +355,10 @@ export function Editor({ project }: { project: Project }) {
         </Notice>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label="Pages" className="flex flex-wrap gap-2">
+        <nav aria-label="Pages" className="flex flex-wrap gap-1 rounded-lg border border-line bg-card p-1">
           {project.pages.map((p, i) => (
-            <button key={p.id} type="button" aria-current={i === pageIndex ? "page" : undefined} onClick={() => set({ pageIndex: i, panelId: null, balloonId: null })} className={cn("h-10 rounded-md border-2 border-ink px-3 text-sm font-semibold", i === pageIndex ? "bg-ink text-paper" : "bg-card hover:bg-sun/40")}>
-              Page {i + 1}{p.panels.some((x) => x.status !== "ok") && <span className="ml-1 text-warn" aria-label="has panels needing attention">●</span>}
+            <button key={p.id} type="button" aria-current={i === pageIndex ? "page" : undefined} onClick={() => set({ pageIndex: i, panelId: null, balloonId: null })} className={cn("h-9 rounded-md px-3 text-sm font-medium", i === pageIndex ? "bg-ink text-paper" : "text-muted hover:bg-ink/5 hover:text-ink")}>
+              Page {i + 1}{p.panels.some((x) => x.status !== "ok") && <span className={cn("ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle", i === pageIndex ? "bg-paper" : "bg-warn")} aria-label="has panels needing attention" />}
             </button>
           ))}
         </nav>
@@ -366,40 +368,45 @@ export function Editor({ project }: { project: Project }) {
           <Exports project={project} />
         </div>
       </div>
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <Card className="overflow-hidden p-2 sm:p-4">
-          <div ref={ref} className="mx-auto w-full max-w-3xl">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
+        <div className="rounded-xl border border-line bg-[#eceae4] p-2 sm:p-6">
+          <div ref={ref} className="mx-auto w-full max-w-3xl overflow-hidden rounded-sm shadow-float">
             {width > 0 && <PageCanvas page={page} width={width} editable selectedPanel={panelId} selectedBalloon={balloonId} drafts={drafts} onSelectPanel={(id) => set({ panelId: id })} onSelectBalloon={(id) => set({ balloonId: id })} onBalloonChange={changeGeometry} />}
           </div>
-        </Card>
-        <aside aria-label="Editing tools" className="space-y-4">
-          <Card className="p-4">
-            <Field label="Page layout" hint="Balloons move with their panels.">
-              {(ids) => <Select {...ids} value={page.layout_template_id} disabled={layout.isPending || page.layout_options.length < 2} onChange={(e) => layout.mutate(e.target.value)}>{page.layout_options.map((o) => <option key={o.id} value={o.id}>{o.id.replace(/^[ws]\d_/, "").replace(/_/g, " ")}</option>)}</Select>}
-            </Field>
-          </Card>
+        </div>
+        <aside aria-label="Editing tools" className="space-y-4 lg:sticky lg:top-20">
           <Card className="p-4">
             {balloon ? (
               <BalloonTools balloon={balloon} geometry={drafts[balloon.id] ?? (balloon.geometry as Geometry)} pageSize={page.size as [number, number]} textValue={texts[balloon.id] ?? balloon.text}
                 onGeometry={(g) => changeGeometry(balloon.id, g, true)} onText={(t) => { set({ texts: { ...useEditor.getState().texts, [balloon.id]: t } }); if (wordCount(t) <= 25 && t.trim()) persist(balloon.id, 700); else set({ save: "dirty" }); }} onDelete={() => remove.mutate(balloon.id)} />
-            ) : panel ? <PanelTools project={project} page={page} panel={panel} /> : <p className="text-sm text-muted">Select a panel or a balloon on the page, or pick one from the list below.</p>}
+            ) : panel ? <PanelTools project={project} page={page} panel={panel} /> : (
+              <div className="space-y-1">
+                <h3 className="text-lg">Edit this page</h3>
+                <p className="text-sm text-muted">Select a panel or a balloon on the page, or pick one from the list below. Drag balloons to move them; arrow keys work too.</p>
+              </div>
+            )}
           </Card>
           <Card className="p-4">
-            <h3 className="mb-2 font-bold">On this page</h3>
-            <ol className="space-y-2 text-sm">
+            <h3 className="mb-2 text-base">On this page</h3>
+            <ol className="space-y-1 text-sm">
               {page.panels.map((p) => (
                 <li key={p.id}>
-                  <button type="button" aria-pressed={panelId === p.id && !balloonId} onClick={() => set({ panelId: p.id, balloonId: null })} className={cn("w-full rounded-md px-2 py-1 text-left font-semibold hover:bg-ink/5", panelId === p.id && !balloonId && "bg-sun")}>Panel {p.index + 1}{p.qa_rules_current === false && <span className="ml-2 font-normal text-warn">checked against older rules</span>}{p.status !== "ok" && <span className="ml-2 font-normal text-warn">{p.busy ? "redrawing" : p.status === "needs_attention" ? QA_STATE_LABEL[p.qa_state ?? ""] ?? "needs attention" : p.status.replace("_", " ")}</span>}</button>
-                  <ul className="ml-3 border-l-2 border-line pl-2">
-                    {p.balloons.map((b) => <li key={b.id}><button type="button" aria-pressed={balloonId === b.id} onClick={() => set({ panelId: p.id, balloonId: b.id })} className={cn("w-full truncate rounded-md px-2 py-1 text-left hover:bg-ink/5", balloonId === b.id && "bg-sun")}><span className="text-muted">{b.type}: </span>{b.flags.includes("overflow") && <span className="font-semibold text-warn">doesn&apos;t fit · </span>}{texts[b.id] ?? b.text}</button></li>)}
+                  <button type="button" aria-pressed={panelId === p.id && !balloonId} onClick={() => set({ panelId: p.id, balloonId: null })} className={cn("w-full rounded-md px-2 py-1.5 text-left font-semibold hover:bg-ink/5", panelId === p.id && !balloonId && "bg-accent-soft text-accent hover:bg-accent-soft")}>Panel {p.index + 1}{p.qa_rules_current === false && <span className="ml-2 font-normal text-warn">checked against older rules</span>}{p.status !== "ok" && <span className="ml-2 font-normal text-warn">{p.busy ? "redrawing" : p.status === "needs_attention" ? QA_STATE_LABEL[p.qa_state ?? ""] ?? "needs attention" : p.status.replace("_", " ")}</span>}</button>
+                  <ul className="ml-3 border-l border-line pl-2">
+                    {p.balloons.map((b) => <li key={b.id}><button type="button" aria-pressed={balloonId === b.id} onClick={() => set({ panelId: p.id, balloonId: b.id })} className={cn("w-full truncate rounded-md px-2 py-1 text-left hover:bg-ink/5", balloonId === b.id && "bg-accent-soft hover:bg-accent-soft")}><span className="text-muted">{b.type}: </span>{b.flags.includes("overflow") && <span className="font-semibold text-warn">doesn&apos;t fit · </span>}{texts[b.id] ?? b.text}</button></li>)}
                   </ul>
                 </li>
               ))}
             </ol>
           </Card>
+          <Card className="p-4">
+            <Field label="Page layout" hint="Balloons move with their panels.">
+              {(ids) => <Select {...ids} value={page.layout_template_id} disabled={layout.isPending || page.layout_options.length < 2} onChange={(e) => layout.mutate(e.target.value)}>{page.layout_options.map((o) => <option key={o.id} value={o.id}>{o.id.replace(/^[ws]\d_/, "").replace(/_/g, " ")}</option>)}</Select>}
+            </Field>
+          </Card>
         </aside>
       </div>
-      {project.bible && <ContinuityRules project={project} />}
+      {project.bible && <Disclosure label="Continuity rules" summary="what every redraw and fix must keep" className="bg-card"><ContinuityRules project={project} /></Disclosure>}
     </div>
   );
 }

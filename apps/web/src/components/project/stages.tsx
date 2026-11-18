@@ -5,7 +5,7 @@ import { Check, Plus, Trash2, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Badge, Button, Card, Dialog, DialogClose, DialogContent, DialogTrigger, Field, Input, Notice, Select, Spinner, Textarea, cn } from "@/components/ui";
+import { Badge, Button, Card, Dialog, DialogClose, DialogContent, DialogTrigger, Disclosure, Field, Input, Notice, Select, Spinner, Textarea, cn } from "@/components/ui";
 import { ApiError, api, describeError, errorDetails, needsFreshReview } from "@/lib/api";
 import { wordCount } from "@/lib/text";
 import { STATUS_LABEL, type Character, type DialogueItem, type PanelSpec, type Project, type Script } from "@/lib/types";
@@ -52,7 +52,7 @@ export function Working({ project }: { project: Project }) {
         </div>
         <ol className="mt-5 grid gap-3 sm:grid-cols-4">
           {steps.map((s) => (
-            <li key={s.key} className={cn("rounded-md border-2 px-3 py-2 text-sm font-semibold", s.done ? "border-ok bg-ok/10 text-ok" : project.status === s.key ? "border-ink bg-sun" : "border-line text-muted")}>
+            <li key={s.key} className={cn("rounded-md border px-3 py-2 text-sm font-semibold", s.done ? "border-ok bg-ok/10 text-ok" : project.status === s.key ? "border-accent bg-accent-soft text-accent" : "border-line text-muted")}>
               {s.done && <Check className="mr-1 inline h-4 w-4" aria-hidden />}{s.label}
               {project.status === s.key && s.key === "planning" && p.characters_total > 0 && <span className="block text-xs font-normal">{p.characters_ready} of {p.characters_total} character sheets ready</span>}
               {project.status === s.key && s.key === "illustrating" && <span className="block text-xs font-normal">{p.panels_done} of {p.panels_total} panels · {p.pages_ready} of {p.pages_total} pages</span>}
@@ -64,7 +64,7 @@ export function Working({ project }: { project: Project }) {
       {project.characters.length > 0 && project.status === "planning" && (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {project.characters.map((c) => (
-            <li key={c.slug}><Card className="overflow-hidden"><Img src={c.images.portrait} alt={`${c.name} portrait`} className="aspect-[3/4] w-full object-cover" /><p className="p-3 font-bold">{c.name}</p></Card></li>
+            <li key={c.slug}><Card className="overflow-hidden"><Img src={c.images.portrait} alt={`${c.name} portrait`} className="aspect-[3/4] w-full object-cover" /><p className="p-3 font-semibold">{c.name}</p></Card></li>
           ))}
         </ul>
       )}
@@ -83,8 +83,8 @@ export function PagePreviews({ project }: { project: Project }) {
             <Card className="overflow-hidden">
               <Img src={page.preview_url} alt={`Page ${page.index + 1}`} className="w-full bg-paper object-contain" />
               {!page.preview_url && <div className="halftone" style={{ aspectRatio: `${page.size[0]} / ${page.size[1]}` }} />}
-              <div className="flex items-center justify-between border-t-2 border-ink p-3 text-sm">
-                <span className="font-bold">Page {page.index + 1}</span>
+              <div className="flex items-center justify-between border-t border-line p-3 text-sm">
+                <span className="font-semibold">Page {page.index + 1}</span>
                 <span className="text-muted">{page.status === "ready" ? "Lettered" : `${done} of ${page.panels.length} panels drawn`}</span>
               </div>
             </Card>
@@ -106,7 +106,7 @@ export function Questions({ project }: { project: Project }) {
   return (
     <Card className="mx-auto max-w-2xl space-y-6 p-6">
       <div>
-        <h2 className="text-xl font-bold">A couple of quick questions</h2>
+        <h2 className="text-xl font-semibold">A couple of quick questions</h2>
         <p className="text-sm text-muted">Each one is optional. Skip any of them and we&apos;ll use the suggested answer.</p>
       </div>
       {project.questions.map((q) => (
@@ -116,7 +116,7 @@ export function Questions({ project }: { project: Project }) {
             {q.options.map((o) => {
               const selected = (answers[q.id] ?? "") === o;
               return (
-                <label key={o} className={cn("cursor-pointer rounded-md border-2 px-3 py-2 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-teal", selected ? "border-ink bg-sun" : "border-line bg-card")}>
+                <label key={o} className={cn("cursor-pointer rounded-md border px-3 py-2 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-accent", selected ? "border-accent bg-accent-soft text-accent" : "border-line bg-card")}>
                   <input type="radio" className="sr-only" name={q.id} value={o} checked={selected} onChange={() => setAnswers((a) => ({ ...a, [q.id]: o }))} />
                   {o}{o === q.default && <span className="ml-1 font-normal text-muted">(suggested)</span>}
                 </label>
@@ -146,11 +146,11 @@ function CharacterCard({ project, c }: { project: Project; c: Character }) {
   const busy = c.revising || c.sheet_status !== "ready";
   return (
     <Card className="overflow-hidden">
-      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] border-b-2 border-ink">
-        <Img src={c.images.portrait} alt={`${c.name}, hero portrait`} className="aspect-[3/4] h-full w-full border-r-2 border-ink bg-paper object-contain" />
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] border-b border-line">
+        <Img src={c.images.portrait} alt={`${c.name}, hero portrait`} className="aspect-[3/4] h-full w-full border-r border-line bg-paper object-contain" />
         <div className="grid grid-rows-2">
           {/* contain, not cover: the turnaround holds four full views; cropping hides the outer ones */}
-          <a href={c.images.turnaround_sheet} target="_blank" rel="noreferrer" className="block min-h-0 border-b-2 border-ink bg-paper" aria-label={`Open ${c.name}'s full turnaround sheet`}>
+          <a href={c.images.turnaround_sheet} target="_blank" rel="noreferrer" className="block min-h-0 border-b border-line bg-paper" aria-label={`Open ${c.name}'s full turnaround sheet`}>
             <Img src={c.images.turnaround_sheet} alt={`${c.name}, turnaround: front, three-quarter, side and back views`} className="h-full w-full object-contain" />
           </a>
           <a href={c.images.expression_sheet} target="_blank" rel="noreferrer" className="block min-h-0 bg-paper" aria-label={`Open ${c.name}'s full expression sheet`}>
@@ -160,7 +160,7 @@ function CharacterCard({ project, c }: { project: Project; c: Character }) {
       </div>
       <div className="space-y-3 p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-lg font-bold">{c.name}</h3>
+          <h3 className="text-lg font-semibold">{c.name}</h3>
           <Badge>{c.spec.role}</Badge>
           {busy && <Badge tone="working">Updating sheet</Badge>}
         </div>
@@ -170,7 +170,7 @@ function CharacterCard({ project, c }: { project: Project; c: Character }) {
           {v.signature_features.map((f) => <li key={f}><Badge tone="action">{f}</Badge></li>)}
         </ul>
         <ul className="flex gap-1" aria-label="Colour palette">
-          {Object.entries(v.palette).map(([k, hex]) => <li key={k} title={`${k} ${hex}`} className="h-5 w-5 rounded-full border border-ink/40" style={{ background: hex }}><span className="sr-only">{k} {hex}</span></li>)}
+          {Object.entries(v.palette).map(([k, hex]) => <li key={k} title={`${k} ${hex}`} className="h-5 w-5 rounded-full border border-ink/20" style={{ background: hex }}><span className="sr-only">{k} {hex}</span></li>)}
         </ul>
         <SheetReview c={c} onFix={(text) => setInstruction(text)} />
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (instruction.trim().length >= 3) revise.mutate(); }}>
@@ -220,7 +220,7 @@ function ReviewList({ items, acks, setAcks }: { items: NonNullable<ReviewItem>[]
       {items.map((r) => {
         const where = [r.page ? `Page ${r.page}` : null, r.panel ? `Panel ${r.panel}` : null, r.character].filter(Boolean).join(" · ");
         return (
-          <li key={r.key} className="rounded-md border-2 border-line p-2">
+          <li key={r.key} className="rounded-md border border-line p-2">
             <label className="flex items-start gap-2">
               <input type="checkbox" className="mt-1" checked={acks.includes(r.key)} onChange={(e) => setAcks(e.target.checked ? [...acks, r.key] : acks.filter((k) => k !== r.key))} />
               <span>
@@ -321,7 +321,7 @@ function BibleEditor({ project }: { project: Project }) {
   return (
     <Card className="space-y-4 p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-bold">Story Bible</h2>
+        <h2 className="text-xl font-semibold">Story Bible</h2>
         <span className="text-sm text-muted" role="status">{save.isPending ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}</span>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -366,12 +366,16 @@ export function Cast({ project }: { project: Project }) {
   const price = meta.data?.credit_prices;
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold">Meet the cast</h2>
-          <p className="max-w-2xl text-sm text-muted">These reference sheets lock each character&apos;s look for every panel. Tweak anything now: it&apos;s much cheaper than fixing pages later.</p>
+      <div>
+        <h2 className="text-2xl">Meet the cast</h2>
+        <p className="mt-1 max-w-2xl text-muted">These reference sheets lock each character&apos;s look for every panel. Tweak anything now: it&apos;s much cheaper than fixing pages later.</p>
+      </div>
+      <Card className="flex flex-wrap items-center justify-between gap-4 border-accent/25 bg-accent-soft/60 p-4 sm:p-5">
+        <div className="min-w-0 max-w-2xl">
+          <p className="font-semibold">Next: approve the cast</p>
+          <p className="mt-0.5 text-sm text-muted">{reviewing ? "Reviewing the reference sheets…" : updating ? "Wait for the sheet to finish updating." : unsaved ? (draft.saving ? "Saving the Story Bible…" : "Save or discard your Story Bible and continuity rule changes first. Approval covers only what is saved.") : price ? `The cast (${price.cast} credits) has been charged; ${price.script} stay held for the script. A revision holds ${price.character_revision} and is charged only if the new sheet is delivered.` : "The script is already covered by the credits held at the start."}</p>
         </div>
-        <div className="text-right">
+        <div className="shrink-0">
           {reviews.length === 0 ? (
             <Button variant="primary" size="lg" busy={approve.isPending || waiting} disabled={updating || unsaved} onClick={() => approve.mutate()}>{waiting ? "Starting the script" : "Approve cast and write the script"}</Button>
           ) : (
@@ -387,19 +391,18 @@ export function Cast({ project }: { project: Project }) {
               </DialogContent>
             </Dialog>
           )}
-          <p className="mt-1 text-xs text-muted">{reviewing ? "Reviewing the reference sheets…" : updating ? "Wait for the sheet to finish updating." : unsaved ? (draft.saving ? "Saving the Story Bible…" : "Save or discard your Story Bible and continuity rule changes first. Approval covers only what is saved.") : price ? `The cast (${price.cast} credits) has been charged; ${price.script} stay held for the script. A revision holds ${price.character_revision} and is charged only if the new sheet is delivered.` : "The script is already covered by the credits held at the start."}</p>
         </div>
-      </div>
+      </Card>
       {approve.isError && <Notice tone="danger" title={approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "The cast changed since you opened this page" : "Couldn't approve the cast"}>{approve.error instanceof ApiError && approve.error.code === "version_conflict" ? "We've loaded the latest version. Review it and approve again." : <ErrorWithDetails error={approve.error} fresh={needsFreshReview(approve.error)} />}</Notice>}
       <ul className="grid gap-6 lg:grid-cols-2">
         {project.characters.map((c) => <li key={c.slug}><CharacterCard project={project} c={c} /></li>)}
       </ul>
       {project.locations.length > 0 && (
         <section aria-labelledby="locations">
-          <h3 id="locations" className="mb-3 text-lg font-bold">Recurring locations</h3>
+          <h3 id="locations" className="mb-3 text-lg font-semibold">Recurring locations</h3>
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {project.locations.map((l) => (
-              <li key={l.slug}><Card className="overflow-hidden"><Img src={l.image_url} alt={`${l.name} reference`} className="aspect-video w-full object-cover" /><div className="border-t-2 border-ink p-3"><p className="font-bold">{l.name}</p><p className="text-sm text-muted">{l.description}</p></div></Card></li>
+              <li key={l.slug}><Card className="overflow-hidden"><Img src={l.image_url} alt={`${l.name} reference`} className="aspect-video w-full object-cover" /><div className="border-t border-line p-3"><p className="font-semibold">{l.name}</p><p className="text-sm text-muted">{l.description}</p></div></Card></li>
             ))}
           </ul>
         </section>
@@ -428,36 +431,14 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
   const dialogue = panel.dialogue ?? [];
   const setLine = (i: number, patch: Partial<DialogueItem>) => onChange({ ...panel, dialogue: dialogue.map((d, n) => (n === i ? { ...d, ...patch } : d)) });
   return (
-    <fieldset onFocusCapture={(e) => (e.target as HTMLElement).scrollIntoView?.({ block: "nearest" })} className={cn("space-y-3 rounded-md border-2 p-4", errors.length ? "border-danger" : "border-line")}>
-      <legend className="px-1 text-sm font-bold">{label}{panel.emphasis === "large" && <Badge tone="action" className="ml-2">Large panel</Badge>}</legend>
-      <div className="grid gap-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)] md:grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)_minmax(10rem,1.4fr)]">
+    <fieldset onFocusCapture={(e) => (e.target as HTMLElement).scrollIntoView?.({ block: "nearest" })} className={cn("space-y-4 rounded-xl border bg-card p-4 shadow-raised sm:p-5", errors.length ? "border-danger" : "border-line")}>
+      {/* floated, so the legend lays out like a heading inside the card instead of on its border */}
+      <legend className="float-left flex w-full items-center gap-2 text-sm font-semibold">{label}{panel.emphasis === "large" && <Badge tone="action">Large panel</Badge>}</legend>
+      <div className="clear-both grid gap-3 pt-1 sm:grid-cols-[minmax(8rem,1fr)_minmax(12rem,3fr)]">
         <Field label="Shot">{(ids) => <Select {...ids} value={panel.shot} onChange={(e) => onChange({ ...panel, shot: e.target.value as PanelSpec["shot"] })}><option value="wide">Wide</option><option value="medium">Medium</option><option value="close_up">Close-up</option></Select>}</Field>
-        <Field label="Location">{(ids) => <Select {...ids} value={panel.location_id} onChange={(e) => onChange({ ...panel, location_id: e.target.value })}>{locations.map((l) => <option key={l.slug} value={l.slug}>{l.name}</option>)}</Select>}</Field>
-        <Field label="Size" hint={strip ? "In a strip, only the last panel has the wide slot." : undefined}>{(ids) => <Select {...ids} value={panel.emphasis ?? "normal"} onChange={(e) => onChange({ ...panel, emphasis: e.target.value as "normal" | "large" })}><option value="normal">Normal</option><option value="large" disabled={strip && !last && panel.emphasis !== "large"}>{strip ? "Large (wide slot, last panel only)" : "Large (climax)"}</option></Select>}</Field>
-      </div>
-      <Field label="What we see" hint={`In frame: ${present.map((id) => characters.find((c) => c.slug === id)?.name ?? id).join(", ") || "no characters"}`}>
-        {(ids) => <Textarea {...ids} className="min-h-16" maxLength={500} value={panel.action} onChange={(e) => onChange({ ...panel, action: e.target.value })} />}
-      </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="What this panel adds" hint="New information, action, emotion or the payoff. Guides the drawing.">{(ids) => <Input {...ids} maxLength={200} value={panel.purpose ?? ""} onChange={(e) => onChange({ ...panel, purpose: e.target.value })} />}</Field>
-        <Field label="Focal point" hint="The one thing the eye should land on.">{(ids) => <Input {...ids} maxLength={120} value={panel.focus ?? ""} onChange={(e) => onChange({ ...panel, focus: e.target.value })} />}</Field>
-      </div>
-      <div className="space-y-2">
-        <p className="text-sm font-semibold">Story elements and their timing ({(panel.element_states ?? []).length} of 4)</p>
-        <p className="text-xs text-muted">For things the story reveals later. Hidden from the reader is still in the scene; unnoticed is a deliberate hint the reader may spot.</p>
-        {(panel.element_states ?? []).map((e, i) => (
-          <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(10rem,max-content)_auto] items-start gap-2">
-            <Input aria-label={`Story element ${i + 1}`} maxLength={80} value={e.element} onChange={(ev) => onChange({ ...panel, element_states: (panel.element_states ?? []).map((x, n) => (n === i ? { ...x, element: ev.target.value } : x)) })} />
-            <Select aria-label={`Story element ${i + 1} state`} value={e.state} onChange={(ev) => onChange({ ...panel, element_states: (panel.element_states ?? []).map((x, n) => (n === i ? { ...x, state: ev.target.value as typeof e.state } : x)) })}>
-              <option value="absent">Not in the scene yet</option>
-              <option value="hidden">Hidden from the reader</option>
-              <option value="unnoticed">Visible, unnoticed (a hint)</option>
-              <option value="revealed">Revealed</option>
-            </Select>
-            <Button variant="ghost" size="icon" aria-label={`Remove story element ${i + 1}`} onClick={() => onChange({ ...panel, element_states: (panel.element_states ?? []).filter((_, n) => n !== i) })}><Trash2 className="h-4 w-4" aria-hidden /></Button>
-          </div>
-        ))}
-        {(panel.element_states ?? []).length < 4 && <Button variant="ghost" size="sm" onClick={() => onChange({ ...panel, element_states: [...(panel.element_states ?? []), { element: "", state: "hidden" }] })}><Plus className="h-4 w-4" aria-hidden /> Add story element</Button>}
+        <Field label="What we see" hint={`In frame: ${present.map((id) => characters.find((c) => c.slug === id)?.name ?? id).join(", ") || "no characters"}`}>
+          {(ids) => <Textarea {...ids} className="min-h-16" maxLength={500} value={panel.action} onChange={(e) => onChange({ ...panel, action: e.target.value })} />}
+        </Field>
       </div>
       <div className="space-y-2">
         <p className="text-sm font-semibold">Lettering ({dialogue.length} of {maxBalloons})</p>
@@ -482,39 +463,66 @@ function PanelEditor({ panel, onChange, characters, locations, limits, errors, r
         })}
         <Button type="button" size="sm" disabled={dialogue.length >= maxBalloons} onClick={() => onChange({ ...panel, dialogue: [...dialogue, { type: "speech", speaker: present[0] ?? null, text: "" }] })}><Plus className="h-4 w-4" aria-hidden />Add line</Button>
       </div>
-      {beatNames.length > 0 && (
-        <div role="group" aria-label={`${label} beats`} className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold">Beats shown</span>
-          {beatNames.map((b) => {
-            const on = (panel.beats ?? []).some((x) => x.toLowerCase() === b.toLowerCase());
-            return <button key={b} type="button" aria-pressed={on} onClick={() => onChange({ ...panel, beats: on ? (panel.beats ?? []).filter((x) => x.toLowerCase() !== b.toLowerCase()) : [...(panel.beats ?? []), b] })} className={cn("rounded-full border-2 px-2 py-0.5 capitalize", on ? "border-ink bg-sun" : "border-line bg-card text-muted")}>{b}</button>;
-          })}
+      <Disclosure label="More panel details" summary="location, size, purpose, story elements, beats and rules" forceOpen={errors.length > 0 || reviews.length > 0}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Location">{(ids) => <Select {...ids} value={panel.location_id} onChange={(e) => onChange({ ...panel, location_id: e.target.value })}>{locations.map((l) => <option key={l.slug} value={l.slug}>{l.name}</option>)}</Select>}</Field>
+          <Field label="Size" hint={strip ? "In a strip, only the last panel has the wide slot." : undefined}>{(ids) => <Select {...ids} value={panel.emphasis ?? "normal"} onChange={(e) => onChange({ ...panel, emphasis: e.target.value as "normal" | "large" })}><option value="normal">Normal</option><option value="large" disabled={strip && !last && panel.emphasis !== "large"}>{strip ? "Large (wide slot, last panel only)" : "Large (climax)"}</option></Select>}</Field>
         </div>
-      )}
-      {rules.length > 0 && (
-        <div className="space-y-1 text-sm">
-          <p className="font-semibold">Continuity rules for this panel</p>
-          {rules.map((r) => {
-            const excepted = (panel.rule_exceptions ?? []).includes(r.id);
-            const contrary = (panel.rule_contrary ?? []).includes(r.id);
-            const mode = contrary ? "contrary" : excepted ? "not_required" : "required";
-            const setMode = (m: string) => {
-              const others = (xs: string[] | undefined) => (xs ?? []).filter((x) => x !== r.id);
-              onChange({ ...panel, rule_exceptions: m === "required" ? others(panel.rule_exceptions) : [...others(panel.rule_exceptions), r.id], rule_contrary: m === "contrary" ? [...others(panel.rule_contrary), r.id] : others(panel.rule_contrary) });
-            };
-            return (
-              <div key={r.id} className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,max-content)] items-start gap-2">
-                <span className={cn(mode !== "required" && "text-muted")}>{r.text}</span>
-                <Select aria-label={`In this panel: ${r.text}`} value={mode} onChange={(e) => setMode(e.target.value)}>
-                  <option value="required">Required here</option>
-                  <option value="not_required">Not required here</option>
-                  <option value="contrary">The opposite holds here</option>
-                </Select>
-              </div>
-            );
-          })}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="What this panel adds" hint="New information, action, emotion or the payoff. Guides the drawing.">{(ids) => <Input {...ids} maxLength={200} value={panel.purpose ?? ""} onChange={(e) => onChange({ ...panel, purpose: e.target.value })} />}</Field>
+          <Field label="Focal point" hint="The one thing the eye should land on.">{(ids) => <Input {...ids} maxLength={120} value={panel.focus ?? ""} onChange={(e) => onChange({ ...panel, focus: e.target.value })} />}</Field>
         </div>
-      )}
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Story elements and their timing ({(panel.element_states ?? []).length} of 4)</p>
+          <p className="text-xs text-muted">For things the story reveals later. Hidden from the reader is still in the scene; unnoticed is a deliberate hint the reader may spot.</p>
+          {(panel.element_states ?? []).map((e, i) => (
+            <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(10rem,max-content)_auto] items-start gap-2">
+              <Input aria-label={`Story element ${i + 1}`} maxLength={80} value={e.element} onChange={(ev) => onChange({ ...panel, element_states: (panel.element_states ?? []).map((x, n) => (n === i ? { ...x, element: ev.target.value } : x)) })} />
+              <Select aria-label={`Story element ${i + 1} state`} value={e.state} onChange={(ev) => onChange({ ...panel, element_states: (panel.element_states ?? []).map((x, n) => (n === i ? { ...x, state: ev.target.value as typeof e.state } : x)) })}>
+                <option value="absent">Not in the scene yet</option>
+                <option value="hidden">Hidden from the reader</option>
+                <option value="unnoticed">Visible, unnoticed (a hint)</option>
+                <option value="revealed">Revealed</option>
+              </Select>
+              <Button variant="ghost" size="icon" aria-label={`Remove story element ${i + 1}`} onClick={() => onChange({ ...panel, element_states: (panel.element_states ?? []).filter((_, n) => n !== i) })}><Trash2 className="h-4 w-4" aria-hidden /></Button>
+            </div>
+          ))}
+          {(panel.element_states ?? []).length < 4 && <Button variant="ghost" size="sm" onClick={() => onChange({ ...panel, element_states: [...(panel.element_states ?? []), { element: "", state: "hidden" }] })}><Plus className="h-4 w-4" aria-hidden /> Add story element</Button>}
+        </div>
+        {beatNames.length > 0 && (
+          <div role="group" aria-label={`${label} beats`} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold">Beats shown</span>
+            {beatNames.map((b) => {
+              const on = (panel.beats ?? []).some((x) => x.toLowerCase() === b.toLowerCase());
+              return <button key={b} type="button" aria-pressed={on} onClick={() => onChange({ ...panel, beats: on ? (panel.beats ?? []).filter((x) => x.toLowerCase() !== b.toLowerCase()) : [...(panel.beats ?? []), b] })} className={cn("rounded-full border px-2 py-0.5 capitalize", on ? "border-accent bg-accent-soft text-accent" : "border-line bg-card text-muted")}>{b}</button>;
+            })}
+          </div>
+        )}
+        {rules.length > 0 && (
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold">Continuity rules for this panel</p>
+            {rules.map((r) => {
+              const excepted = (panel.rule_exceptions ?? []).includes(r.id);
+              const contrary = (panel.rule_contrary ?? []).includes(r.id);
+              const mode = contrary ? "contrary" : excepted ? "not_required" : "required";
+              const setMode = (m: string) => {
+                const others = (xs: string[] | undefined) => (xs ?? []).filter((x) => x !== r.id);
+                onChange({ ...panel, rule_exceptions: m === "required" ? others(panel.rule_exceptions) : [...others(panel.rule_exceptions), r.id], rule_contrary: m === "contrary" ? [...others(panel.rule_contrary), r.id] : others(panel.rule_contrary) });
+              };
+              return (
+                <div key={r.id} className="grid grid-cols-[minmax(0,1fr)_minmax(12rem,max-content)] items-start gap-2">
+                  <span className={cn(mode !== "required" && "text-muted")}>{r.text}</span>
+                  <Select aria-label={`In this panel: ${r.text}`} value={mode} onChange={(e) => setMode(e.target.value)}>
+                    <option value="required">Required here</option>
+                    <option value="not_required">Not required here</option>
+                    <option value="contrary">The opposite holds here</option>
+                  </Select>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Disclosure>
       {errors.length > 0 && <ul role="alert" className="list-inside list-disc text-sm text-danger">{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
       {reviews.length > 0 && <ul className="list-inside list-disc text-sm text-warn">{reviews.map((e) => <li key={e}>{e}</li>)}</ul>}
     </fieldset>
@@ -559,15 +567,15 @@ export function ScriptReview({ project }: { project: Project }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Review the script</h2>
+          <h2 className="text-2xl font-semibold">Review the script</h2>
           <p className="max-w-2xl text-sm text-muted">Change any line or panel. Drawing only starts when you approve this exact version.</p>
         </div>
         <span className="text-sm text-muted" role="status">Version {script.version} · {save.isPending ? "Saving…" : dirty ? "Unsaved changes" : script.source === "user" ? "Saved (edited by you)" : "Saved"}</span>
       </div>
       <Card className="p-5">
-        <h3 className="mb-2 font-bold">Beat sheet</h3>
+        <h3 className="mb-2 font-semibold">Beat sheet</h3>
         <ol className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
-          {script.beats.beats.map((b, i) => { const at = beatPanels(b.name); return <li key={i} className={cn("rounded-md border-2 p-2", at.length ? "border-line" : "border-danger")}><span className="font-semibold capitalize">{b.name}</span><span className="block text-muted">{b.summary}</span><span className={cn("mt-1 block text-xs", at.length ? "text-muted" : "font-semibold text-danger")}>{at.length ? `Panel ${at.join(", ")}` : "No panel shows this beat"}</span></li>; })}
+          {script.beats.beats.map((b, i) => { const at = beatPanels(b.name); return <li key={i} className={cn("rounded-md border p-2", at.length ? "border-line" : "border-danger")}><span className="font-semibold capitalize">{b.name}</span><span className="block text-muted">{b.summary}</span><span className={cn("mt-1 block text-xs", at.length ? "text-muted" : "font-semibold text-danger")}>{at.length ? `Panel ${at.join(", ")}` : "No panel shows this beat"}</span></li>; })}
         </ol>
       </Card>
       {checking && <Notice title="Checking this version against the Story Bible…">This takes a few seconds. You can approve once it&apos;s done.</Notice>}
@@ -578,14 +586,14 @@ export function ScriptReview({ project }: { project: Project }) {
       {save.isError && !conflict && <Notice tone="danger" title="Couldn't save the script">{describeError(save.error)}</Notice>}
       {draft.pages.map((page, pi) => (
         <section key={pi} aria-labelledby={`page-${pi}`} className="space-y-3">
-          <h3 id={`page-${pi}`} className="text-lg font-bold">Page {pi + 1} <span className="text-sm font-normal text-muted">· {page.panels.length} panels</span></h3>
+          <h3 id={`page-${pi}`} className="text-lg font-semibold">Page {pi + 1} <span className="text-sm font-normal text-muted">· {page.panels.length} panels</span></h3>
           <div className="grid items-start gap-4 xl:grid-cols-2">
             {page.panels.map((panel, ni) => <PanelEditor key={ni} label={`Panel ${ni + 1}`} panel={panel} onChange={(p) => setPanel(pi, ni, p)} characters={project.characters} locations={project.locations} limits={meta.data?.limits ?? {}} errors={dirty ? [] : issuesFor(pi, ni)} reviews={dirty ? [] : issuesFor(pi, ni, "review")} beatNames={beatNames} rules={rulesFor(panel, rules)} strip={strip} last={ni === page.panels.length - 1} />)}
           </div>
         </section>
       ))}
       <div ref={barRef} data-sticky-approval className="sticky bottom-4 z-20">
-        <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
+        <Card className="flex flex-wrap items-center justify-between gap-4 p-4 shadow-float">
           <div className="text-sm">
             {estimate.data ? <p className="font-semibold">Drawing {estimate.data.breakdown.panels ?? "these"} panels holds {estimate.data.credits} credits <span className="font-normal text-muted">(you have {estimate.data.available})</span></p> : <Spinner label="Calculating cost" />}
             <p className="text-muted">{estimate.data?.note}</p>
@@ -626,7 +634,7 @@ export function Stopped({ project }: { project: Project }) {
   const titles: Record<string, string> = { failed: "This comic stopped before it finished", expired: "This comic was waiting for you", cancelled: "You cancelled this comic", blocked: "We can't make this comic" };
   return (
     <Card className="mx-auto max-w-2xl space-y-4 p-6">
-      <h2 className="text-xl font-bold">{titles[project.status] ?? "This comic stopped"}</h2>
+      <h2 className="text-xl font-semibold">{titles[project.status] ?? "This comic stopped"}</h2>
       <p>{f?.message as string ?? "Something interrupted this comic."}</p>
       {typeof f?.suggestion === "string" && <p className="text-sm text-muted">Tip: {f.suggestion}</p>}
       <p className="text-sm text-muted">{project.status === "blocked" ? "Nothing was charged for the blocked step." : "Credits held for unfinished work were released. Finished work is kept."}</p>

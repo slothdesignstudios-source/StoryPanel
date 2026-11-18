@@ -47,14 +47,14 @@ export function ContinuityRules({ project, onDirty }: { project: Project; onDirt
   return (
     <Card className="space-y-4 p-6" aria-labelledby="continuity-title">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="continuity-title" className="text-xl font-bold">Continuity rules</h2>
+        <h2 id="continuity-title" className="text-xl font-semibold">Continuity rules</h2>
         <span className="text-sm text-muted" role="status">{save.isPending ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}</span>
       </div>
       <p className="text-sm text-muted">What every drawing must keep. <b>Must</b> rules go into every picture they apply to and are checked in the script and in each panel; <b>Prefer</b> rules are asked for where they fit. Prompts make these likelier, not certain: the checks flag panels that miss them.{project.status !== "awaiting_cast_approval" && " Changes apply to later redraws and fixes; existing pictures aren't redrawn."}</p>
       {rules.length === 0 && <p className="text-sm">No rules yet.</p>}
       <ul className="space-y-3">
         {rules.map((r, n) => (
-          <li key={n} className={cn("space-y-2 rounded-md border-2 p-3", fieldError(n) ? "border-danger" : "border-line")}>
+          <li key={n} className={cn("space-y-2 rounded-md border p-3", fieldError(n) ? "border-danger" : "border-line")}>
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={r.strength === "must" ? "action" : "neutral"}>{r.strength === "must" ? "Must" : "Prefer"}</Badge>
               {r.source === "world_rule" && <Badge>From a world rule · wording kept</Badge>}
@@ -84,7 +84,7 @@ export function ContinuityRules({ project, onDirty }: { project: Project; onDirt
         ))}
       </ul>
       {unclassified.length > 0 && (
-        <div className="space-y-2 rounded-md border-2 border-dashed border-line p-3">
+        <div className="space-y-2 rounded-md border border-dashed border-line p-3">
           <p className="text-sm font-semibold">World rules not used in pictures yet</p>
           <p className="text-xs text-muted">Choose which of these the pictures must show. The rule keeps its exact wording; you choose what it applies to and how strict it is.</p>
           <ul className="space-y-2">

@@ -42,14 +42,14 @@ export default function Reader() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-2xl font-bold">{q.data.title}</h1><p className="text-sm text-muted" aria-live="polite">Page {index + 1} of {count}</p></div>
+        <div><h1 className="text-2xl font-semibold">{q.data.title}</h1><p className="text-sm text-muted" aria-live="polite">Page {index + 1} of {count}</p></div>
         <div className="flex gap-2">
           <Button size="icon" aria-label="Previous page" disabled={index === 0} onClick={() => setIndex(index - 1)}><ChevronLeft className="h-4 w-4" aria-hidden /></Button>
           <Button size="icon" aria-label="Next page" disabled={index >= count - 1} onClick={() => setIndex(index + 1)}><ChevronRight className="h-4 w-4" aria-hidden /></Button>
           <Button asChild><Link href={`/projects/${id}`}>Edit</Link></Button>
         </div>
       </div>
-      <div ref={ref} className="overflow-hidden rounded-lg border-2 border-ink bg-card shadow-panel" role="img" aria-label={`Page ${index + 1}. ${transcript}`}>
+      <div ref={ref} className="overflow-hidden rounded-lg border border-line bg-card shadow-raised" role="img" aria-label={`Page ${index + 1}. ${transcript}`}>
         {width > 0 && <PageCanvas page={page} width={width} />}
       </div>
     </div>

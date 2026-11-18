@@ -21,3 +21,6 @@ playwright-report/
 evals/reports/*.json
 !evals/reports/.gitkeep
 *.tsbuildinfo
+
+# local-preview copies of sample art that is not approved for publication (apps/web/scripts/preview-samples.sh)
+apps/web/public/samples/

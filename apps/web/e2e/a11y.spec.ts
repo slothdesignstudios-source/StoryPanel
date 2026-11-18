@@ -56,7 +56,8 @@ test("a comic can be created and a balloon edited with the keyboard alone", asyn
   // sign in with the keyboard
   await page.goto("/sign-in");
   await page.keyboard.press("Tab"); // skip link
-  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
+  for (let i = 0; i < 4 && !(await page.getByLabel("Email").evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab"); // home link, then the form
   await expect(page.getByLabel("Email")).toBeFocused();
   await page.keyboard.type(email);
   await page.keyboard.press("Enter");

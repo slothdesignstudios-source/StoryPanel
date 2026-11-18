@@ -8,37 +8,44 @@
 @font-face { font-family: "Comic Neue"; src: url("/fonts/comic-neue-latin-700-normal.woff") format("woff"); font-weight: 700; font-display: block; }
 @font-face { font-family: "Bangers"; src: url("/fonts/bangers-latin-400-normal.woff") format("woff"); font-weight: 400; font-display: block; }
 
+/* Design tokens (docs/design/brief.md). Contrast is checked in src/lib/tokens.test.ts, which reads
+   this block: change a value here and the test says whether it still passes. */
 @theme {
-  --color-paper: #fbf7f0;
+  --color-paper: #f7f6f2;
   --color-card: #ffffff;
-  --color-ink: #16130f;
-  --color-muted: #5c554b;
-  --color-line: #e4dccf;
-  --color-accent: #d93a24;
+  --color-ink: #18202b;
+  --color-muted: #596273;
+  --color-line: #dde1e7;
+  --color-field: #858e9d;
+  --color-accent: #4338ca;
+  --color-accent-strong: #3730a3;
+  --color-accent-soft: #eef0fc;
   --color-accent-ink: #ffffff;
-  --color-teal: #0e5a55;
-  --color-sun: #ffd23f;
-  --color-ok: #135c33;
-  --color-warn: #7a4500;
-  --color-danger: #9b1c15;
+  --color-ok: #1e6b43;
+  --color-warn: #8a4a00;
+  --color-danger: #a3261c;
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bricolage Grotesque Variable", "Inter Variable", sans-serif;
   --font-comic: "Comic Neue", "Comic Sans MS", cursive;
   --font-sfx: "Bangers", Impact, sans-serif;
-  --shadow-panel: 4px 4px 0 0 var(--color-ink);
-  --shadow-panel-sm: 2px 2px 0 0 var(--color-ink);
+  --shadow-raised: 0 1px 2px rgb(24 32 43 / 0.05), 0 2px 8px rgb(24 32 43 / 0.04);
+  --shadow-float: 0 8px 28px rgb(24 32 43 / 0.12), 0 2px 6px rgb(24 32 43 / 0.06);
 }
 
 html { background: var(--color-paper); color: var(--color-ink); scroll-padding-top: 5rem; /* keeps focused fields clear of the sticky header */ }
-body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; min-height: 100dvh; }
-h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+body { font-family: var(--font-sans); font-size: 0.9375rem; line-height: 1.55; -webkit-font-smoothing: antialiased; min-height: 100dvh; background: var(--color-paper); }
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; font-weight: 600; line-height: 1.15; text-wrap: balance; }
+p { text-wrap: pretty; }
+a { text-underline-offset: 3px; }
 
 /* One visible focus treatment everywhere, for keyboard users. */
-:focus-visible { outline: 3px solid var(--color-teal); outline-offset: 2px; border-radius: 4px; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
 
+/* A quiet placeholder texture for art that hasn't arrived yet. */
 .halftone {
-  background-image: radial-gradient(var(--color-line) 1.2px, transparent 1.2px);
-  background-size: 14px 14px;
+  background-color: var(--color-paper);
+  background-image: radial-gradient(rgb(24 32 43 / 0.07) 1px, transparent 1px);
+  background-size: 12px 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {

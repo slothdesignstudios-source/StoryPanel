@@ -9,7 +9,8 @@ import { Cast, Questions, ScriptReview, Stopped, Working } from "@/components/pr
 import { Badge, Button, Dialog, DialogClose, DialogContent, DialogTrigger, Notice, Spinner } from "@/components/ui";
 import { ApiError, api, describeError } from "@/lib/api";
 import { useProjectEvents } from "@/lib/events";
-import { ACTIVE, WORKING, projectStatus, type Project } from "@/lib/types";
+import { ACTIVE, STATUS_LABEL, WORKING, projectStatus, type Project } from "@/lib/types";
+import { FlowSteps } from "@/components/project/flow";
 import { pk } from "@/lib/session";
 
 function Stage({ project }: { project: Project }) {
@@ -51,33 +52,38 @@ export default function ProjectPage() {
     return <Notice tone="danger" title={missing ? "We can't find that comic" : "We couldn't load this comic"} action={missing ? <Button onClick={() => router.push("/dashboard")}>Back to comics</Button> : <Button onClick={() => void q.refetch()}>Try again</Button>}>{missing ? "It may have been deleted, or it belongs to another account." : describeError(q.error)}</Notice>;
   }
   const project = q.data;
+  const review = projectStatus(project).review;
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-3xl font-bold">{project.title}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge tone={projectStatus(project).review ? "warn" : statusTone(project.status)}>{projectStatus(project).label}</Badge>
-            <span className="text-xs text-muted">Illustrated with {PROVIDER_LABEL[project.image_provider ?? "fal"] ?? project.image_provider}{project.image_model ? ` (${project.image_model})` : ""}</span>
-            {ACTIVE.has(project.status) && <span className="text-xs text-muted" role="status">{stream === "live" ? "Live updates on" : stream === "reconnecting" ? "Reconnecting… your comic is still running" : "Connecting…"}</span>}
+    <div className="space-y-8">
+      <div className="space-y-4 border-b border-line pb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-3xl sm:text-4xl">{project.title}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge tone={statusTone(project.status)}>{STATUS_LABEL[project.status] ?? project.status}</Badge>
+              {review > 0 && <Badge tone="warn">{review} panel{review > 1 ? "s" : ""} to review</Badge>}
+              <span className="text-xs text-muted">Illustrated with {PROVIDER_LABEL[project.image_provider ?? "fal"] ?? project.image_provider}{project.image_model ? ` (${project.image_model})` : ""}</span>
+              {ACTIVE.has(project.status) && <span className="text-xs text-muted" role="status">{stream === "live" ? "Live updates on" : stream === "reconnecting" ? "Reconnecting… your comic is still running" : "Connecting…"}</span>}
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          {ACTIVE.has(project.status) && (
+          <div className="flex gap-2">
+            {ACTIVE.has(project.status) && (
+              <Dialog>
+                <DialogTrigger asChild><Button size="sm">Cancel comic</Button></DialogTrigger>
+                <DialogContent title="Cancel this comic?" description="Work in progress stops. Credits held for unfinished work are released; finished steps stay charged.">
+                  <div className="flex justify-end gap-3"><DialogClose asChild><Button variant="ghost">Keep going</Button></DialogClose><DialogClose asChild><Button variant="danger" onClick={() => cancel.mutate()}>Cancel comic</Button></DialogClose></div>
+                </DialogContent>
+              </Dialog>
+            )}
             <Dialog>
-              <DialogTrigger asChild><Button size="sm">Cancel comic</Button></DialogTrigger>
-              <DialogContent title="Cancel this comic?" description="Work in progress stops. Credits held for unfinished work are released; finished steps stay charged.">
-                <div className="flex justify-end gap-3"><DialogClose asChild><Button variant="ghost">Keep going</Button></DialogClose><DialogClose asChild><Button variant="danger" onClick={() => cancel.mutate()}>Cancel comic</Button></DialogClose></div>
+              <DialogTrigger asChild><Button size="sm" variant="ghost">Delete</Button></DialogTrigger>
+              <DialogContent title="Delete this comic?" description="The comic, its images and its exports are removed. This can't be undone.">
+                <div className="flex justify-end gap-3"><DialogClose asChild><Button variant="ghost">Keep it</Button></DialogClose><Button variant="danger" busy={remove.isPending} onClick={() => remove.mutate()}>Delete comic</Button></div>
               </DialogContent>
             </Dialog>
-          )}
-          <Dialog>
-            <DialogTrigger asChild><Button size="sm" variant="ghost">Delete</Button></DialogTrigger>
-            <DialogContent title="Delete this comic?" description="The comic, its images and its exports are removed. This can't be undone.">
-              <div className="flex justify-end gap-3"><DialogClose asChild><Button variant="ghost">Keep it</Button></DialogClose><Button variant="danger" busy={remove.isPending} onClick={() => remove.mutate()}>Delete comic</Button></div>
-            </DialogContent>
-          </Dialog>
+          </div>
         </div>
+        <FlowSteps status={project.status} />
       </div>
       <Stage project={project} />
     </div>

@@ -13,3 +13,6 @@ evals/reports
 **/test-results
 **/playwright-report
 infra/terraform/.terraform
+# sample art not approved for publication (apps/web/src/content/samples.ts)
+apps/web/public/samples
+apps/web/preview-samples

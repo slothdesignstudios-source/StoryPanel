@@ -6,6 +6,12 @@ import { API_URL, setTokenSource } from "./api";
 import { setIdentity } from "./session";
 
 export const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE === "clerk" ? "clerk" : "dev";
+
+/** Set when someone signs out in this tab. Lives outside React because an identity change remounts
+ *  the whole app. After a sign-out, the next sign-in always starts at the dashboard: it must never be
+ *  sent to the previous account's pages (e2e/isolation.spec.ts). */
+let signedOutInThisTab = false;
+export const signedOutHere = () => signedOutInThisTab;
 const KEY = "sp.dev.session";
 
 /** `identity` is a stable id for the signed-in person (null when signed out); private client state is partitioned by it. */
@@ -43,6 +49,7 @@ function DevAuth({ children }: { children: ReactNode }) {
     setSession(next);
   }, []);
   const signOut = useCallback(async () => {
+    signedOutInThisTab = true;
     // Stop authenticating requests first, then discard private state, then the session.
     setTokenSource(async () => null);
     setIdentity(null);
@@ -59,6 +66,7 @@ function ClerkBridge({ children }: { children: ReactNode }) {
   const clerk = useClerk();
   setTokenSource(() => getToken());
   const signOut = useCallback(async () => {
+    signedOutInThisTab = true;
     setTokenSource(async () => null);
     setIdentity(null);
     await clerk.signOut();
