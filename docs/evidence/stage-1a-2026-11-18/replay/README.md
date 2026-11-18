@@ -26,7 +26,7 @@
 **Reproduce:**
 
 ```bash
-services/backend/.venv/bin/python docs/evidence/stage-1a-2026-11-18/replay/replay.py ART_DIR OUT_DIR docs/evidence/stage-1a-2026-11-18/replay/lettering_before_fix.py
+services/backend/.venv/bin/python docs/evidence/stage-1a-2026-11-18/replay/replay.py ART_DIR docs/evidence/stage-1a-2026-11-18/replay/pages docs/evidence/stage-1a-2026-11-18/replay/lettering_before_fix.py
 ```
 
 ## The fix (`services/backend/src/storypanel/pipeline/lettering.py`)
@@ -73,3 +73,7 @@ services/backend/.venv/bin/python docs/evidence/stage-1a-2026-11-18/replay/repla
 - **Narrow sample.** This is two comics and seven lettered panels. It doesn't show the fix generalises.
 - **Not yet in your running app.** The app is at cfa4534, which places balloons using guessed faces.
   Neither this fix nor automatic face location has been deployed.
+
+**Full pages and measurements:** `pages/`. It holds `*-before-fix-reading-size.jpg`,
+`*-after-fix-reading-size.jpg` and `replay.json`, which has the flags and the measurements against the
+manual annotation per panel.

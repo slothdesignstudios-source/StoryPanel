@@ -1,0 +1,289 @@
+{
+ "inputs": {
+  "faces": "STORED DETECTION (stage 1A run, head boxes only)",
+  "characters_and_dialogue": "SCRIPT (owner's preflight)",
+  "annotations": "MANUAL, comparison only"
+ },
+ "pages": {
+  "train-after-fix": {
+   "panel 1": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Chuff... chuff...",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0
+       }
+      }
+     ]
+    }
+   },
+   "panel 2": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Missed it again! Ha... sorry",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 18.1,
+       "tail_to_nearest_other": 127.0
+      },
+      {
+       "text": "It's... okay.",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 10.9,
+       "tail_to_nearest_other": 131.3
+      }
+     ]
+    }
+   },
+   "panel 3": {
+    "flags": [
+     "covers_face"
+    ],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Every day, the same boy...",
+       "flags": [
+        "covers_face"
+       ],
+       "covers_annotated_face": {
+        "mira": 0.38
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null
+      }
+     ]
+    }
+   },
+   "panel 4": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Delayed! I can make it!",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0,
+        "teo": 0.1
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": 97.4
+      }
+     ]
+    }
+   },
+   "panel 5": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Oh...",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null
+      }
+     ]
+    }
+   },
+   "panel 6": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Tomorrow... same table?",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 12.5,
+       "tail_to_nearest_other": 584.4
+      }
+     ]
+    }
+   }
+  },
+  "train-before-fix": {
+   "panel 1": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Chuff... chuff...",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0
+       }
+      }
+     ]
+    }
+   },
+   "panel 2": {
+    "flags": [
+     "tail_crosses_lettering"
+    ],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Missed it again! Ha... sorry",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.17,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 8.4,
+       "tail_to_nearest_other": 45.4
+      },
+      {
+       "text": "It's... okay.",
+       "flags": [
+        "tail_crosses_lettering"
+       ],
+       "covers_annotated_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 27.6,
+       "tail_to_nearest_other": 26.2
+      }
+     ]
+    }
+   },
+   "panel 3": {
+    "flags": [
+     "covers_face"
+    ],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Every day, the same boy...",
+       "flags": [
+        "covers_face"
+       ],
+       "covers_annotated_face": {
+        "mira": 0.38
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null
+      }
+     ]
+    }
+   },
+   "panel 4": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Delayed! I can make it!",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0,
+        "teo": 0.1
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": 97.4
+      }
+     ]
+    }
+   },
+   "panel 5": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Oh...",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null
+      }
+     ]
+    }
+   },
+   "panel 6": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Tomorrow... same table?",
+       "flags": [],
+       "covers_annotated_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 12.5,
+       "tail_to_nearest_other": 584.4
+      }
+     ]
+    }
+   }
+  },
+  "tulips-after-fix": {
+   "panel 3": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Oh... you remembered.",
+       "flags": [],
+       "covers_annotated_face": {
+        "old_man": 0.06
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null
+      }
+     ]
+    }
+   }
+  },
+  "tulips-before-fix": {
+   "panel 3": {
+    "flags": [],
+    "measured": {
+     "source": "manual annotation (comparison only)",
+     "balloons": [
+      {
+       "text": "Oh... you remembered.",
+       "flags": [],
+       "covers_annotated_face": {
+        "old_man": 0.06
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null
+      }
+     ]
+    }
+   }
+  }
+ }
+}
