@@ -1,5 +1,7 @@
 # Blockers
 
+> **Current status:** see [`release-blockers.md`](release-blockers.md) (2026-11-18). This page keeps the earlier infrastructure detail and blocker ids.
+
 ## Remaining blockers (updated 2026-11-15, later the same day)
 
 StoryPanel is **not production-ready**: no live integration has been exercised, and output quality
