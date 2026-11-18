@@ -285,3 +285,39 @@ async def test_lettering_follows_a_new_picture_but_never_moves_a_hand_placed_bal
         after = list((await db.execute(select(Balloon).where(Balloon.panel_id == panel_id))).scalars())
         assert {b.id: b.geometry for b in after} == kept  # never moved
         assert all("lettering_stale" in b.flags for b in after)  # but flagged for the user
+
+
+@pytest.mark.workflow
+async def test_the_face_check_stops_before_a_call_that_would_cross_its_cap(
+    client: Any, headers: dict[str, str], worker: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """scripts/face-check.py: with a cap below one call's reservation, no call is made at all."""
+    import importlib.util
+    import json as _json
+    import uuid
+    from decimal import Decimal
+
+    from storypanel.config import get_settings
+    from storypanel.pipeline import qa as qa_mod
+    from tests.conftest import run_to_completion
+
+    p = await run_to_completion(client, headers, "A robot and a girl share noodles in the rain, as a 4 panel strip")
+    spec = importlib.util.spec_from_file_location("face_check", Path(__file__).resolve().parents[3] / "scripts/face-check.py")
+    assert spec and spec.loader
+    fc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fc)
+    calls: list[Any] = []
+
+    async def no_call(**kw: Any) -> Any:
+        calls.append(kw)
+        raise AssertionError("a call was made")
+
+    monkeypatch.setattr(qa_mod, "vision_report", no_call)
+    monkeypatch.setattr(get_settings(), "provider_mode", "live", raising=False)
+    monkeypatch.setattr(fc, "reservation", lambda data, r: Decimal("0.02"))
+    out = tmp_path / "fc"
+    out.mkdir()
+    assert await fc.run(uuid.UUID(p["id"]), out, Decimal("0.01"), None, None) == 0
+    summary = _json.loads((out / "face-check.json").read_text())
+    assert calls == [] and summary["totals"]["calls"] == 0
+    assert summary["stopped"].startswith("stopped before page 1 panel 1")

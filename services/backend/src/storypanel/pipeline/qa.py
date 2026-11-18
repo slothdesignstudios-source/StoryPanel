@@ -151,19 +151,17 @@ async def check_identity_visual(*, image: bytes, expected: list[str], cast: dict
                                "report": report.model_dump()}  # fmt: skip
 
 
-async def vision_report(*, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec],
-                        reference_images: dict[str, bytes], required: list[ContinuityRule],
-                        elements: list[tuple[str, str]], ctx: CallContext, operation: str) -> VisionQAReport:  # fmt: skip
-    """The panel check's vision call alone (one metered request): characters with face and body boxes,
-    required elements, story elements, defects. `evaluate_panel` builds its verdict on it;
-    scripts/face-check.py uses it to re-check existing panels without redrawing anything."""
+def vision_request(*, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec],
+                   reference_images: dict[str, bytes], required: list[ContinuityRule],
+                   elements: list[tuple[str, str]]) -> tuple[str, str, tuple[ImageInput, ...]]:  # fmt: skip
+    """(system, user, images) exactly as the panel check sends them, so a caller can also compute the
+    app's reservation for the call (metering.vision_reservation) before making it."""
     expected = [c for c in panel.characters if c.id in cast]
     images = [ImageInput(image, label="Panel to check:")]
     for ch in expected:
         if ch.id in reference_images:
             images.append(ImageInput(reference_images[ch.id], label=f"Reference for '{ch.id}':"))
-    spec_lines = [f"Shot: {panel.shot}, {panel.angle}. Action: {panel.action}",
-                  "Expected characters:"]  # fmt: skip
+    spec_lines = [f"Shot: {panel.shot}, {panel.angle}. Action: {panel.action}", "Expected characters:"]
     for ch in expected:
         feats = ", ".join(cast[ch.id].visual.signature_features)
         spec_lines.append(f"- id '{ch.id}' ({cast[ch.id].name}), {ch.position}, {ch.pose}, "
@@ -178,35 +176,26 @@ async def vision_report(*, image: bytes, panel: PanelSpec, cast: dict[str, Chara
         spec_lines += [
             f"- {n}: {e} (expected: {ELEMENT_EXPECT[st]})" for n, (e, st) in enumerate(elements, start=1)
         ]
-    report = await metering.structured(
-        role="vision",
-        system=render_prompt("vision_qa"),
-        user="\n".join(spec_lines),
-        schema=VisionQAReport,
-        images=tuple(images),
-        ctx=CallContext(
-            operation,
-            ctx.user_id,
-            ctx.project_id,
-            ctx.target_id,
-            ctx.attempt,
-            PROMPT_VERSION,
-            inputs={
-                "characters": [
-                    {
-                        "id": c.id,
-                        "position": c.position,
-                        "signature_features": cast[c.id].visual.signature_features,
-                    }
-                    for c in expected
-                ],
-                "required_rules": [r.id for r in required],
-                "elements": [{"element": e, "state": st} for e, st in elements],
-            },
-        ),  # fmt: skip
-    )
+    return render_prompt("vision_qa"), "\n".join(spec_lines), tuple(images)
 
-    return report
+
+async def vision_report(*, image: bytes, panel: PanelSpec, cast: dict[str, CharacterSpec],
+                        reference_images: dict[str, bytes], required: list[ContinuityRule],
+                        elements: list[tuple[str, str]], ctx: CallContext, operation: str) -> VisionQAReport:  # fmt: skip
+    """The panel check's vision call alone (one metered request): characters with face and body boxes,
+    required elements, story elements, defects. `evaluate_panel` builds its verdict on it;
+    scripts/face-check.py uses it to re-check existing panels without redrawing anything."""
+    expected = [c for c in panel.characters if c.id in cast]
+    system, user, images = vision_request(image=image, panel=panel, cast=cast, reference_images=reference_images,
+                                          required=required, elements=elements)  # fmt: skip
+    return await metering.structured(
+        role="vision", system=system, user=user, schema=VisionQAReport, images=images,
+        ctx=CallContext(operation, ctx.user_id, ctx.project_id, ctx.target_id, ctx.attempt, PROMPT_VERSION, inputs={
+            "characters": [{"id": c.id, "position": c.position,
+                            "signature_features": cast[c.id].visual.signature_features} for c in expected],
+            "required_rules": [r.id for r in required],
+            "elements": [{"element": e, "state": st} for e, st in elements]}),
+    )  # fmt: skip
 
 
 async def evaluate_panel(

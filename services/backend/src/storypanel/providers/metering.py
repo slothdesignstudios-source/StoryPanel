@@ -48,6 +48,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -397,6 +398,17 @@ def _observe(provider: str, operation: str, outcome: str, latency_ms: int) -> No
 
 
 # ------------------------------------------------------------------ text
+def structured_reservation(*, role: TextRole, system: str, user: str, schema: type[BaseModel],
+                           images: tuple[ImageInput, ...] = (), provider: TextProvider | None = None) -> Decimal:  # fmt: skip
+    """What `structured` will reserve (and count, until the call settles) for exactly this request."""
+    provider = provider or get_providers().text
+    price = pricing.require(provider.name, provider.model_for(role))
+    input_bytes = (len(system.encode()) + len(user.encode()) + sum(len((i.label or "").encode()) for i in images)
+                   + len(json.dumps(schema.model_json_schema()).encode()))  # fmt: skip
+    return pricing.text_estimate(price, input_bytes=input_bytes, images_wh=[_size(i.data) for i in images],
+                                 max_tokens=provider.max_tokens)  # fmt: skip
+
+
 async def structured(
     *, role: TextRole, system: str, user: str, schema: type[T], ctx: CallContext,
     images: tuple[ImageInput, ...] = (), provider: TextProvider | None = None,
