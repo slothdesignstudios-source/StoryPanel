@@ -44,6 +44,9 @@ BORDER_BREAK = 0.12  # how far (of panel size) a balloon may cross the border
 # Print safe area: all lettering stays 0.125 in inside the trim. Exports print the page 6 in wide
 # (render.PDF_TRIM_WIDTH_PT = 432 pt), so the margin is 9/432 of the page width in page units.
 SAFE_MARGIN_FRACTION = 9.0 / 432.0
+TAIL_MARGIN = 0.05  # of the panel diagonal: a tail must end clearly nearer its speaker than anyone else
+FAR_SIDE_COST = 2.0  # a line placed where it reads as another character's
+FACE_TOLERANCE = 0.1  # of a located head's size: detected boxes are approximate (stage 1A)
 SFX_STROKE = 3.0  # page units the SFX ink outline extends beyond the glyphs (render: 2 x 3 wide, centred)
 
 
@@ -371,6 +374,21 @@ def face_core(head: Rect) -> Rect:
     return (head[0], head[1] + head[3] * 0.3, head[2], head[3] * 0.7)
 
 
+def face_margin(head: Rect) -> Rect:
+    """The face core grown by FACE_TOLERANCE of the head size on every side."""
+    core = face_core(head)
+    m = FACE_TOLERANCE * max(head[2], head[3])
+    return (core[0] - m, core[1] - m, core[2] + 2 * m, core[3] + 2 * m)
+
+
+def covers_face(rect: Rect, head: Rect) -> bool:
+    """More than 15% of a located face is covered, allowing for the box being approximate: the face
+    is measured with a margin of FACE_TOLERANCE of the head size on every side (stage 1A, Train p2,
+    where a balloon covered 18% of the real face but under 15% of the detected one)."""
+    core, grown = face_core(head), face_margin(head)
+    return overlap(rect, core) > 0.15 * core[2] * core[3] or overlap(rect, grown) > 0.15 * grown[2] * grown[3]
+
+
 def crown(head: Rect) -> Rect:
     return (head[0], head[1], head[2], head[3] * 0.3)
 
@@ -550,6 +568,7 @@ def layout_panel(
             continue
 
         head = heads.get(speaker or "")
+        others_located = [z for k, z in heads.items() if k != speaker and k not in guessed]
 
         def search(
             grow: float,
@@ -558,6 +577,7 @@ def layout_panel(
             head: Rect | None = head,
             prev_key: float = prev_key,
             prev_rect: Rect | None = prev_rect,
+            others_located: list[Rect] = others_located,
         ) -> tuple[float, float, float]:
             x0, x1 = px + pad - grow * pw, px + pw - w - pad + grow * pw
             y0, y1 = py + pad - grow * ph, py + ph - h - pad
@@ -590,6 +610,15 @@ def layout_panel(
                         cost += math.hypot(cx + w / 2 - hx, cy + h - hy) / math.hypot(pw, ph) * 2.0
                         if cy + h > head[1] + head[3]:
                             cost += 1.5  # balloons belong above the speaker, not across the body
+                        centre = (cx + w / 2, cy + h / 2)
+                        mouth = (hx, head[1] + head[3] * 0.6)
+                        for o in others_located:
+                            # resting right on another character's head reads as theirs (stage 1A, Train p2)
+                            if (o[0] <= centre[0] <= o[0] + o[2] and not head[0] <= centre[0] <= head[0] + head[2]
+                                    and cy + h > o[1]):  # fmt: skip
+                                cost += FAR_SIDE_COST  # reaches down onto that head
+                            if _segment_hits(centre, mouth, face_core(o)):
+                                cost += FAR_SIDE_COST  # a tail that has to cross another face
                     if reading_key(rect, panel_rect) <= prev_key + 0.02:
                         cost += 100.0  # must read after the previous balloon
                     elif (
@@ -621,11 +650,7 @@ def layout_panel(
         if cost >= 100.0:
             flags.append("reading_order")
         rect = (x, y, w, h)
-        if any(
-            overlap(rect, face_core(z)) > 0.15 * z[2] * z[3] * 0.7
-            for k, z in heads.items()
-            if k not in guessed
-        ):
+        if any(covers_face(rect, z) for k, z in heads.items() if k not in guessed):
             flags.append("covers_face")
         elif any(overlap(rect, z) > 0.05 * w * h for z in bands):
             # where a face really is wasn't reported: an overlap can't be ruled out
@@ -642,8 +667,10 @@ def layout_panel(
             to_speaker = _dist_to(tail, heads[speaker])
             if speaker in guessed:
                 flags.append("tail_target_estimated")  # aimed at a guessed head position
-            elif any(_dist_to(tail, z) < to_speaker for z in others):
-                flags.append("tail_ambiguous")  # the tail ends nearer another character
+            elif any(_dist_to(tail, z) < to_speaker + TAIL_MARGIN * math.hypot(pw, ph) for z in others):
+                # the tail ends nearer another character, or so nearly as near that a reader can't tell:
+                # detected boxes are approximate (stage 1A, Train p2: 27.6 vs 26.2 units, unflagged)
+                flags.append("tail_ambiguous")
         if tail is not None:  # a tail aimed at a speaker near the page edge stops inside the safe area
             sx, sy, sw, sh = safe_rect(page_size)
             tail = (min(max(tail[0], sx), sx + sw), min(max(tail[1], sy), sy + sh))

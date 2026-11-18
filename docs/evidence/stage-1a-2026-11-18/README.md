@@ -75,3 +75,8 @@ needs the overlay; it didn't affect placement, because Mira is the speaker.
 - **The remaining errors are in the letterer:** speaker-side crossing, and warning thresholds measured
   against the detected boxes.
 - **The boxes are stored in the JSON,** so letterer fixes can be replayed on them with no further calls.
+
+## Follow-up (free): the letterer fix
+
+See [`replay/README.md`](replay/README.md). Train 2's crossing is fixed in a replay on the stored boxes,
+and nothing else moved. The limitations are listed there.
