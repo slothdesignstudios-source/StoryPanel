@@ -1,0 +1,727 @@
+{
+ "comic_id": "5b291705-ebfe-4db5-9372-ec209b5def1d",
+ "mode": "LIVE",
+ "approved_usd": "0.20",
+ "started_at": "2026-11-18T03:30:59.389775+00:00",
+ "stopped": null,
+ "panels": [
+  {
+   "page": 1,
+   "panel": 1,
+   "expected_faces": [
+    "mira",
+    "teo"
+   ],
+   "returned": {
+    "present": [
+     "mira",
+     "teo"
+    ],
+    "head_boxes_image_fractions": {
+     "mira": {
+      "x": 0.1,
+      "y": 0.31,
+      "w": 0.2,
+      "h": 0.18
+     },
+     "teo": {
+      "x": 0.3,
+      "y": 0.21,
+      "w": 0.07,
+      "h": 0.08
+     }
+    }
+   },
+   "faces_unlocated": [],
+   "head_boxes_on_displayed_panel": {
+    "mira": {
+     "x": 0.1,
+     "y": 0.2893069306930693,
+     "w": 0.2000000000000001,
+     "h": 0.19960396039603956
+    },
+    "teo": {
+     "x": 0.3,
+     "y": 0.1784158415841584,
+     "w": 0.07,
+     "h": 0.08871287128712868
+    }
+   },
+   "basis": {
+    "version_id": "45eba4d8-833f-45fc-a63b-ec2b244c924f",
+    "faces": "located",
+    "located": [
+     "mira",
+     "teo"
+    ],
+    "box_problems": {}
+   },
+   "balloons": [
+    {
+     "text": "Chuff... chuff...",
+     "flags": [
+      "sfx_covers_character"
+     ]
+    }
+   ],
+   "evaluation": {
+    "flags": [
+     "sfx_covers_character"
+    ],
+    "expected_faces_not_located": [],
+    "faces_reported_unlocated": [],
+    "reading_order_ok": true,
+    "manual_annotation": true,
+    "measurements": {
+     "source": "manual annotation (comparison only)",
+     "characters": {
+      "mira": {
+       "detected": true,
+       "iou": 0.37,
+       "centre_error_of_panel_diagonal": 0.052,
+       "assigned_correctly": true,
+       "aligned": true
+      }
+     },
+     "balloons": [
+      {
+       "text": "Chuff... chuff...",
+       "type": "sfx",
+       "speaker": null,
+       "flags": [
+        "sfx_covers_character"
+       ],
+       "covers_true_face": {
+        "mira": 0.0
+       }
+      }
+     ]
+    },
+    "missed_defects": [],
+    "outcome": "unresolved_defect_detected",
+    "counts_as_successful_placement": false
+   }
+  },
+  {
+   "page": 1,
+   "panel": 2,
+   "expected_faces": [
+    "mira",
+    "teo"
+   ],
+   "returned": {
+    "present": [
+     "mira",
+     "teo"
+    ],
+    "head_boxes_image_fractions": {
+     "mira": {
+      "x": 0.1,
+      "y": 0.27,
+      "w": 0.32,
+      "h": 0.28
+     },
+     "teo": {
+      "x": 0.5,
+      "y": 0.12,
+      "w": 0.26,
+      "h": 0.24
+     }
+    }
+   },
+   "faces_unlocated": [],
+   "head_boxes_on_displayed_panel": {
+    "mira": {
+     "x": 0.1,
+     "y": 0.24495049504950497,
+     "w": 0.32000000000000006,
+     "h": 0.31049504950495055
+    },
+    "teo": {
+     "x": 0.5,
+     "y": 0.07861386138613861,
+     "w": 0.26,
+     "h": 0.26613861386138615
+    }
+   },
+   "basis": {
+    "version_id": "33b719c2-cf51-457e-96dd-215473be8b69",
+    "faces": "located",
+    "located": [
+     "mira",
+     "teo"
+    ],
+    "box_problems": {}
+   },
+   "balloons": [
+    {
+     "text": "Missed it again! Ha... sorry",
+     "flags": []
+    },
+    {
+     "text": "It's... okay.",
+     "flags": []
+    }
+   ],
+   "evaluation": {
+    "flags": [],
+    "expected_faces_not_located": [],
+    "faces_reported_unlocated": [],
+    "reading_order_ok": true,
+    "manual_annotation": true,
+    "measurements": {
+     "source": "manual annotation (comparison only)",
+     "characters": {
+      "mira": {
+       "detected": true,
+       "iou": 0.73,
+       "centre_error_of_panel_diagonal": 0.028,
+       "assigned_correctly": true,
+       "aligned": true
+      },
+      "teo": {
+       "detected": true,
+       "iou": 0.65,
+       "centre_error_of_panel_diagonal": 0.032,
+       "assigned_correctly": true,
+       "aligned": true
+      }
+     },
+     "balloons": [
+      {
+       "text": "Missed it again! Ha... sorry",
+       "type": "speech",
+       "speaker": "teo",
+       "flags": [],
+       "covers_true_face": {
+        "mira": 0.18,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 8.5,
+       "tail_to_nearest_other": 45.3,
+       "tail_attributed": true
+      },
+      {
+       "text": "It's... okay.",
+       "type": "speech",
+       "speaker": "mira",
+       "flags": [],
+       "covers_true_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 27.6,
+       "tail_to_nearest_other": 26.2,
+       "tail_attributed": false
+      }
+     ]
+    },
+    "missed_defects": [
+     "balloon 'Missed it again! Ha.' covers 18% of a hand-placed face, unflagged",
+     "tail of 'It's... okay.' points nearer another character, unflagged"
+    ],
+    "outcome": "missed_defect",
+    "counts_as_successful_placement": false
+   }
+  },
+  {
+   "page": 1,
+   "panel": 3,
+   "expected_faces": [
+    "mira"
+   ],
+   "returned": {
+    "present": [
+     "mira"
+    ],
+    "head_boxes_image_fractions": {
+     "mira": {
+      "x": 0.36,
+      "y": 0.12,
+      "w": 0.46,
+      "h": 0.39
+     }
+    }
+   },
+   "faces_unlocated": [],
+   "head_boxes_on_displayed_panel": {
+    "mira": {
+     "x": 0.3542268041237113,
+     "y": 0.12,
+     "w": 0.47896907216494855,
+     "h": 0.39
+    }
+   },
+   "basis": {
+    "version_id": "98e3ae1d-e292-458f-9ddb-cfe9d9044912",
+    "faces": "located",
+    "located": [
+     "mira"
+    ],
+    "box_problems": {}
+   },
+   "balloons": [
+    {
+     "text": "Every day, the same boy...",
+     "flags": [
+      "covers_face"
+     ]
+    }
+   ],
+   "evaluation": {
+    "flags": [
+     "covers_face"
+    ],
+    "expected_faces_not_located": [],
+    "faces_reported_unlocated": [],
+    "reading_order_ok": true,
+    "manual_annotation": true,
+    "measurements": {
+     "source": "manual annotation (comparison only)",
+     "characters": {
+      "mira": {
+       "detected": true,
+       "iou": 0.66,
+       "centre_error_of_panel_diagonal": 0.055,
+       "assigned_correctly": true,
+       "aligned": true
+      }
+     },
+     "balloons": [
+      {
+       "text": "Every day, the same boy...",
+       "type": "thought",
+       "speaker": "mira",
+       "flags": [
+        "covers_face"
+       ],
+       "covers_true_face": {
+        "mira": 0.38
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null,
+       "tail_attributed": true
+      }
+     ]
+    },
+    "missed_defects": [],
+    "outcome": "unresolved_defect_detected",
+    "counts_as_successful_placement": false
+   }
+  },
+  {
+   "page": 1,
+   "panel": 4,
+   "expected_faces": [
+    "teo",
+    "mira"
+   ],
+   "returned": {
+    "present": [
+     "teo",
+     "mira"
+    ],
+    "head_boxes_image_fractions": {
+     "teo": {
+      "x": 0.6,
+      "y": 0.18,
+      "w": 0.26,
+      "h": 0.2
+     },
+     "mira": {
+      "x": 0.16,
+      "y": 0.42,
+      "w": 0.13,
+      "h": 0.12
+     }
+    }
+   },
+   "faces_unlocated": [],
+   "head_boxes_on_displayed_panel": {
+    "teo": {
+     "x": 0.6041237113402061,
+     "y": 0.18,
+     "w": 0.27072164948453603,
+     "h": 0.2
+    },
+    "mira": {
+     "x": 0.14597938144329897,
+     "y": 0.42000000000000004,
+     "w": 0.13536082474226807,
+     "h": 0.12
+    }
+   },
+   "basis": {
+    "version_id": "ab164590-7612-452a-a2cd-8c91897bfced",
+    "faces": "located",
+    "located": [
+     "mira",
+     "teo"
+    ],
+    "box_problems": {}
+   },
+   "balloons": [
+    {
+     "text": "Delayed! I can make it!",
+     "flags": []
+    }
+   ],
+   "evaluation": {
+    "flags": [],
+    "expected_faces_not_located": [],
+    "faces_reported_unlocated": [],
+    "reading_order_ok": true,
+    "manual_annotation": true,
+    "measurements": {
+     "source": "manual annotation (comparison only)",
+     "characters": {
+      "mira": {
+       "detected": true,
+       "iou": 0.28,
+       "centre_error_of_panel_diagonal": 0.008,
+       "assigned_correctly": true,
+       "aligned": true
+      },
+      "teo": {
+       "detected": true,
+       "iou": 0.55,
+       "centre_error_of_panel_diagonal": 0.041,
+       "assigned_correctly": true,
+       "aligned": true
+      }
+     },
+     "balloons": [
+      {
+       "text": "Delayed! I can make it!",
+       "type": "speech",
+       "speaker": "teo",
+       "flags": [],
+       "covers_true_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": 96.3,
+       "tail_attributed": true
+      }
+     ]
+    },
+    "missed_defects": [],
+    "outcome": "clean_automatic_placement",
+    "counts_as_successful_placement": true
+   }
+  },
+  {
+   "page": 1,
+   "panel": 5,
+   "expected_faces": [
+    "mira"
+   ],
+   "returned": {
+    "present": [
+     "mira"
+    ],
+    "head_boxes_image_fractions": {
+     "mira": {
+      "x": 0.22,
+      "y": 0.03,
+      "w": 0.5,
+      "h": 0.4
+     }
+    }
+   },
+   "faces_unlocated": [],
+   "head_boxes_on_displayed_panel": {
+    "mira": {
+     "x": 0.20845360824742268,
+     "y": 0.03,
+     "w": 0.520618556701031,
+     "h": 0.4
+    }
+   },
+   "basis": {
+    "version_id": "7f360a9b-4faf-430c-9d59-a646e66d0cd5",
+    "faces": "located",
+    "located": [
+     "mira"
+    ],
+    "box_problems": {}
+   },
+   "balloons": [
+    {
+     "text": "Oh...",
+     "flags": []
+    }
+   ],
+   "evaluation": {
+    "flags": [],
+    "expected_faces_not_located": [],
+    "faces_reported_unlocated": [],
+    "reading_order_ok": true,
+    "manual_annotation": true,
+    "measurements": {
+     "source": "manual annotation (comparison only)",
+     "characters": {
+      "mira": {
+       "detected": true,
+       "iou": 0.81,
+       "centre_error_of_panel_diagonal": 0.024,
+       "assigned_correctly": true,
+       "aligned": true
+      }
+     },
+     "balloons": [
+      {
+       "text": "Oh...",
+       "type": "speech",
+       "speaker": "mira",
+       "flags": [],
+       "covers_true_face": {
+        "mira": 0.0
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null,
+       "tail_attributed": true
+      }
+     ]
+    },
+    "missed_defects": [],
+    "outcome": "clean_automatic_placement",
+    "counts_as_successful_placement": true
+   }
+  },
+  {
+   "page": 1,
+   "panel": 6,
+   "expected_faces": [
+    "teo",
+    "mira"
+   ],
+   "returned": {
+    "present": [
+     "mira",
+     "teo"
+    ],
+    "head_boxes_image_fractions": {
+     "mira": {
+      "x": 0.26,
+      "y": 0.295,
+      "w": 0.105,
+      "h": 0.155
+     },
+     "teo": {
+      "x": 0.762,
+      "y": 0.07,
+      "w": 0.091,
+      "h": 0.21
+     }
+    }
+   },
+   "faces_unlocated": [],
+   "head_boxes_on_displayed_panel": {
+    "mira": {
+     "x": 0.23797101449275362,
+     "y": 0.295,
+     "w": 0.11463768115942027,
+     "h": 0.15499999999999997
+    },
+    "teo": {
+     "x": 0.786048309178744,
+     "y": 0.07,
+     "w": 0.09935265700483087,
+     "h": 0.21000000000000002
+    }
+   },
+   "basis": {
+    "version_id": "6f475399-1ff0-4e1d-84c3-7d1c03b4ddff",
+    "faces": "located",
+    "located": [
+     "mira",
+     "teo"
+    ],
+    "box_problems": {}
+   },
+   "balloons": [
+    {
+     "text": "Tomorrow... same table?",
+     "flags": []
+    }
+   ],
+   "evaluation": {
+    "flags": [],
+    "expected_faces_not_located": [],
+    "faces_reported_unlocated": [],
+    "reading_order_ok": true,
+    "manual_annotation": true,
+    "measurements": {
+     "source": "manual annotation (comparison only)",
+     "characters": {
+      "mira": {
+       "detected": true,
+       "iou": 0.8,
+       "centre_error_of_panel_diagonal": 0.001,
+       "assigned_correctly": true,
+       "aligned": true
+      },
+      "teo": {
+       "detected": true,
+       "iou": 0.02,
+       "centre_error_of_panel_diagonal": 0.071,
+       "assigned_correctly": true,
+       "aligned": true
+      }
+     },
+     "balloons": [
+      {
+       "text": "Tomorrow... same table?",
+       "type": "speech",
+       "speaker": "mira",
+       "flags": [],
+       "covers_true_face": {
+        "mira": 0.0,
+        "teo": 0.0
+       },
+       "tail_to_speaker": 12.3,
+       "tail_to_nearest_other": 586.8,
+       "tail_attributed": true
+      }
+     ]
+    },
+    "missed_defects": [],
+    "outcome": "clean_automatic_placement",
+    "counts_as_successful_placement": true
+   }
+  }
+ ],
+ "calls": [
+  {
+   "status": "succeeded",
+   "cost_basis": "calculated",
+   "cost_estimate_usd": "0.009801",
+   "cost_counted_usd": "0.002046",
+   "cost_calculated_usd": "0.002046",
+   "cost_confirmed_usd": null,
+   "input_tokens": 10505,
+   "output_tokens": 1990,
+   "images": 0,
+   "latency_ms": 15581,
+   "error_code": null,
+   "model": "claude-haiku-5-5",
+   "project_id": "5b291705-ebfe-4db5-9372-ec209b5def1d",
+   "created_at": "2026-11-18 03:31:00.880782+00:00"
+  },
+  {
+   "status": "succeeded",
+   "cost_basis": "calculated",
+   "cost_estimate_usd": "0.009797",
+   "cost_counted_usd": "0.002015",
+   "cost_calculated_usd": "0.002015",
+   "cost_confirmed_usd": null,
+   "input_tokens": 10498,
+   "output_tokens": 1931,
+   "images": 0,
+   "latency_ms": 13370,
+   "error_code": null,
+   "model": "claude-haiku-5-5",
+   "project_id": "5b291705-ebfe-4db5-9372-ec209b5def1d",
+   "created_at": "2026-11-18 03:31:16.765256+00:00"
+  },
+  {
+   "status": "succeeded",
+   "cost_basis": "calculated",
+   "cost_estimate_usd": "0.009460",
+   "cost_counted_usd": "0.001462",
+   "cost_calculated_usd": "0.001462",
+   "cost_confirmed_usd": null,
+   "input_tokens": 7349,
+   "output_tokens": 1454,
+   "images": 0,
+   "latency_ms": 10366,
+   "error_code": null,
+   "model": "claude-haiku-5-5",
+   "project_id": "5b291705-ebfe-4db5-9372-ec209b5def1d",
+   "created_at": "2026-11-18 03:31:30.427982+00:00"
+  },
+  {
+   "status": "succeeded",
+   "cost_basis": "calculated",
+   "cost_estimate_usd": "0.009724",
+   "cost_counted_usd": "0.002092",
+   "cost_calculated_usd": "0.002092",
+   "cost_confirmed_usd": null,
+   "input_tokens": 9779,
+   "output_tokens": 2228,
+   "images": 0,
+   "latency_ms": 13841,
+   "error_code": null,
+   "model": "claude-haiku-5-5",
+   "project_id": "5b291705-ebfe-4db5-9372-ec209b5def1d",
+   "created_at": "2026-11-18 03:31:41.055888+00:00"
+  },
+  {
+   "status": "succeeded",
+   "cost_basis": "calculated",
+   "cost_estimate_usd": "0.009464",
+   "cost_counted_usd": "0.001524",
+   "cost_calculated_usd": "0.001524",
+   "cost_confirmed_usd": null,
+   "input_tokens": 7354,
+   "output_tokens": 1578,
+   "images": 0,
+   "latency_ms": 10996,
+   "error_code": null,
+   "model": "claude-haiku-5-5",
+   "project_id": "5b291705-ebfe-4db5-9372-ec209b5def1d",
+   "created_at": "2026-11-18 03:31:55.161666+00:00"
+  },
+  {
+   "status": "succeeded",
+   "cost_basis": "calculated",
+   "cost_estimate_usd": "0.009653",
+   "cost_counted_usd": "0.001774",
+   "cost_calculated_usd": "0.001774",
+   "cost_confirmed_usd": null,
+   "input_tokens": 9142,
+   "output_tokens": 1719,
+   "images": 0,
+   "latency_ms": 11394,
+   "error_code": null,
+   "model": "claude-haiku-5-5",
+   "project_id": "5b291705-ebfe-4db5-9372-ec209b5def1d",
+   "created_at": "2026-11-18 03:32:06.425794+00:00"
+  }
+ ],
+ "totals": {
+  "calls": 6,
+  "reserved_usd": "0.057899",
+  "counted_usd": "0.010913",
+  "calculated_usd": "0.010913",
+  "unresolved": 0,
+  "input_tokens": 54627,
+  "output_tokens": 10900
+ },
+ "stage_1a_cumulative": {
+  "live_calls": 6,
+  "counted_usd": "0.010913",
+  "cap_usd": "0.20",
+  "remaining_usd": "0.189087"
+ },
+ "outcomes": {
+  "panels": 6,
+  "clean_automatic_placement": [
+   "p1-4",
+   "p1-5",
+   "p1-6"
+  ],
+  "unresolved_defect_detected (detection, not placement)": [
+   "p1-1",
+   "p1-3"
+  ],
+  "uncertain_faces_not_located": [],
+  "missed_defect": [
+   "p1-2"
+  ],
+  "clean_unverified (no manual annotation; review overlay)": [],
+  "call_failed": []
+ }
+}

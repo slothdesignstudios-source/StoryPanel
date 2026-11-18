@@ -1,0 +1,132 @@
+{
+ "comic_id": "2a3baf5d-a7ad-48a7-b9ee-d428ed58d63f",
+ "mode": "LIVE",
+ "approved_usd": "0.20",
+ "started_at": "2026-11-18T03:32:40.264467+00:00",
+ "stopped": null,
+ "panels": [
+  {
+   "page": 1,
+   "panel": 3,
+   "expected_faces": [
+    "old_man"
+   ],
+   "returned": {
+    "present": [
+     "old_man"
+    ],
+    "head_boxes_image_fractions": {
+     "old_man": {
+      "x": 0.13,
+      "y": 0.0,
+      "w": 0.5,
+      "h": 0.58
+     }
+    }
+   },
+   "faces_unlocated": [],
+   "head_boxes_on_displayed_panel": {
+    "old_man": {
+     "x": 0.13,
+     "y": 0.0,
+     "w": 0.5,
+     "h": 0.5861538461538461
+    }
+   },
+   "basis": {
+    "version_id": "d3aeab60-6922-4f00-a837-01ef73903fee",
+    "faces": "located",
+    "located": [
+     "old_man"
+    ],
+    "box_problems": {}
+   },
+   "balloons": [
+    {
+     "text": "Oh... you remembered.",
+     "flags": []
+    }
+   ],
+   "evaluation": {
+    "flags": [],
+    "expected_faces_not_located": [],
+    "faces_reported_unlocated": [],
+    "reading_order_ok": true,
+    "manual_annotation": true,
+    "measurements": {
+     "source": "manual annotation (comparison only)",
+     "characters": {
+      "old_man": {
+       "detected": true,
+       "iou": 0.69,
+       "centre_error_of_panel_diagonal": 0.044,
+       "assigned_correctly": true,
+       "aligned": true
+      }
+     },
+     "balloons": [
+      {
+       "text": "Oh... you remembered.",
+       "type": "speech",
+       "speaker": "old_man",
+       "flags": [],
+       "covers_true_face": {
+        "old_man": 0.06
+       },
+       "tail_to_speaker": 0.0,
+       "tail_to_nearest_other": null,
+       "tail_attributed": true
+      }
+     ]
+    },
+    "missed_defects": [],
+    "outcome": "clean_automatic_placement",
+    "counts_as_successful_placement": true
+   }
+  }
+ ],
+ "calls": [
+  {
+   "status": "succeeded",
+   "cost_basis": "calculated",
+   "cost_estimate_usd": "0.009516",
+   "cost_counted_usd": "0.000984",
+   "cost_calculated_usd": "0.000984",
+   "cost_confirmed_usd": null,
+   "input_tokens": 8015,
+   "output_tokens": 365,
+   "images": 0,
+   "latency_ms": 4999,
+   "error_code": null,
+   "model": "claude-haiku-5-5",
+   "project_id": "2a3baf5d-a7ad-48a7-b9ee-d428ed58d63f",
+   "created_at": "2026-11-18 03:32:41.749640+00:00"
+  }
+ ],
+ "totals": {
+  "calls": 1,
+  "reserved_usd": "0.009516",
+  "counted_usd": "0.000984",
+  "calculated_usd": "0.000984",
+  "unresolved": 0,
+  "input_tokens": 8015,
+  "output_tokens": 365
+ },
+ "stage_1a_cumulative": {
+  "live_calls": 7,
+  "counted_usd": "0.011897",
+  "cap_usd": "0.20",
+  "remaining_usd": "0.188103"
+ },
+ "outcomes": {
+  "panels": 1,
+  "clean_automatic_placement": [
+   "p1-3"
+  ],
+  "unresolved_defect_detected (detection, not placement)": [],
+  "uncertain_faces_not_located": [],
+  "missed_defect": [],
+  "clean_unverified (no manual annotation; review overlay)": [],
+  "call_failed": []
+ }
+}
