@@ -18,14 +18,23 @@ like every paid request) -> boxes in the stored qa_scores format -> stages_art.l
 conversion, bad-box refusal) -> lettering.layout_panel -> render.render_page (PNG) and
 render.build_pdf (PDF). The boxes are written to OUT_DIR/face-check.json, not to the database.
 
-The cap: before each call, the counted spend of this run (from the paid-request ledger) plus the
-app's own reservation for that call (input bound + full output cap, pricing.text_estimate with the
-real images) must stay within --approve-usd, or the run stops there. The app's per-comic and per-user
+The cap is ONE stage-1A budget of USD 0.20 for both comics together, never reset: before each call,
+everything stage 1A has counted so far (every live face_check row in the paid-request ledger, on any
+comic, from any run, including failed, retried and resumed runs) plus the app's own reservation for
+that call (input bound + full output cap, pricing.text_estimate with the real images) must stay within
+min(--approve-usd, 0.20), or the run stops there and does not retry. The app's per-comic and per-user
 limits apply as usual. This is an application limit, not a guaranteed provider billing ceiling.
+
+Run it from a checkout of this commit with THAT checkout's own environment
+(services/backend/.venv): the package is installed editable, so another checkout's Python would
+import that checkout's code instead.
 
 --annotations (docs/evidence/quality-2026-11-17/reletter/annotations.json) is read only AFTER the
 automatic placement, to evaluate it: assignment, box alignment, balloon overlap, reading order, tail
-attribution. It is never an input to detection or placement.
+attribution. It is never an input to detection or placement. Without an annotation for a panel,
+those measurements are reported as unavailable and only the overlay is given for review. Outcomes are
+reported separately: clean automatic placement; an unresolved defect correctly flagged (detection,
+not placement); faces not located (uncertain); and defects the flags missed.
 """
 
 from __future__ import annotations
@@ -85,7 +94,9 @@ async def load(pid: uuid.UUID) -> dict[str, Any]:
             pages.append({"page": page, "template": t, "panels": rows, "all": panels})
     blobs: dict[uuid.UUID, bytes | None] = {}
     problems = []
-    for a in [r["asset"] for p in pages for r in p["panels"] if r["asset"] is not None] + list(portraits.values()):
+    for a in [r["asset"] for p in pages for r in p["panels"] if r["asset"] is not None] + list(
+        portraits.values()
+    ):
         try:
             data = await get_bytes(a.storage_key)
         except Exception as exc:  # noqa: BLE001 - reported, the run won't start
@@ -100,13 +111,19 @@ async def load(pid: uuid.UUID) -> dict[str, Any]:
 
 
 def lettered(data: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
-    return [(p, r) for p in data["pages"] for r in p["panels"] if r["spec"].dialogue and r["version"] is not None]
+    return [
+        (p, r) for p in data["pages"] for r in p["panels"] if r["spec"].dialogue and r["version"] is not None
+    ]
 
 
 def call_inputs(data: dict[str, Any], r: dict[str, Any]) -> tuple[bytes, dict[str, bytes]]:
     image = data["blobs"][r["asset"].id]
     speakers = {c.id for c in r["spec"].characters}
-    refs = {s: data["blobs"][a.id] for s, a in data["portraits"].items() if s in speakers and data["blobs"].get(a.id)}
+    refs = {
+        s: data["blobs"][a.id]
+        for s, a in data["portraits"].items()
+        if s in speakers and data["blobs"].get(a.id)
+    }
     return image, refs
 
 
@@ -121,7 +138,9 @@ def reservation(data: dict[str, Any], r: dict[str, Any]) -> Decimal:
     rules = art.effective_rules(data["bible"].continuity_rules if data["bible"] else [], spec)
     system, user, images = qa.vision_request(image=image, panel=spec, cast=data["cast"], reference_images=refs,
                                              required=rules.must, elements=[(e.element, e.state) for e in spec.element_states])  # fmt: skip
-    return metering.structured_reservation(role="vision", system=system, user=user, schema=VisionQAReport, images=images)
+    return metering.structured_reservation(
+        role="vision", system=system, user=user, schema=VisionQAReport, images=images
+    )
 
 
 async def preflight(pid: uuid.UUID) -> int:
@@ -130,8 +149,10 @@ async def preflight(pid: uuid.UUID) -> int:
     s = get_settings()
     data = await load(pid)
     todo = lettered(data)
-    print(f"comic {pid}: \"{data['project'].title}\"  status {data['project'].status}")
-    print(f"storage: endpoint {s.s3_endpoint_url or 'default'}; SP_LOCAL_S3={os.environ.get('SP_LOCAL_S3', 'unset')}")
+    print(f'comic {pid}: "{data["project"].title}"  status {data["project"].status}')
+    print(
+        f"storage: endpoint {s.s3_endpoint_url or 'default'}; SP_LOCAL_S3={os.environ.get('SP_LOCAL_S3', 'unset')}"
+    )
     n_assets = len([1 for b in data["blobs"].values()])
     print(f"  {n_assets} image(s) read back; {len(data['storage_problems'])} problem(s)")
     for p in data["storage_problems"]:
@@ -141,36 +162,77 @@ async def preflight(pid: uuid.UUID) -> int:
         for r in p["panels"]:
             spec = r["spec"]
             mark = "CHECK" if (p, r) in [(a, b) for a, b in todo] else "skip "
-            faces = ", ".join(f"{data['cast'][c.id].name} ({c.position})" for c in spec.characters if c.id in data["cast"])
-            lines = "; ".join(f"{d.type}{' ' + d.speaker if d.speaker else ''}: {d.text[:30]}" for d in spec.dialogue) or "no lettering"
+            faces = ", ".join(
+                f"{data['cast'][c.id].name} ({c.position})" for c in spec.characters if c.id in data["cast"]
+            )
+            lines = (
+                "; ".join(
+                    f"{d.type}{' ' + d.speaker if d.speaker else ''}: {d.text[:30]}" for d in spec.dialogue
+                )
+                or "no lettering"
+            )
             cost = reservation(data, r) if mark == "CHECK" else Decimal(0)
             total += cost
             print(f"  {mark} page {p['page'].index + 1} panel {r['panel'].index + 1}: expected faces [{faces or 'none'}]"
                   f" | {lines}" + (f" | reserved USD {cost:.4f}" if cost else ""))  # fmt: skip
-    print(f"panels to check: {len(todo)} (only panels with lettering; a panel without lettering has nothing to place)")
+    print(
+        f"panels to check: {len(todo)} (only panels with lettering; a panel without lettering has nothing to place)"
+    )
     print(f"reserved total: USD {total:.4f} (the app counts each call at this until it settles)")
+    spent, calls = await stage_spent()
+    from storypanel.db.session import transaction
+    from storypanel.providers.metering import project_refuses_paid_work
+
+    async with transaction() as db:
+        refusal = await project_refuses_paid_work(db, pid)
+    print("paid checks allowed on this comic: " + ("yes" if refusal is None else f"NO ({refusal})"))
+    print(
+        f"stage 1A budget (both comics, all runs so far): {calls} live call(s), counted USD {spent:.4f} of "
+        f"{STAGE_1A_CAP}; remaining USD {STAGE_1A_CAP - spent:.4f}"
+    )
     print(f"provider mode: {s.provider_mode}; vision model: {s.vision_model}; Anthropic key configured: "
           f"{'yes' if s.anthropic_api_key else 'no'}")  # fmt: skip
     durable = os.environ.get("SP_LOCAL_S3", "versity") != "moto" or s.s3_endpoint_url is None
-    print("image storage: " + ("on disk (durable)" if durable else "IN MEMORY: images are lost when it stops"))
+    print(
+        "image storage: " + ("on disk (durable)" if durable else "IN MEMORY: images are lost when it stops")
+    )
     ready = (not data["storage_problems"] and durable and s.provider_mode == "live" and s.anthropic_api_key is not None
-             and bool(todo))  # fmt: skip
+             and bool(todo) and spent < STAGE_1A_CAP and refusal is None)  # fmt: skip
     print("preflight: " + ("PASS" if ready else "FAIL (see above); no call would be made"))
     return 0 if ready else 1
 
 
+STAGE_1A_CAP = Decimal("0.20")
+LEDGER_COLUMNS = """status, cost_basis, cost_estimate_usd, cost_counted_usd, cost_calculated_usd, cost_confirmed_usd,
+                   input_tokens, output_tokens, images, latency_ms, error_code, model, project_id, created_at"""
+
+
 async def counted(pid: uuid.UUID, since: datetime) -> list[dict[str, Any]]:
+    """This run's ledger rows (for the report)."""
     from sqlalchemy import text
 
     from storypanel.db.session import transaction
 
     async with transaction() as db:
-        rows = (await db.execute(text("""
-            select status, cost_basis, cost_estimate_usd, cost_counted_usd, cost_calculated_usd, cost_confirmed_usd,
-                   input_tokens, output_tokens, images, latency_ms, error_code, model
-            from provider_attempts where project_id = :p and stage = 'face_check' and created_at >= :t
-            order by created_at"""), {"p": pid, "t": since})).mappings().all()  # fmt: skip
+        rows = (await db.execute(text(f"""
+            select {LEDGER_COLUMNS} from provider_attempts
+            where project_id = :p and stage = 'face_check' and created_at >= :t order by created_at"""),
+            {"p": pid, "t": since})).mappings().all()  # fmt: skip
     return [dict(r) for r in rows]
+
+
+async def stage_spent() -> tuple[Decimal, int]:
+    """Everything stage 1A has counted so far: every live face check, on every comic, in every run,
+    including failed, retried and resumed ones. Never reset; a rerun starts from this total."""
+    from sqlalchemy import text
+
+    from storypanel.db.session import transaction
+
+    async with transaction() as db:
+        row = (await db.execute(text("""
+            select coalesce(sum(cost_counted_usd), 0) as spent, count(*) as calls from provider_attempts
+            where stage = 'face_check' and provider <> 'fake'"""))).mappings().one()  # fmt: skip
+    return Decimal(str(row["spent"])), int(row["calls"])
 
 
 def annotation_index(path: Path, comic: str, cast: dict[str, Any]) -> dict[tuple[int, int], dict[str, Any]]:
@@ -181,53 +243,142 @@ def annotation_index(path: Path, comic: str, cast: dict[str, Any]) -> dict[tuple
     for n, ann in notes.items():
         heads = {}
         for k, v in ann["heads"].items():
-            cid = k if k in cast else by_name.get(k.lower()) or next((c for c in cast if c.startswith(k)), None)
+            cid = (
+                k if k in cast else by_name.get(k.lower()) or next((c for c in cast if c.startswith(k)), None)
+            )
             if cid:
                 heads[cid] = dict(zip("xywh", v, strict=True))
         out[(1, int(n))] = {"heads": heads}
     return out
 
 
+UNAVAILABLE = "unavailable: no manual annotation for this panel; judge from the overlay"
+DEFECT_FLAGS = frozenset({"covers_face", "covers_prop", "overflow", "reading_order", "overlaps_lettering", "tail_ambiguous",
+                          "sfx_covers_character"})  # fmt: skip
+GUESS_FLAGS = frozenset({"face_position_estimated", "tail_target_estimated"})
+FACE_COVER_LIMIT = 0.15
+
+
 def evaluate(placed: list[Any], detected: dict[str, dict[str, float]], ann: dict[str, Any] | None,
-             rect: tuple[float, ...]) -> dict[str, Any]:  # fmt: skip
-    """Score the automatic result against hand-placed faces (comparison evidence only)."""
+             rect: tuple[float, ...], expected: list[str], unlocated: list[str]) -> dict[str, Any]:  # fmt: skip
+    """Classify the automatic result. Manual annotations are comparison evidence only (never inputs).
+
+    Outcomes, kept separate:
+      clean_automatic_placement      - every expected face located, no balloon flagged, and (where a manual
+                                       annotation exists) nothing it reveals was missed
+      unresolved_defect_detected     - the letterer could not place cleanly AND said so with a confirmed flag.
+                                       Successful defect detection; NOT successful placement.
+      uncertain_faces_not_located    - a face was not located; balloons carry "possibly" flags. Not placement.
+      missed_defect                  - a manual annotation shows a problem that no flag reported
+      clean_unverified               - no flags, but no manual annotation to check against: judge the overlay
+    """
     from storypanel.pipeline import lettering
 
+    flags = sorted({f for b in placed for f in b.flags})
+    defects = [f for f in flags if f in DEFECT_FLAGS]
+    guesses = [f for f in flags if f in GUESS_FLAGS]
+    missing = [c for c in expected if c not in detected]
+    out: dict[str, Any] = {
+        "flags": flags,
+        "expected_faces_not_located": missing,
+        "faces_reported_unlocated": unlocated,
+    }
+    keys = [lettering.reading_key((b.x, b.y, b.w, b.h), rect) for b in placed if b.type != "sfx"]
+    out["reading_order_ok"] = keys == sorted(keys)
+    missed: list[str] = []
     if not ann:
-        return {"annotations": "none for this panel"}
-    truth = {k: lettering._abs(v, rect) for k, v in ann["heads"].items()}
-    found = {k: lettering._abs(v, rect) for k, v in detected.items()}
-    per_char = {}
-    for cid, t in truth.items():
-        d = found.get(cid)
-        if d is None or t is None:
-            per_char[cid] = {"detected": False}
-            continue
-        inter = lettering.overlap(d, t)
-        iou = inter / (d[2] * d[3] + t[2] * t[3] - inter)
-        dc = (d[0] + d[2] / 2, d[1] + d[3] / 2)
-        own = lettering._dist_to(dc, t)
-        others = [lettering._dist_to(dc, o) for k, o in truth.items() if k != cid and o is not None]
-        per_char[cid] = {"detected": True, "iou": round(iou, 2),
-                         "centre_error_of_panel": round(((dc[0] - t[0] - t[2] / 2) ** 2 + (dc[1] - t[1] - t[3] / 2) ** 2) ** 0.5
-                                                        / (rect[2] ** 2 + rect[3] ** 2) ** 0.5, 3),
-                         "assigned_correctly": own == 0.0 or not others or own < min(others)}  # fmt: skip
-    balloons = []
-    keys = []
-    for b in placed:
-        cover = {k: round(lettering.overlap((b.x, b.y, b.w, b.h), lettering.face_core(t)) / (t[2] * t[3] * 0.7), 2)
-                 for k, t in truth.items() if t is not None}  # fmt: skip
-        row = {"text": b.text[:28], "type": b.type, "speaker": b.speaker, "flags": b.flags, "covers_true_face": cover}
-        if b.tail is not None and b.speaker in truth and truth[b.speaker] is not None:
-            to_sp = lettering._dist_to(b.tail, truth[b.speaker])  # type: ignore[arg-type]
-            others = [lettering._dist_to(b.tail, t) for k, t in truth.items() if k != b.speaker and t is not None]
-            row["tail_to_speaker"] = round(to_sp, 1)
-            row["tail_to_nearest_other"] = round(min(others), 1) if others else None
-            row["tail_attributed"] = not others or to_sp < min(others)
-        balloons.append(row)
-        if b.type != "sfx":
-            keys.append(lettering.reading_key((b.x, b.y, b.w, b.h), rect))
-    return {"characters": per_char, "balloons": balloons, "reading_order_ok": keys == sorted(keys)}
+        out["manual_annotation"] = False
+        out["measurements"] = UNAVAILABLE
+    else:
+        out["manual_annotation"] = True
+        truth = {k: lettering._abs(v, rect) for k, v in ann["heads"].items()}
+        found = {k: lettering._abs(v, rect) for k, v in detected.items()}
+        per_char = {}
+        for cid, t in truth.items():
+            d = found.get(cid)
+            if d is None or t is None:
+                per_char[cid] = {"detected": False}
+                continue
+            inter = lettering.overlap(d, t)
+            iou = inter / (d[2] * d[3] + t[2] * t[3] - inter)
+            dc = (d[0] + d[2] / 2, d[1] + d[3] / 2)
+            own = lettering._dist_to(dc, t)
+            others = [lettering._dist_to(dc, o) for k, o in truth.items() if k != cid and o is not None]
+            err = (((dc[0] - t[0] - t[2] / 2) ** 2 + (dc[1] - t[1] - t[3] / 2) ** 2) ** 0.5
+                   / (rect[2] ** 2 + rect[3] ** 2) ** 0.5)  # fmt: skip
+            row = {"detected": True, "iou": round(iou, 2), "centre_error_of_panel_diagonal": round(err, 3),
+                   "assigned_correctly": own == 0.0 or not others or own < min(others)}  # fmt: skip
+            row["aligned"] = row["iou"] >= 0.3 or err <= 0.10
+            per_char[cid] = row
+            if not row["assigned_correctly"]:
+                missed.append(f"{cid}: detected box is nearer another character's face")
+            if not row["aligned"]:
+                missed.append(f"{cid}: detected box does not line up with the hand-placed face")
+        balloons = []
+        for b in placed:
+            cover = {k: round(lettering.overlap((b.x, b.y, b.w, b.h), lettering.face_core(t)) / (t[2] * t[3] * 0.7), 2)
+                     for k, t in truth.items() if t is not None}  # fmt: skip
+            row = {
+                "text": b.text[:28],
+                "type": b.type,
+                "speaker": b.speaker,
+                "flags": b.flags,
+                "covers_true_face": cover,
+            }
+            worst = max(cover.values(), default=0.0)
+            if (
+                worst > FACE_COVER_LIMIT
+                and not {"covers_face", "sfx_covers_character"} & set(b.flags)
+                and not GUESS_FLAGS & set(b.flags)
+            ):
+                missed.append(f"balloon '{b.text[:20]}' covers {worst:.0%} of a hand-placed face, unflagged")
+            if b.tail is not None and b.speaker in truth and truth[b.speaker] is not None:
+                to_sp = lettering._dist_to(b.tail, truth[b.speaker])  # type: ignore[arg-type]
+                others = [
+                    lettering._dist_to(b.tail, t)
+                    for k, t in truth.items()
+                    if k != b.speaker and t is not None
+                ]
+                row["tail_to_speaker"] = round(to_sp, 1)
+                row["tail_to_nearest_other"] = round(min(others), 1) if others else None
+                row["tail_attributed"] = not others or to_sp < min(others)
+                if not row["tail_attributed"] and not {"tail_ambiguous", "tail_target_estimated"} & set(
+                    b.flags
+                ):
+                    missed.append(f"tail of '{b.text[:20]}' points nearer another character, unflagged")
+            balloons.append(row)
+        out["measurements"] = {"source": "manual annotation (comparison only)", "characters": per_char,
+                               "balloons": balloons}  # fmt: skip
+    if not out["reading_order_ok"] and "reading_order" not in flags:
+        missed.append("balloons out of reading order, unflagged")
+    out["missed_defects"] = missed
+    if missed:
+        outcome = "missed_defect"
+    elif defects:
+        outcome = "unresolved_defect_detected"
+    elif guesses or missing or unlocated:
+        outcome = "uncertain_faces_not_located"
+    elif ann:
+        outcome = "clean_automatic_placement"
+    else:
+        outcome = "clean_unverified"
+    out["outcome"] = outcome
+    out["counts_as_successful_placement"] = outcome == "clean_automatic_placement"
+    return out
+
+
+def outcome_counts(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Placement and defect detection, reported separately (a flag is never a placement)."""
+    by: dict[str, list[str]] = {}
+    for r in results:
+        key = r["evaluation"]["outcome"] if "evaluation" in r else "call_failed"
+        by.setdefault(key, []).append(f"p{r['page']}-{r['panel']}")
+    return {"panels": len(results), "clean_automatic_placement": by.get("clean_automatic_placement", []),
+            "unresolved_defect_detected (detection, not placement)": by.get("unresolved_defect_detected", []),
+            "uncertain_faces_not_located": by.get("uncertain_faces_not_located", []),
+            "missed_defect": by.get("missed_defect", []),
+            "clean_unverified (no manual annotation; review overlay)": by.get("clean_unverified", []),
+            "call_failed": by.get("call_failed", [])}  # fmt: skip
 
 
 def overlay(image: bytes, rect: tuple[float, ...], detected: dict[str, Any], ann: dict[str, Any] | None,
@@ -263,7 +414,9 @@ def overlay(image: bytes, rect: tuple[float, ...], detected: dict[str, Any], ann
     return out.getvalue()
 
 
-async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: Path | None, comic: str | None) -> int:
+async def run(
+    pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: Path | None, comic: str | None
+) -> int:
     from storypanel.catalog import styles
     from storypanel.config import get_settings
     from storypanel.errors import AppError
@@ -273,7 +426,10 @@ async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: P
 
     live = get_settings().provider_mode == "live"
     if live != (approve is not None):
-        print("refusing: --approve-usd with live providers, --simulated only with simulated ones", file=sys.stderr)
+        print(
+            "refusing: --approve-usd with live providers, --simulated only with simulated ones",
+            file=sys.stderr,
+        )
         return 2
     data = await load(pid)
     if data["storage_problems"]:
@@ -287,10 +443,11 @@ async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: P
     for p, r in lettered(data):
         page, panel, spec = p["page"], r["panel"], r["spec"]
         cost = reservation(data, r)
-        spent = sum((Decimal(str(x["cost_counted_usd"])) for x in await counted(pid, started)), Decimal(0))
-        if approve is not None and spent + cost > approve:
-            stop = (f"stopped before page {page.index + 1} panel {panel.index + 1}: counted USD {spent:.4f} + reserved "
-                    f"USD {cost:.4f} would exceed the approved USD {approve}")  # fmt: skip
+        spent, _ = await stage_spent()
+        if approve is not None and spent + cost > min(approve, STAGE_1A_CAP):
+            stop = (f"stopped before page {page.index + 1} panel {panel.index + 1}: stage 1A has counted USD {spent:.4f} "
+                    f"(both comics, all runs) + reserved USD {cost:.4f} would exceed USD {min(approve, STAGE_1A_CAP)}; "
+                    "not retried")  # fmt: skip
             break
         image, refs = call_inputs(data, r)
         rules = art.effective_rules(data["bible"].continuity_rules if data["bible"] else [], spec)
@@ -300,7 +457,14 @@ async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: P
                                         ctx=CallContext("face_check", str(data["project"].owner_id), str(pid),
                                                         target_id=str(panel.id)), operation="face_check")  # fmt: skip
         except AppError as exc:  # recorded by metering; not retried
-            results.append({"page": page.index + 1, "panel": panel.index + 1, "error": exc.code.value, "message": exc.message})
+            results.append(
+                {
+                    "page": page.index + 1,
+                    "panel": panel.index + 1,
+                    "error": exc.code.value,
+                    "message": exc.message,
+                }
+            )
             continue
         # exactly the stored qa_scores format, so letter_panel sees what production would
         scores = {"head_boxes": {o.id: o.head_box.model_dump() for o in vr.characters if o.present and o.head_box},
@@ -317,7 +481,9 @@ async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: P
         shown = {k: v for k, v in ((k, lettering.image_box_to_panel(b, (w, h) if w and h else None, (rect[2], rect[3]))[0])
                                    for k, b in scores["head_boxes"].items()) if v}  # fmt: skip
         ann = truth.get((page.index + 1, panel.index + 1))
-        (out / f"overlay-p{page.index + 1}-{panel.index + 1}.png").write_bytes(overlay(image, rect, shown, ann, placed, names))
+        (out / f"overlay-p{page.index + 1}-{panel.index + 1}.png").write_bytes(
+            overlay(image, rect, shown, ann, placed, names)
+        )
         results.append({
             "page": page.index + 1, "panel": panel.index + 1,
             "expected_faces": [c.id for c in spec.characters],
@@ -326,7 +492,8 @@ async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: P
             "faces_unlocated": [o.id for o in vr.characters if o.present and o.head_box is None],
             "head_boxes_on_displayed_panel": shown, "basis": basis,
             "balloons": [{"text": b.text[:28], "flags": b.flags} for b in placed],
-            "evaluation_vs_hand_annotation": evaluate(placed, shown, ann, rect),
+            "evaluation": evaluate(placed, shown, ann, rect, [c.id for c in spec.characters],
+                                   [o.id for o in vr.characters if o.present and o.head_box is None]),
         })  # fmt: skip
     # pages: as stored (before) and re-lettered automatically (after), PNG at reading size and print, and PDF
     from storypanel.db.session import transaction
@@ -349,6 +516,7 @@ async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: P
     (out / "after-auto.pdf").write_bytes(render.build_pdf(after_docs, [render.render_page(d, 2000, lettering=False)
                                                                        for d in after_docs], "face check"))  # fmt: skip
     ledger = await counted(pid, started)
+    stage_total, stage_calls = await stage_spent()
     summary = {"comic_id": str(pid), "mode": "LIVE" if live else "SIMULATED", "approved_usd": str(approve) if approve else None,
                "started_at": started.isoformat(), "stopped": stop, "panels": results,
                "calls": [{k: str(v) if isinstance(v, Decimal) else v for k, v in x.items()} for x in ledger],
@@ -358,9 +526,21 @@ async def run(pid: uuid.UUID, out: Path, approve: Decimal | None, annotations: P
                           "calculated_usd": str(sum((Decimal(str(x["cost_calculated_usd"] or 0)) for x in ledger), Decimal(0))),
                           "unresolved": sum(1 for x in ledger if x["cost_basis"] == "unresolved" or x["status"] == "ambiguous"),
                           "input_tokens": sum(x["input_tokens"] for x in ledger),
-                          "output_tokens": sum(x["output_tokens"] for x in ledger)}}  # fmt: skip
+                          "output_tokens": sum(x["output_tokens"] for x in ledger)},
+               "stage_1a_cumulative": {"live_calls": stage_calls, "counted_usd": str(stage_total),
+                                       "cap_usd": str(STAGE_1A_CAP), "remaining_usd": str(STAGE_1A_CAP - stage_total)},
+               "outcomes": outcome_counts(results)}  # fmt: skip
     (out / "face-check.json").write_text(json.dumps(summary, indent=1, default=str))
-    print(json.dumps(summary["totals"], indent=1))
+    print(
+        json.dumps(
+            {
+                "this_run": summary["totals"],
+                "stage_1a_cumulative": summary["stage_1a_cumulative"],
+                "outcomes": summary["outcomes"],
+            },
+            indent=1,
+        )
+    )
     if stop:
         print(stop)
     print(f"-> {out}")

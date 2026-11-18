@@ -292,7 +292,6 @@ async def test_the_face_check_stops_before_a_call_that_would_cross_its_cap(
     client: Any, headers: dict[str, str], worker: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """scripts/face-check.py: with a cap below one call's reservation, no call is made at all."""
-    import importlib.util
     import json as _json
     import uuid
     from decimal import Decimal
@@ -301,11 +300,10 @@ async def test_the_face_check_stops_before_a_call_that_would_cross_its_cap(
     from storypanel.pipeline import qa as qa_mod
     from tests.conftest import run_to_completion
 
-    p = await run_to_completion(client, headers, "A robot and a girl share noodles in the rain, as a 4 panel strip")
-    spec = importlib.util.spec_from_file_location("face_check", Path(__file__).resolve().parents[3] / "scripts/face-check.py")
-    assert spec and spec.loader
-    fc = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(fc)
+    p = await run_to_completion(
+        client, headers, "A robot and a girl share noodles in the rain, as a 4 panel strip"
+    )
+    fc = _face_check_module()
     calls: list[Any] = []
 
     async def no_call(**kw: Any) -> Any:
@@ -321,3 +319,159 @@ async def test_the_face_check_stops_before_a_call_that_would_cross_its_cap(
     summary = _json.loads((out / "face-check.json").read_text())
     assert calls == [] and summary["totals"]["calls"] == 0
     assert summary["stopped"].startswith("stopped before page 1 panel 1")
+
+
+def _face_check_module() -> Any:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "face_check", Path(__file__).resolve().parents[3] / "scripts/face-check.py"
+    )
+    assert spec and spec.loader
+    fc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fc)
+    return fc
+
+
+@pytest.mark.workflow
+async def test_the_face_check_budget_is_shared_by_both_comics_and_every_rerun(
+    client: Any,
+    headers: dict[str, str],
+    worker: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Earlier stage-1A spend (another comic, an earlier or interrupted run) counts against the same
+    USD 0.20: a rerun never starts from zero."""
+    import json as _json
+    import uuid
+    from decimal import Decimal
+
+    from storypanel.config import get_settings
+    from storypanel.pipeline import qa as qa_mod
+    from tests.conftest import run_to_completion
+
+    p = await run_to_completion(
+        client, headers, "A robot and a girl share noodles in the rain, as a 4 panel strip"
+    )
+    fc = _face_check_module()
+    assert (await fc.stage_spent())[0] >= 0  # the real ledger query runs
+    calls: list[Any] = []
+
+    async def no_call(**kw: Any) -> Any:
+        calls.append(kw)
+        raise AssertionError("a call was made")
+
+    async def earlier_spend() -> tuple[Decimal, int]:
+        return Decimal("0.195"), 9  # e.g. the Train run, then a retry; 0.195 + 0.0091 > 0.20
+
+    monkeypatch.setattr(qa_mod, "vision_report", no_call)
+    monkeypatch.setattr(get_settings(), "provider_mode", "live", raising=False)
+    monkeypatch.setattr(fc, "reservation", lambda data, r: Decimal("0.0091"))
+    monkeypatch.setattr(fc, "stage_spent", earlier_spend)
+    assert (
+        await fc.preflight(uuid.UUID(p["id"])) == 1
+    )  # no Anthropic key here, and the budget is nearly spent
+    shown = capsys.readouterr().out
+    assert "remaining USD 0.0050" in shown and "paid checks allowed on this comic: yes" in shown
+    assert "preflight: FAIL" in shown and "sk-" not in shown
+    out = tmp_path / "fc"
+    out.mkdir()
+    assert await fc.run(uuid.UUID(p["id"]), out, Decimal("0.20"), None, None) == 0
+    summary = _json.loads((out / "face-check.json").read_text())
+    assert calls == []
+    assert "all runs" in summary["stopped"] and summary["stage_1a_cumulative"]["remaining_usd"] == "0.005"
+
+
+def test_a_flagged_defect_is_detection_not_placement_and_no_annotation_means_unavailable() -> None:
+    from storypanel.pipeline.lettering import Placed
+
+    fc = _face_check_module()
+    rect = (0.0, 0.0, 400.0, 300.0)
+    face = {"x": 0.4, "y": 0.2, "w": 0.2, "h": 0.3}
+
+    def balloon(flags: list[str], x: float = 10, y: float = 10) -> Any:
+        return Placed(index=0, type="speech", text="Hello", speaker="mira", x=x, y=y, w=80, h=40, font_size=12.0, tail=None,
+                      flags=flags)  # fmt: skip
+
+    flagged = fc.evaluate(
+        [balloon(["covers_face"])], {"mira": face}, {"heads": {"mira": face}}, rect, ["mira"], []
+    )
+    assert (
+        flagged["outcome"] == "unresolved_defect_detected" and not flagged["counts_as_successful_placement"]
+    )
+    clean = fc.evaluate([balloon([])], {"mira": face}, {"heads": {"mira": face}}, rect, ["mira"], [])
+    assert clean["outcome"] == "clean_automatic_placement" and clean["counts_as_successful_placement"]
+    unannotated = fc.evaluate([balloon([])], {"mira": face}, None, rect, ["mira"], [])
+    assert unannotated["outcome"] == "clean_unverified" and not unannotated["counts_as_successful_placement"]
+    assert unannotated["measurements"].startswith("unavailable")
+    guessed = fc.evaluate([balloon(["face_position_estimated"])], {}, None, rect, ["mira"], ["mira"])
+    assert guessed["outcome"] == "uncertain_faces_not_located"
+    # a balloon squarely on the hand-placed face, with no flag: a missed defect, never "clean"
+    missed = fc.evaluate(
+        [balloon([], x=160, y=95)], {"mira": face}, {"heads": {"mira": face}}, rect, ["mira"], []
+    )
+    assert missed["outcome"] == "missed_defect"
+    counts = fc.outcome_counts(
+        [{"page": 1, "panel": 3, "evaluation": flagged}, {"page": 1, "panel": 4, "evaluation": clean}]
+    )
+    assert counts["clean_automatic_placement"] == ["p1-4"]
+    assert counts["unresolved_defect_detected (detection, not placement)"] == ["p1-3"]
+
+
+@pytest.mark.workflow
+async def test_the_face_check_writes_only_ledger_rows_and_never_starts_workers_or_migrations(
+    client: Any, headers: dict[str, str], worker: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A full (simulated) face-check run on a finished comic: Temporal and Alembic are tripwired, and
+    every table is fingerprinted before and after. Only the paid-request ledger may change."""
+    import json as _json
+    import uuid
+
+    import alembic.command
+    import temporalio.client
+    from sqlalchemy import text
+
+    from storypanel.db.session import transaction
+    from tests.conftest import run_to_completion
+
+    p = await run_to_completion(
+        client, headers, "A robot and a girl share noodles in the rain, as a 4 panel strip"
+    )
+
+    async def no_temporal(*a: Any, **k: Any) -> Any:
+        raise AssertionError("the face check connected to Temporal")
+
+    def no_migration(*a: Any, **k: Any) -> Any:
+        raise AssertionError("the face check ran a migration")
+
+    monkeypatch.setattr(temporalio.client.Client, "connect", no_temporal)
+    monkeypatch.setattr(alembic.command, "upgrade", no_migration)
+
+    async def fingerprint() -> dict[str, str]:
+        async with transaction() as db:
+            tables = [r[0] for r in await db.execute(text(
+                "select tablename from pg_tables where schemaname = current_schema() order by 1"))]  # fmt: skip
+            out = {}
+            for t in tables:
+                out[t] = (await db.execute(text(
+                    f'select md5(coalesce(string_agg(md5(x::text), \'\' order by md5(x::text)), \'\')) from "{t}" x'))).scalar_one()  # fmt: skip
+            return out
+
+    fc = _face_check_module()
+    before = await fingerprint()
+    out = tmp_path / "fc"
+    out.mkdir()
+    assert await fc.run(uuid.UUID(p["id"]), out, None, None, None) == 0
+    after = await fingerprint()
+    changed = sorted(t for t in before if before[t] != after.get(t))
+    assert set(changed) <= {"provider_usage", "provider_attempts"}, changed
+    summary = _json.loads((out / "face-check.json").read_text())
+    assert summary["totals"]["calls"] >= 1 and "provider_attempts" in changed
+    assert all(c["status"] == "succeeded" for c in summary["calls"])
+    assert {f.name for f in out.iterdir()} >= {
+        "face-check.json",
+        "after-auto.pdf",
+        "page-1-before-reading-size.png",
+    }
