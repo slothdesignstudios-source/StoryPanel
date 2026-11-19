@@ -3,4 +3,4 @@
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 /** Account and project pages: never indexed (robots.txt, X-Robots-Tag and page metadata). */
-export const PRIVATE_PATHS = ["/dashboard", "/new", "/projects", "/billing", "/settings", "/sign-in"];
+export const PRIVATE_PATHS = ["/dashboard", "/new", "/projects", "/billing", "/settings", "/sign-in", "/demo"];

@@ -30,7 +30,7 @@ const config: NextConfig = {
   poweredByHeader: false,
   async headers() {
     // Account and project pages are never indexed, even if robots.txt is ignored (src/lib/site.ts).
-    const noindex = ["/dashboard", "/new", "/projects", "/billing", "/settings", "/sign-in"].flatMap((p) => [p, `${p}/:path*`]).map((source) => ({
+    const noindex = ["/dashboard", "/new", "/projects", "/billing", "/settings", "/sign-in", "/demo"].flatMap((p) => [p, `${p}/:path*`]).map((source) => ({
       source, headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
     }));
     return [...noindex, {

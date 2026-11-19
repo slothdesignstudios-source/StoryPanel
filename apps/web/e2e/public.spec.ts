@@ -6,7 +6,7 @@ import { API } from "./helpers";
 
 test("the landing page states the product, offers one primary action and shows live prices", async ({ page, request }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Turn your story idea into an editable comic.");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Turn a story idea into a comic worth sharing");
   const main = page.locator("main");
   await expect(main.getByRole("link", { name: "Start a comic" }).first()).toBeVisible();
   // prices come from the API's configuration, not from copies in the page

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BookOpenCheck, Download, PencilLine, ScrollText, Users } from "lucide-react";
-import { GalleryGrid, SampleArt, Section } from "@/components/marketing";
+import { GalleryGrid, Section } from "@/components/marketing";
 import { CreditPrices, HoldsExplained } from "@/components/pricing";
 import { Button } from "@/components/ui";
-import { SAMPLES, anyUnapprovedShown } from "@/content/samples";
+import { anyUnapprovedShown } from "@/content/samples";
 import { getPublicMeta } from "@/lib/public-meta";
+import { HeroDemo } from "@/components/hero-demo/HeroDemo";
 
 export const revalidate = 300;
 
@@ -45,27 +46,26 @@ const FAQ: [string, string][] = [
 
 export default async function Landing() {
   const meta = await getPublicMeta();
-  const [hero, second] = SAMPLES;
   return (
     <>
       {/* hero */}
-      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-20 lg:grid-cols-[1fr_1.1fr] lg:gap-14">
+      <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-10 sm:px-6 sm:pt-16 lg:grid-cols-[0.85fr_1.15fr] lg:gap-12">
         <div>
           <p className="text-sm font-semibold text-accent">From one idea to a finished comic</p>
-          <h1 className="mt-3 text-[2.6rem] leading-[1.05] sm:text-6xl">Turn your story idea into an editable comic.</h1>
-          <p className="mt-6 max-w-xl text-lg text-muted">Describe a story in a sentence or two. StoryPanel proposes the cast and the script for you to approve, draws every panel, and letters the pages, with every balloon left editable.</p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <h1 className="mt-3 text-[2.4rem] leading-[1.06] sm:text-[3.4rem]">Turn a story idea into a comic worth sharing</h1>
+          <p className="mt-5 max-w-xl text-lg text-muted">Shape your characters, review the story, and make every panel your own.</p>
+          <div className="mt-7 flex flex-wrap items-center gap-3">
             <Button asChild variant="primary" size="lg"><Link href="/new">Start a comic</Link></Button>
             <Link href="/gallery" className="rounded-md px-3 py-2 text-sm font-semibold text-accent hover:underline">See sample comics</Link>
           </div>
           <p className="mt-4 text-sm text-muted">You review the cast and the script before anything is drawn.</p>
         </div>
-        <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
-          <div className="grid grid-cols-[1.2fr_0.8fr] items-end gap-5">
-            {hero && <SampleArt sample={hero} priority sizes="(min-width: 1024px) 32vw, 55vw" />}
-            {second && <SampleArt sample={second} sizes="(min-width: 1024px) 22vw, 40vw" className="mb-10" />}
-          </div>
-        </div>
+        <figure className="mx-auto w-full max-w-[640px]" aria-labelledby="demo-caption">
+          <HeroDemo />
+          <figcaption id="demo-caption" className="mt-3 text-[13px] text-muted">
+            <span className="font-semibold text-ink">How a comic comes together.</span> An idea becomes a cast you approve, a Story Bible, and a three-panel script with one line edited; once the script is approved the panels are drawn in order, checked for consistency, lettered, and exported. Illustrative demo with sample artwork; nothing is generated and no credits are used.
+          </figcaption>
+        </figure>
       </section>
 
       <div className="space-y-24 sm:space-y-28">
